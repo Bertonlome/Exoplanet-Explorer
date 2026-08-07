@@ -55,4 +55,4 @@ animations = [{
 [node name="LoadingIconAnimatedSprite2d" type="AnimatedSprite2D"]
 sprite_frames = SubResource("SpriteFrames_okg82")
 autoplay = "default"
-frame_progress = 0.74963
+frame_progress = 0.173516

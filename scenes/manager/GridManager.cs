@@ -149,13 +149,13 @@ public partial class GridManager : Node
 			
 			// Found the first valid layer for this tile
 			var elevationLayer = tileMapLayerToElevationLayer.GetValueOrDefault(layer);
-			bool isElevated = elevationLayer != null && elevationLayer.Name == "ElevationLayer";
+			bool isElevated = elevationLayer != null && elevationLayer.Name.ToString().StartsWith("ElevationLayer", StringComparison.Ordinal);
 			return (elevationLayer, isElevated);
 		}
 		
 		// Fallback: if no valid tile found, use baseTerrainTilemapLayer's elevation
 		var fallbackElevationLayer = tileMapLayerToElevationLayer.GetValueOrDefault(baseTerrainTilemapLayer);
-		bool fallbackIsElevated = fallbackElevationLayer != null && fallbackElevationLayer.Name == "ElevationLayer";
+		bool fallbackIsElevated = fallbackElevationLayer != null && fallbackElevationLayer.Name.ToString().StartsWith("ElevationLayer", StringComparison.Ordinal);
 		return (fallbackElevationLayer, fallbackIsElevated);
 	}
 
@@ -283,27 +283,28 @@ public partial class GridManager : Node
 
 		(firstTileMapLayer, _) = GetTileCustomData(originTile, IS_ROUGH_TERRAIN);
 		var OriginElevationLayer = firstTileMapLayer != null ? tileMapLayerToElevationLayer[firstTileMapLayer] : null;
+		var (robotElevation, robotIsElevated) = GetElevationLayerForTile(originTile);
 		(_, bool isInMud) = GetTileCustomData(originTile, IS_MUD);
 
 		return tilesDestination.All((tilePosition) =>
 		{
-			(TileMapLayer tileMapLayer, bool isRoulable) = GetTileCustomData(tilePosition, IS_ROUGH_TERRAIN);
-			var elevationLayer = tileMapLayer != null ? tileMapLayerToElevationLayer[tileMapLayer] : null;
-			(tileMapLayer, bool isWood) = GetTileCustomData(tilePosition, IS_WOOD);
-			(_, bool isMud) = GetTileCustomData(tilePosition, IS_MUD);
-			(_, bool isWater) = GetTileCustomData(tilePosition, IS_WATER);
+			(TileMapLayer roughLayer, bool isRoulable) = GetTileCustomData(tilePosition, IS_ROUGH_TERRAIN);
+			var elevationLayer = roughLayer != null ? tileMapLayerToElevationLayer[roughLayer] : null;
+			(TileMapLayer woodLayer, bool isWood) = GetTileCustomData(tilePosition, IS_WOOD);
+			(TileMapLayer mudLayer, bool isMud) = GetTileCustomData(tilePosition, IS_MUD);
+			(TileMapLayer waterLayer, bool isWater) = GetTileCustomData(tilePosition, IS_WATER);
 			var (targetElevation, targetIsElevated) = GetElevationLayerForTile(tilePosition);
 
 			// DEBUG: Log tile checking details
-			//if (considerBridge && bridgeElevationIsElevated.HasValue)
-			//{
-				//GD.Print($"[Bridge Check] Tile {tilePosition}:");
-				//GD.Print($"  - elevationLayer: {elevationLayer?.Name ?? "null"}");
-				//GD.Print($"  - targetElevationLayer: {targetElevationLayer?.Name ?? "null"}");
-				//GD.Print($"  - robotIsElevated: {robotIsElevated}, targetIsElevated: {targetIsElevated}");
-				//GD.Print($"  - isWater: {isWater}, isRoulable: {isRoulable}, isWood: {isWood}");
-				//GD.Print($"  - bridgeElevationIsElevated: {bridgeElevationIsElevated.Value}");
-			//}
+			//GD.Print($"[Bridge Check] Tile {tilePosition}:");
+			//GD.Print($"  - elevationLayer: {elevationLayer?.Name ?? "null"}");
+			//GD.Print($"  - targetElevationLayer: {targetElevationLayer?.Name ?? "null"}");
+			//GD.Print($"  - roughLayer: {roughLayer?.Name ?? "null"}, woodLayer: {woodLayer?.Name ?? "null"}, mudLayer: {mudLayer?.Name ?? "null"}, waterLayer: {waterLayer?.Name ?? "null"}");
+			//GD.Print($"  - originElevation: {robotElevation?.Name ?? "null"}, tileElevation: {targetElevation?.Name ?? "null"}");
+			//GD.Print($"  - robotIsElevated: {robotIsElevated}, targetIsElevated: {targetIsElevated}");
+			//GD.Print($"  - isWater: {isWater}, isRoulable: {isRoulable}, isWood: {isWood}");
+			//GD.Print($"  - considerBridge: {considerBridge}, bridgeElevationIsElevated: {(bridgeElevationIsElevated.HasValue ? bridgeElevationIsElevated.Value.ToString() : "null")}");
+			// End of DEBUG
 
 			// When considerBridge is true and bridgeElevationIsElevated is set,
 			// we're planning a bridge at a specific elevation level
@@ -337,7 +338,26 @@ public partial class GridManager : Node
 			var check7 = !isRoulable;
 			var check9 = !isWater || canCrossWithBridge;
 
-			return check1 && check2 && check3 && check7 && check9;
+			GD.Print($"  - check1 (not occupied or origin tile): {check1}");
+			GD.Print($"  - check2 (same elevation as target or bridge-cross): {check2}");
+			GD.Print($"  - check3 (origin elevation compatible or bridge-cross): {check3}");
+			GD.Print($"  - check7 (not rough terrain): {check7}");
+			GD.Print($"  - check9 (not water or bridge-cross): {check9}");
+
+			var canMoveOnThisTile = check1 && check2 && check3 && check7 && check9;
+			if (!canMoveOnThisTile)
+			{
+				var failedChecks = new List<string>();
+				if (!check1) failedChecks.Add("check1");
+				if (!check2) failedChecks.Add("check2");
+				if (!check3) failedChecks.Add("check3");
+				if (!check7) failedChecks.Add("check7");
+				if (!check9) failedChecks.Add("check9");
+				GD.Print($"  - FAILED checks: {string.Join(", ", failedChecks)}");
+			}
+			GD.Print($"  - tileResult: {canMoveOnThisTile}");
+
+			return canMoveOnThisTile;
 		});
 	}
 
@@ -844,6 +864,7 @@ public partial class GridManager : Node
 		//collectedResourceTiles.Clear();
 		//dangerOccupiedTiles.Clear();
 		buildingToBuildableTiles.Clear();
+		movementCoverageCacheInitialized = false;
 		TileToBuilding.Clear();
 
 		var buildingComponents = BuildingComponent.GetValidBuildingComponents(this);

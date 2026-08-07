@@ -227,7 +227,6 @@ public partial class SelectedRobotUI : CanvasLayer
 	{
 		if (selectedBuildingComponent.BuildingResource.IsAerial)
 		{
-			liftRobotButton.Disabled = false;
 			groundRobotBelowUav = groundRobot;
 		}
 	}
@@ -236,7 +235,7 @@ public partial class SelectedRobotUI : CanvasLayer
 	{
 		if (selectedBuildingComponent.BuildingResource.IsAerial)
 		{
-			liftRobotButton.Disabled = true;
+			groundRobotBelowUav = null;
 		}
 	}
 
@@ -596,6 +595,22 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void OnLiftRobotButtonPressed()
 	{
+		if (selectedBuildingComponent == null || !selectedBuildingComponent.BuildingResource.IsAerial)
+		{
+			return;
+		}
+
+		var dronePos = selectedBuildingComponent.GetGridCellPosition();
+		var groundPos = dronePos + Vector2I.Down;
+		var robotUnderDrone = selectedBuildingComponent.gridManager.GetRobotAtPosition(groundPos);
+
+		if (robotUnderDrone == null || robotUnderDrone.BuildingResource.IsAerial)
+		{
+			selectedBuildingComponent.PulseGrappleNoTarget();
+			return;
+		}
+
+		groundRobotBelowUav = robotUnderDrone;
 		selectedBuildingComponent.AttachToRobot(groundRobotBelowUav);
 		groundRobotBelowUav.AttachToRobot(selectedBuildingComponent);
 		GameEvents.EmitLiftRobotButtonPressed(selectedBuildingComponent, groundRobotBelowUav);
@@ -619,7 +634,7 @@ public partial class SelectedRobotUI : CanvasLayer
 				break;
 			case MultiPurposeButtonState.LiftRobot:
 				liftRobotButton.Text = "Lift Robot";
-				liftRobotButton.Disabled = true;
+				liftRobotButton.Disabled = false;
 				if (liftRobotButton.IsConnected("pressed", Callable.From(OnDropRobotButtonPressed)))
 				{
 					liftRobotButton.Pressed -= OnDropRobotButtonPressed;

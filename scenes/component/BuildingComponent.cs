@@ -1578,6 +1578,18 @@ public partial class BuildingComponent : Node2D
 		IsGrappleExtended = false;
 	}
 
+	public async void PulseGrappleNoTarget(float durationSeconds = 1.0f)
+	{
+		if (!BuildingResource.IsAerial || IsLifting || IsLifted)
+		{
+			return;
+		}
+
+		ExtendGrapple();
+		await ToSignal(GetTree().CreateTimer(durationSeconds), "timeout");
+		RetractGrapple();
+	}
+
 	private string GetDirectionFromDelta(Vector2I current, Vector2I target)
 	{
 		int dx = target.X - current.X;

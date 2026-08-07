@@ -23,6 +23,7 @@ public partial class GameCamera : Camera2D
 
 	private readonly StringName ACTION_SCROLL_FORWARD = "scroll_forward";
 	private readonly StringName ACTION_SCROLL_BACKWARD = "scroll_backward";
+	private readonly StringName ACTION_UNZOOM = "unzoom";
 
 	private enum State
 	{
@@ -34,6 +35,12 @@ public partial class GameCamera : Camera2D
 	private FastNoiseLite shakeNoise;
 	[Export]
 	private BuildingManager buildingManager;
+	[Export]
+	private float zoomStep = 0.01f;
+	[Export]
+	private float minZoom = 0.3f;
+	[Export]
+	private float maxZoom = 2.5f;
 	[Signal]
 	public delegate void CameraZoomEventHandler();
 
@@ -87,6 +94,13 @@ public partial class GameCamera : Camera2D
 			GlobalPosition = new Vector2(xClamped, yClamped);
 		}
 		
+		// Smooth dezoom while U is held
+		if (Input.IsActionPressed(ACTION_UNZOOM) && Zoom.X > minZoom)
+		{
+			var newZoom = Mathf.Max(Zoom.X - zoomStep, minZoom);
+			Zoom = new Vector2(newZoom, newZoom);
+		}
+
 		switch (currentState)
 		{
 			case State.CameraFree:
@@ -121,16 +135,25 @@ public partial class GameCamera : Camera2D
 		{
 			if (mouseButton.ButtonIndex == MouseButton.Left)
 			{
-				if (mouseButton.Pressed && currentState == State.CameraFree)
+				if (mouseButton.Pressed)
 				{
 					// Don't start dragging if BuildingManager is in painting mode
 					if (buildingManager.IsInPaintingMode)
 					{
 						return;
 					}
-					// Start dragging - input reached here so BuildingManager didn't handle it
-					isDragging = true;
-					lastMousePosition = GetViewport().GetMousePosition();
+
+					if (currentState == State.TrackingRobot)
+					{
+						OnStopTrackingRobot();
+					}
+
+					if (currentState == State.CameraFree)
+					{
+						// Start dragging - input reached here so BuildingManager didn't handle it
+						isDragging = true;
+						lastMousePosition = GetViewport().GetMousePosition();
+					}
 				}
 				else if (!mouseButton.Pressed && isDragging)
 				{
@@ -145,14 +168,14 @@ public partial class GameCamera : Camera2D
 			CenterOnPosition(buildingManager.hoveredGridArea.Position * 64);
 			GetViewport().SetInputAsHandled();
 		}
-		if (evt.IsActionPressed(ACTION_SCROLL_FORWARD) && Zoom.X <= 1.5f)
+		if (evt.IsActionPressed(ACTION_SCROLL_FORWARD) && Zoom.X <= maxZoom)
 		{
-			Zoom = new Vector2((float)(Zoom.X +  0.1f), (float)(Zoom.Y + 0.1f));
+			Zoom = new Vector2(Zoom.X + zoomStep, Zoom.Y + zoomStep);
 			//EmitSignal(SignalName.CameraZoom);
 		}
-		if (evt.IsActionPressed(ACTION_SCROLL_BACKWARD) && Zoom.X >= 0.3f)
+		if (evt.IsActionPressed(ACTION_SCROLL_BACKWARD) && Zoom.X >= minZoom)
 		{
-			Zoom = new Vector2((float)(Zoom.X -  0.1f), (float)(Zoom.Y - 0.1f));
+			Zoom = new Vector2(Zoom.X - zoomStep, Zoom.Y - zoomStep);
 			//EmitSignal(SignalName.CameraZoom);
 		}
 	}

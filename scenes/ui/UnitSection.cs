@@ -45,6 +45,9 @@ public partial class UnitSection : PanelContainer
 		AudioHelpers.RegisterButtons(new Button[] { selectButton, stopButton });
 		selectButton.Pressed += () => EmitSignal(SignalName.SelectButtonPressed);
 		stopButton.Pressed += () => EmitSignal(SignalName.StopButtonPressed);
+		stopButton.SetDisabled(true);
+		stopButton.MouseFilter = Control.MouseFilterEnum.Ignore;
+		stopButton.Modulate = new Color(0.6f, 0.6f, 0.6f, 1f);
 
 	}
 
@@ -86,30 +89,62 @@ public partial class UnitSection : PanelContainer
 			"None" => "Idle",
 			_ => !string.IsNullOrEmpty(mode) ? mode : "Idle"
 		};
+
+		UpdateStopButtonState(mode);
 	}
 
 	public void OnRobotStuck()
 	{
 		statusLabel.Text = "Stuck";
 		statusLabel.AddThemeColorOverride("font_color", new Color(1, 0, 0)); // Red color for stuck status
+		stopButton.SetDisabled(false);
+		stopButton.MouseFilter = Control.MouseFilterEnum.Stop;
+		stopButton.Modulate = new Color(1f, 1f, 1f, 1f);
 	}
 
 	public void OnRobotUnStuck()
 	{
 		statusLabel.Text = "Idle";
 		statusLabel.AddThemeColorOverride("font_color", new Color(1, 1, 1)); // Reset to default color
+		stopButton.SetDisabled(true);
+		stopButton.MouseFilter = Control.MouseFilterEnum.Ignore;
+		stopButton.Modulate = new Color(0.6f, 0.6f, 0.6f, 1f);
 	}
 
 	public void OnStartCharging()
 	{
 		batteryLabel.Text = "Charging";
 		batteryLabel.AddThemeColorOverride("font_color", new Color(0, 1, 0)); // Green color for charging status
+		stopButton.SetDisabled(true);
+		stopButton.MouseFilter = Control.MouseFilterEnum.Ignore;
+		stopButton.Modulate = new Color(0.6f, 0.6f, 0.6f, 1f);
 	}
 
 	public void OnStopCharging()
 	{
 		batteryLabel.Text = "Battery";
 		statusLabel.AddThemeColorOverride("font_color", new Color(1, 1, 1)); // Reset to default color
+		stopButton.SetDisabled(true);
+		stopButton.MouseFilter = Control.MouseFilterEnum.Ignore;
+		stopButton.Modulate = new Color(0.6f, 0.6f, 0.6f, 1f);
+	}
+
+	private void UpdateStopButtonState(string mode)
+	{
+		if (stopButton == null)
+		{
+			return;
+		}
+
+		bool isIdleMode = string.IsNullOrWhiteSpace(mode)
+			|| string.Equals(mode, "None", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(mode, "Idle", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(mode, "Charging", StringComparison.OrdinalIgnoreCase);
+
+		GD.Print($"Updating Stop Button State: Mode = {mode}, IsIdleMode = {isIdleMode}");
+		stopButton.SetDisabled(isIdleMode);
+		stopButton.MouseFilter = isIdleMode ? Control.MouseFilterEnum.Ignore : Control.MouseFilterEnum.Stop;
+		stopButton.Modulate = isIdleMode ? new Color(0.6f, 0.6f, 0.6f, 1f) : new Color(1f, 1f, 1f, 1f);
 	}
 
 	public void OnNewRobotSelected(BuildingComponent buildingComponent)

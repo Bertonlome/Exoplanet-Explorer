@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics.Tracing;
 using Game.Autoload;
 using Game.Component;
@@ -18,6 +19,12 @@ public partial class SelectedRobotUI : CanvasLayer
 	Texture2D mutedGeigerTexture;
 	[Export]
 	Texture2D unmutedGeigerTexture;
+	[Export]
+	Texture2D materialIconTexture;
+	[Export]
+	Texture2D woodIconTexture;
+	[Export]
+	Texture2D mineralIconTexture;
 	private Button randomExplorButton;
 	private Button stopExplorbutton;
 	private Button trackRobotButton;
@@ -26,19 +33,29 @@ public partial class SelectedRobotUI : CanvasLayer
 	private Button startExplorButton;
 	private OptionButton explorModeOptionsButton;
 	private Label gravAnomValueLabel;
-	private Label statusLabel;
 	private Label batteryLabel;
-	private Label resourceLabel;
+	private BoxContainer resourcesCarriedContainer;
+	private HBoxContainer resourceLabel;
+	private Label woodCountLabel;
+	private TextureRect woodIconRect;
+	private Label mineralCountLabel;
+	private TextureRect mineralIconRect;
 	private Label titleLabel;
-	private Button multiPurposeButton;
+	private Button placeBridgeButton;
 	private Button toggleSoundGeigerButton;
 
 	private Button placeAntennaButton;
+	private Button liftRobotButton;
+	private Button analyseSampleButton;
 
 	private MultiPurposeButtonState currentButtonState;
 	public BuildingComponent selectedBuildingComponent;
 	public BuildingComponent groundRobotBelowUav;
 	private MiniMapController miniMapController;
+	private readonly Queue<int> anomalyHistory = new();
+	private const int MaxAnomalyHistoryEntries = 10;
+	private const int AnomalyBarLength = 24;
+	private const float MaxAnomalyValuePossible = 500f;
 
 	public enum MultiPurposeButtonState
 	{
@@ -120,13 +137,23 @@ public partial class SelectedRobotUI : CanvasLayer
 		stopExplorbutton = GetNode<Button>("%StopExplorButton");
 		trackRobotButton = GetNode<Button>("%TrackRobotButton");
 		startExplorButton = GetNode<Button>("%StartExplorButton");
-		multiPurposeButton = GetNode<Button>("%PlaceBridgeButton");
+		placeBridgeButton = GetNode<Button>("%PlaceBridgeButton");
+		liftRobotButton = GetNode<Button>("%LiftRobotButton");
+		analyseSampleButton = GetNode<Button>("%AnalyseSampleButton");
 		placeAntennaButton = GetNode<Button>("%PlaceAntennaButton");
+		placeBridgeButton.Hide();
+		liftRobotButton.Hide();
+		analyseSampleButton.Hide();
 		toggleSoundGeigerButton = GetNode<Button>("%ToggleSoundGeigerButton");
+		toggleSoundGeigerButton.Icon = mutedGeigerTexture;
 		gravAnomValueLabel = GetNode<Label>("%GravAnomValueLabel");
-		statusLabel = GetNode<Label>("%StatusLabel");
 		batteryLabel = GetNode<Label>("%BatteryLabel");
-		resourceLabel = GetNode<Label>("%ResourceLabel");
+		resourcesCarriedContainer = GetNode<BoxContainer>("%ResourcesCarriedContainer");
+		resourceLabel = GetNode<HBoxContainer>("%ResourceLabel");
+		woodCountLabel = GetNode<Label>("%WoodCountLabel");
+		woodIconRect = GetNode<TextureRect>("%WoodIcon");
+		mineralCountLabel = GetNode<Label>("%MineralCountLabel");
+		mineralIconRect = GetNode<TextureRect>("%MineralIcon");
 		titleLabel = GetNode<Label>("%Title");
 
 		randomExplorButton.Pressed += OnRandomExplorButtonPressed;
@@ -136,15 +163,15 @@ public partial class SelectedRobotUI : CanvasLayer
 		trackRobotButton.Pressed += OnTrackRobotButtonPressed;
 		toggleSoundGeigerButton.Pressed += () =>
 		{
-			if (!AudioHelpers.geigerActive)
+			if (AudioHelpers.geigerActive)
 			{
-				AudioHelpers.StartGeigerCounter(initialAnomalyValue: selectedBuildingComponent.GetAnomalyReadingAtCurrentPos());
-				toggleSoundGeigerButton.Icon = unmutedGeigerTexture; // Remove the muted icon
+				AudioHelpers.StopGeigerCounter();
+				toggleSoundGeigerButton.Icon = mutedGeigerTexture; // Show the muted icon
 			}
 			else
 			{
-				AudioHelpers.StopGeigerCounter();
-				toggleSoundGeigerButton.Icon = mutedGeigerTexture; // Set the muted icon
+				AudioHelpers.StartGeigerCounter(initialAnomalyValue: selectedBuildingComponent.GetAnomalyReadingAtCurrentPos());
+				toggleSoundGeigerButton.Icon = unmutedGeigerTexture; // Show the unmuted icon
 			}
 		};
 		if (SettingManager.Instance.IsTrackingRobot)
@@ -162,6 +189,13 @@ public partial class SelectedRobotUI : CanvasLayer
 		if (selectedBuildingComponent.BuildingResource.IsAerial)
 		{
 			titleLabel.Text = "Selected Drone";
+			placeBridgeButton.Hide();
+			analyseSampleButton.Hide();
+			liftRobotButton.Show();
+			if (IsInstanceValid(resourcesCarriedContainer))
+			{
+				resourcesCarriedContainer.Hide();
+			}
 			if (selectedBuildingComponent.IsLifting)
 			{
 				ChangeStateMultiPurposeButton(MultiPurposeButtonState.DropRobot);
@@ -175,16 +209,25 @@ public partial class SelectedRobotUI : CanvasLayer
 		else
 		{
 			titleLabel.Text = "Selected Rover";
-			multiPurposeButton.Pressed += OnPlaceBridgeButtonPressed;
+			placeBridgeButton.Show();
+			analyseSampleButton.Show();
+			liftRobotButton.Hide();
+			if (IsInstanceValid(resourcesCarriedContainer))
+			{
+				resourcesCarriedContainer.Show();
+			}
+			placeBridgeButton.Pressed += OnPlaceBridgeButtonPressed;
 			placeAntennaButton.Pressed += OnPlaceAntennaButtonPressed;
 		}
+
+		UpdateResourceLabel();
 	}
 
 	private void OnGroundRobotBelowUav(BuildingComponent groundRobot)
 	{
 		if (selectedBuildingComponent.BuildingResource.IsAerial)
 		{
-			multiPurposeButton.Disabled = false;
+			liftRobotButton.Disabled = false;
 			groundRobotBelowUav = groundRobot;
 		}
 	}
@@ -193,7 +236,7 @@ public partial class SelectedRobotUI : CanvasLayer
 	{
 		if (selectedBuildingComponent.BuildingResource.IsAerial)
 		{
-			multiPurposeButton.Disabled = true;
+			liftRobotButton.Disabled = true;
 		}
 	}
 
@@ -207,35 +250,29 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void OnBuildingStuck(BuildingComponent component)
 	{
-		statusLabel.Text = "Stuck";
 	}
 
 	private void OnBuildingUnStuck(BuildingComponent component)
 	{
-		statusLabel.Text = "Available";
 	}
 
 	private void OnAllRobotsStopped()
 	{
-		statusLabel.Text = "Available";
 	}
 
 	private void OnRandomExplorButtonPressed()
 	{
 		selectedBuildingComponent.EnableRandomMode();
-		statusLabel.Text = "Exploring randomly";
 	}
 
 	private void OnGradientSearchButtonPressed()
 	{
 		selectedBuildingComponent.EnableGradientSearchMode();
-		statusLabel.Text = "Searching for high anomaly";
 	}
 
 	private void OnReturnToBaseButtonPressed()
 	{
 		selectedBuildingComponent.EnableReturnToBase();
-		statusLabel.Text = "Returning to base";
 	}
 
 
@@ -266,7 +303,6 @@ public partial class SelectedRobotUI : CanvasLayer
 	{
 		currentexplorMode = ExplorMode.None;
 		selectedBuildingComponent.StopAnyAutomatedMovementMode();
-		statusLabel.Text = "Available";
 	}
 
 	private void OnTrackRobotButtonPressed()
@@ -292,32 +328,93 @@ public partial class SelectedRobotUI : CanvasLayer
 	{
 		selectedBuildingComponent.NewAnomalyReading += OnNewAnomalyReading;
 		int initialAnomaly = selectedBuildingComponent.GetAnomalyReadingAtCurrentPos();
-		gravAnomValueLabel.Text = "Value: " + initialAnomaly;
-		if (selectedBuildingComponent.IsStuck) { statusLabel.Text = "Stuck"; }
-		else if (selectedBuildingComponent.currentExplorMode != BuildingComponent.ExplorMode.None) statusLabel.Text = "Busy";
-		else statusLabel.Text = "Available";
+		UpdateAnomalyDisplay(initialAnomaly);
 		
-		// Start Geiger counter with initial anomaly reading
-		AudioHelpers.StartGeigerCounter(initialAnomaly);
+		// Keep the geiger counter muted until the player explicitly enables it.
+		AudioHelpers.StopGeigerCounter();
+		toggleSoundGeigerButton.Icon = mutedGeigerTexture;
 	}
 
 	private void SetBatterySignal()
 	{
 		selectedBuildingComponent.BatteryChange += OnBatteryChange;
-		batteryLabel.Text = selectedBuildingComponent.Battery + " move left";
+		UpdateBatteryDisplay(selectedBuildingComponent.Battery);
 	}
 
 	private void SetResourceSignal()
 	{
-		resourceLabel.Text = selectedBuildingComponent.resourceCollected.Count.ToString() + " / " + selectedBuildingComponent.BuildingResource.ResourceCapacity.ToString();
+		UpdateResourceLabel();
+	}
+
+	private void UpdateResourceLabel()
+	{
+		if (!IsInstanceValid(resourceLabel) || selectedBuildingComponent == null)
+		{
+			return;
+		}
+
+		int carriedCount = selectedBuildingComponent.resourceCollected.Count;
+		int woodCount = 0;
+		int mineralCount = 0;
+
+		foreach (string resourceType in selectedBuildingComponent.resourceCollected)
+		{
+			if (resourceType == "wood")
+			{
+				woodCount++;
+			}
+			else
+			{
+				mineralCount++;
+			}
+		}
+
+		if (IsInstanceValid(woodCountLabel))
+		{
+			woodCountLabel.Text = woodCount.ToString();
+		}
+		if (IsInstanceValid(woodIconRect))
+		{
+			woodIconRect.Texture = woodIconTexture;
+		}
+		if (IsInstanceValid(mineralCountLabel))
+		{
+			mineralCountLabel.Text = mineralCount.ToString();
+		}
+		if (IsInstanceValid(mineralIconRect))
+		{
+			mineralIconRect.Texture = mineralIconTexture;
+		}
 	}
 
 	public void OnBatteryChange(int value)
 	{
 		if (IsInstanceValid(batteryLabel))
 		{
-			batteryLabel.Text = value + " move left";
+			UpdateBatteryDisplay(value);
 		}
+	}
+
+	private void UpdateBatteryDisplay(int value)
+	{
+		if (!IsInstanceValid(batteryLabel))
+		{
+			return;
+		}
+
+		int maxBattery = selectedBuildingComponent?.BuildingResource?.BatteryMax ?? 100;
+		int batteryPercent = Mathf.Clamp((int)Math.Round((value / (float)maxBattery) * 100f), 0, 100);
+		int segments = 10;
+		int filledSegments = Mathf.Clamp((int)Math.Round(batteryPercent / 10f), 0, segments);
+
+		char[] bar = new char[segments];
+		Array.Fill(bar, '·');
+		for (int i = 0; i < filledSegments; i++)
+		{
+			bar[i] = '█';
+		}
+
+		batteryLabel.Text = $"BAT [{new string(bar)}]\n{value} moves left";
 	}
 
 	public void HideUI()
@@ -329,16 +426,94 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	public void OnNewAnomalyReading(int value)
 	{
-		if (IsInstanceValid(gravAnomValueLabel))
-		{
-			gravAnomValueLabel.Text = "Value: " + value;
-		}
+		UpdateAnomalyDisplay(value);
 
 		// Don't refresh minimap here - OnBuildingMovedForMinimap already handles it
 		// This was causing double-refresh on every move
 		
 		// Update Geiger counter with new reading
 		AudioHelpers.UpdateAnomalyReading(value);
+	}
+
+	private void UpdateAnomalyDisplay(int value)
+	{
+		if (!IsInstanceValid(gravAnomValueLabel))
+		{
+			return;
+		}
+
+		anomalyHistory.Enqueue(value);
+		while (anomalyHistory.Count > MaxAnomalyHistoryEntries)
+		{
+			anomalyHistory.Dequeue();
+		}
+
+		char[] bar = new char[AnomalyBarLength];
+		Array.Fill(bar, '·');
+
+		var historyValues = anomalyHistory.ToArray();
+		int currentIndex = MapAnomalyToBarIndex(value);
+		bar[currentIndex] = '█';
+
+		for (int i = 0; i < historyValues.Length; i++)
+		{
+			int historyValue = historyValues[i];
+			int historyIndex = MapAnomalyToBarIndex(historyValue);
+			if (historyIndex == currentIndex)
+			{
+				continue;
+			}
+
+			char marker = i == historyValues.Length - 1 ? '▒' : i == historyValues.Length - 2 ? '░' : '·';
+			if (bar[historyIndex] == '·')
+			{
+				bar[historyIndex] = marker;
+			}
+		}
+
+		string trend = GetTrendIndicator(historyValues);
+		gravAnomValueLabel.Text = $"ANOM [{new string(bar)}] {trend} {value}/{(int)MaxAnomalyValuePossible}";
+	}
+
+	private int MapAnomalyToBarIndex(int anomalyValue)
+	{
+		return Mathf.Clamp((int)Math.Round((anomalyValue / MaxAnomalyValuePossible) * (AnomalyBarLength - 1)), 0, AnomalyBarLength - 1);
+	}
+
+	private string GetTrendIndicator(IReadOnlyList<int> historyValues)
+	{
+		if (historyValues.Count < 2)
+		{
+			return "→";
+		}
+
+		int firstCount = Math.Max(1, historyValues.Count / 2);
+		int firstSum = 0;
+		int secondSum = 0;
+
+		for (int i = 0; i < firstCount; i++)
+		{
+			firstSum += historyValues[i];
+		}
+
+		for (int i = historyValues.Count - firstCount; i < historyValues.Count; i++)
+		{
+			secondSum += historyValues[i];
+		}
+
+		double firstAverage = firstSum / (double)firstCount;
+		double secondAverage = secondSum / (double)firstCount;
+		double delta = secondAverage - firstAverage;
+
+		if (delta > 20)
+		{
+			return "▲";
+		}
+		if (delta < -20)
+		{
+			return "▼";
+		}
+		return "→";
 	}
 
 	private void OnBuildingMovedForMinimap(BuildingComponent movedBuilding)
@@ -352,10 +527,7 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	public void OnResourceCarriedCountChanged(int carriedResourceCount)
 	{
-		if (IsInstanceValid(resourceLabel))
-		{
-			resourceLabel.Text = carriedResourceCount.ToString() + " / " + selectedBuildingComponent.BuildingResource.ResourceCapacity.ToString();
-		}
+		UpdateResourceLabel();
 	}
 
 	private void DisconnectSignals()
@@ -373,17 +545,17 @@ public partial class SelectedRobotUI : CanvasLayer
 		{
 			trackRobotButton.Pressed -= OnTrackRobotButtonPressed;
 		}
-		if (multiPurposeButton.IsConnected("pressed", Callable.From(OnPlaceBridgeButtonPressed)))
+		if (IsInstanceValid(placeBridgeButton) && placeBridgeButton.IsConnected("pressed", Callable.From(OnPlaceBridgeButtonPressed)))
 		{
-			multiPurposeButton.Pressed -= OnPlaceBridgeButtonPressed;
+			placeBridgeButton.Pressed -= OnPlaceBridgeButtonPressed;
 		}
-		if (multiPurposeButton.IsConnected("pressed", Callable.From(OnLiftRobotButtonPressed)))
+		if (IsInstanceValid(liftRobotButton) && liftRobotButton.IsConnected("pressed", Callable.From(OnLiftRobotButtonPressed)))
 		{
-			multiPurposeButton.Pressed -= OnLiftRobotButtonPressed;
+			liftRobotButton.Pressed -= OnLiftRobotButtonPressed;
 		}
-		if (multiPurposeButton.IsConnected("pressed", Callable.From(OnDropRobotButtonPressed)))
+		if (IsInstanceValid(liftRobotButton) && liftRobotButton.IsConnected("pressed", Callable.From(OnDropRobotButtonPressed)))
 		{
-			multiPurposeButton.Pressed -= OnDropRobotButtonPressed;
+			liftRobotButton.Pressed -= OnDropRobotButtonPressed;
 		}
 		if (gradientSearchButton.IsConnected("pressed", Callable.From(OnGradientSearchButtonPressed)))
 		{
@@ -443,97 +615,30 @@ public partial class SelectedRobotUI : CanvasLayer
 		switch (state)
 		{
 			case MultiPurposeButtonState.Placebridge:
-				multiPurposeButton.Text = "Place Bridge";
-
+				liftRobotButton.Text = "Place Bridge";
 				break;
 			case MultiPurposeButtonState.LiftRobot:
-				multiPurposeButton.Text = "Lift Robot";
-				multiPurposeButton.Disabled = true;
-				if (multiPurposeButton.IsConnected("pressed", Callable.From(OnDropRobotButtonPressed)))
+				liftRobotButton.Text = "Lift Robot";
+				liftRobotButton.Disabled = true;
+				if (liftRobotButton.IsConnected("pressed", Callable.From(OnDropRobotButtonPressed)))
 				{
-					multiPurposeButton.Pressed -= OnDropRobotButtonPressed;
+					liftRobotButton.Pressed -= OnDropRobotButtonPressed;
 				}
-				multiPurposeButton.Pressed += OnLiftRobotButtonPressed;
+				liftRobotButton.Pressed += OnLiftRobotButtonPressed;
 				break;
 			case MultiPurposeButtonState.DropRobot:
-				multiPurposeButton.Text = "Drop Robot";
-				if (multiPurposeButton.IsConnected("pressed", Callable.From(OnLiftRobotButtonPressed)))
+				liftRobotButton.Text = "Drop Robot";
+				if (liftRobotButton.IsConnected("pressed", Callable.From(OnLiftRobotButtonPressed)))
 				{
-					multiPurposeButton.Pressed -= OnLiftRobotButtonPressed;
+					liftRobotButton.Pressed -= OnLiftRobotButtonPressed;
 				}
-				multiPurposeButton.Pressed += OnDropRobotButtonPressed;
+				liftRobotButton.Pressed += OnDropRobotButtonPressed;
 				break;
 		}
 	}
 
 	private void OnModeChanged(string mode)
 	{
-		if (IsInstanceValid(statusLabel))
-		{
-			if (mode == "Stuck")
-			{
-				statusLabel.Text = "Stuck";
-			}
-			else if (mode == "Available")
-			{
-				statusLabel.Text = "Available";
-			}
-			else if (mode == "Busy")
-			{
-				statusLabel.Text = "Busy";
-			}
-			else if (mode == "Reached Maxima")
-			{
-				statusLabel.Text = "Reached Maxima";
-				AlertStatus();
-			}
-			else if (mode == "Idle")
-			{
-				statusLabel.Text = "Idle";
-				AlertStatus();
-			}
-			else if (mode == "Lifting")
-			{
-				statusLabel.Text = "Lifting";
-			}
-			else if (mode == "Lifted")
-			{
-				statusLabel.Text = "Lifted";
-			}
-		}
-	}
-
-	private async void AlertStatus()
-	{
-		if (!IsInstanceValid(statusLabel)) return;
-		
-		// Pulse from white to red 3 times
-		for (int i = 0; i < 3; i++)
-		{
-			// Fade from white to red
-			for (float t = 0; t <= 1; t += 0.05f)
-			{
-				if (!IsInstanceValid(statusLabel)) return;
-				Color color = new Color(1, 1 - t, 1 - t); // White (1,1,1) to Red (1,0,0)
-				statusLabel.AddThemeColorOverride("font_color", color);
-				await ToSignal(GetTree().CreateTimer(0.02f), "timeout");
-			}
-			
-			// Fade from red back to white
-			for (float t = 0; t <= 1; t += 0.05f)
-			{
-				if (!IsInstanceValid(statusLabel)) return;
-				Color color = new Color(1, t, t); // Red (1,0,0) to White (1,1,1)
-				statusLabel.AddThemeColorOverride("font_color", color);
-				await ToSignal(GetTree().CreateTimer(0.02f), "timeout");
-			}
-		}
-		
-		// End with white color
-		if (IsInstanceValid(statusLabel))
-		{
-			statusLabel.AddThemeColorOverride("font_color", Colors.White);
-		}
 	}
 
 

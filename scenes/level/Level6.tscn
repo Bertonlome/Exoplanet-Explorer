@@ -1,12 +1,20 @@
-[gd_scene load_steps=5 format=4 uid="uid://c6n8cbgsm02g5"]
+[gd_scene load_steps=6 format=4 uid="uid://cuqi5lec0enjx"]
 
 [ext_resource type="PackedScene" uid="uid://bipxsk1snp5nq" path="res://scenes/level/BaseLevel.tscn" id="1_qp1t0"]
-[ext_resource type="Resource" uid="uid://chdrtywn2f25a" path="res://resources/level/level_06.tres" id="2_k2iid"]
+[ext_resource type="Script" path="res://resources/level/LevelDefinitionResource.cs" id="2_ibyp0"]
 [ext_resource type="TileSet" uid="uid://dvqwr0ci0x55u" path="res://resources/tiles.tres" id="3_ytvgh"]
 [ext_resource type="PackedScene" uid="uid://iv4rk5h4ybki" path="res://scenes/level/util/ElevationLayer.tscn" id="4_a25sv"]
 
+[sub_resource type="Resource" id="Resource_37upb"]
+script = ExtResource("2_ibyp0")
+Id = "earthmover"
+StartingWoodCount = 6
+StartingMaterialCount = 16
+LevelScenePath = "res://scenes/level/Level6.tscn"
+LevelDuration = 1500
+
 [node name="Level6" instance=ExtResource("1_qp1t0")]
-levelDefinitionResource = ExtResource("2_k2iid")
+levelDefinitionResource = SubResource("Resource_37upb")
 
 [node name="BuildingManager" parent="." index="0"]
 buildingGhostScene = null

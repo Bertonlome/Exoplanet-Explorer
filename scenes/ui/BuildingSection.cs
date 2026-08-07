@@ -8,10 +8,13 @@ public partial class BuildingSection : PanelContainer
 {
 	[Signal]
 	public delegate void SelectButtonPressedEventHandler();
+	[Export]
+	private Texture2D materialIcon;
 
 	private Label titleLabel;
 	private Label descriptionLabel;
 	private Label costLabel;
+	private TextureRect materialIconRect;
 	private Button selectButton;
 
 	public override void _Ready()
@@ -19,6 +22,7 @@ public partial class BuildingSection : PanelContainer
 		titleLabel = GetNode<Label>("%TitleLabel");
 		descriptionLabel = GetNode<Label>("%DescriptionLabel");
 		costLabel = GetNode<Label>("%CostLabel");
+		materialIconRect = GetNodeOrNull<TextureRect>("%MaterialIcon");
 		selectButton = GetNode<Button>("%Button");
 
 		AudioHelpers.RegisterButtons(new Button[] {selectButton});
@@ -30,6 +34,10 @@ public partial class BuildingSection : PanelContainer
 	{
 		titleLabel.Text = buildingResource.DisplayName;
 		costLabel.Text = $"{buildingResource.ResourceCost}";
+		if (materialIconRect != null)
+		{
+			materialIconRect.Texture = materialIcon;
+		}
 		descriptionLabel.Text = buildingResource.Description;
 	}
 

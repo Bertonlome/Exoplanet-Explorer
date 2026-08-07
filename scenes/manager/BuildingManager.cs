@@ -1495,20 +1495,22 @@ public partial class BuildingManager : Node
 	/// Create a painted tile at a specific grid position (for API use)
 	/// </summary>
 	/// <param name="isCheckpoint">True if this represents a waypoint, false if connecting tile</param>
-	public void CreatePaintedTileAt(Vector2I gridPosition, string annotation = "", bool isCheckpoint = false)
+	/// <param name="robot">The robot this tile belongs to. Falls back to selectedBuildingComponent if null.</param>
+	public void CreatePaintedTileAt(Vector2I gridPosition, string annotation = "", bool isCheckpoint = false, BuildingComponent robot = null)
 	{
-		if (selectedBuildingComponent == null)
+		var ownerRobot = robot ?? selectedBuildingComponent;
+		if (ownerRobot == null)
 		{
-			GD.PrintErr("No robot selected to paint path for");
+			GD.PrintErr("CreatePaintedTileAt: no robot provided and no robot selected");
 			return;
 		}
-		
+
 		var paintedTile = paintedTileScene.Instantiate<PaintedTile>();
 		paintedTile.GlobalPosition = gridPosition * 64;
 		ySortRoot.AddChild(paintedTile);
 		
 		// Set properties
-		paintedTile.AssociatedRobot = selectedBuildingComponent;
+		paintedTile.AssociatedRobot = ownerRobot;
 		paintedTile.GridPosition = gridPosition;
 		paintedTile.IsCheckpoint = isCheckpoint; // Mark if this is a waypoint vs connecting tile
 		
@@ -1531,8 +1533,7 @@ public partial class BuildingManager : Node
 			{
 				// Other annotations make it a checkpoint
 				paintedTile.IsCheckpoint = true;
-				// Default color for other annotations
-				if (selectedBuildingComponent.BuildingResource.IsAerial) 
+				if (ownerRobot.BuildingResource.IsAerial) 
 					paintedTile.SetColor(Colors.Cyan);
 				else 
 					paintedTile.SetColor(Colors.Yellow);
@@ -1541,29 +1542,29 @@ public partial class BuildingManager : Node
 		else
 		{
 			// No annotation - use default robot colors
-			if (selectedBuildingComponent.BuildingResource.IsAerial) 
-			paintedTile.SetColor(Colors.Cyan);
-		else 
-			paintedTile.SetColor(Colors.Yellow);
-	}
-		
-	paintedTile.SetNumberLabel(paintedTiles.Count + 1);
-	
-	// Set annotation if provided (but don't display "LIFTING" - it clutters the screen)
-	if (!string.IsNullOrEmpty(annotation))
-	{
-		paintedTile.SetAnnotation(annotation);
-		
-		// Only display label for LIFT/DROP and other important annotations, not for intermediate "LIFTING" tiles
-		if (!annotation.Equals("LIFTING", StringComparison.OrdinalIgnoreCase))
-		{
-			paintedTile.DisplayLabelEdit();
+			if (ownerRobot.BuildingResource.IsAerial)
+				paintedTile.SetColor(Colors.Cyan);
+			else
+				paintedTile.SetColor(Colors.Yellow);
 		}
-	}
-	
-	selectedBuildingComponent.AddPaintedTile(paintedTile);
-	paintedTiles.Add(paintedTile);
-}	private void RenumberPaintedTiles()
+		
+		paintedTile.SetNumberLabel(paintedTiles.Count + 1);
+		
+		// Set annotation if provided (but don't display "LIFTING" - it clutters the screen)
+		if (!string.IsNullOrEmpty(annotation))
+		{
+			paintedTile.SetAnnotation(annotation);
+			
+			// Only display label for LIFT/DROP and other important annotations, not for intermediate "LIFTING" tiles
+			if (!annotation.Equals("LIFTING", StringComparison.OrdinalIgnoreCase))
+			{
+				paintedTile.DisplayLabelEdit();
+			}
+		}
+		
+		ownerRobot.AddPaintedTile(paintedTile);
+		paintedTiles.Add(paintedTile);
+	}	private void RenumberPaintedTiles()
 	{
 		// Renumber all painted tiles sequentially
 		for (int i = 0; i < paintedTiles.Count; i++)

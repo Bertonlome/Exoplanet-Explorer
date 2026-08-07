@@ -42,6 +42,7 @@ public partial class GameUI : CanvasLayer
 	private Button executePathButton;
 	private Button previewPathButton;
 	private Button configureApiKeyButton;
+	private Button foldButton;
 	private CheckButton displayTraceButton;
 	private MarginContainer specialFunctionsContainer;
 	private PanelContainer sendPathButtonPanelContainer;
@@ -76,6 +77,7 @@ public partial class GameUI : CanvasLayer
 		stopRobotButton = GetNode<Button>("%StopRobotButton");
 		displayAnomalyMapButton = GetNode<Button>("%DisplayAnomalyMapButton");
 		displayTraceButton = GetNode<CheckButton>("%DisplayTraceButton");
+		foldButton = GetNode<Button>("%FoldButton");
 		specialFunctionsContainer = GetNode<MarginContainer>("%SpecialFunctionsContainer");
 		sendPathButtonPanelContainer = GetNode<PanelContainer>("%SendPathButtonPanelContainer");
 		executePathButton = GetNode<Button>("%ExecutePathButton");
@@ -85,6 +87,9 @@ public partial class GameUI : CanvasLayer
 		
 		// Try to get preview button (may not exist in older scenes)
 		previewPathButton = GetNodeOrNull<Button>("%PreviewPathButton");
+		
+		UpdateFoldButtonState();
+		foldButton.Pressed += OnFoldButtonPressed;
 		
 		// Create API key dialog
 		apiKeyDialog = new ApiKeyDialog();
@@ -123,6 +128,22 @@ public partial class GameUI : CanvasLayer
 		GameEvents.Instance.Connect(GameEvents.SignalName.BuildingMoved, Callable.From<BuildingComponent>(OnRobotMoved));
 		GameEvents.Instance.Connect(GameEvents.SignalName.RobotSelected, Callable.From<BuildingComponent>(OnRobotSelected));
 		GameEvents.Instance.Connect(GameEvents.SignalName.RobotBackToIdle, Callable.From<BuildingComponent>(OnRobotBackToIdle));
+	}
+
+	private void OnFoldButtonPressed()
+	{
+		unitsSectionContainer.Visible = !unitsSectionContainer.Visible;
+		UpdateFoldButtonState();
+	}
+
+	private void UpdateFoldButtonState()
+	{
+		if (foldButton == null || unitsSectionContainer == null)
+		{
+			return;
+		}
+
+		foldButton.Text = unitsSectionContainer.Visible ? "▼ Deployed units" : "▶ Deployed units";
 	}
 
 	public void OnRobotMoved(BuildingComponent buildingComponent)
@@ -740,7 +761,7 @@ public partial class GameUI : CanvasLayer
 					foreach (var tileDto in pathData.Tiles)
 					{
 						var gridPos = new Vector2I(tileDto.GridX, tileDto.GridY);
-						buildingManager.CreatePaintedTileAt(gridPos, tileDto.Annotation);
+						buildingManager.CreatePaintedTileAt(gridPos, tileDto.Annotation, robot: robot);
 						totalTiles++;
 					}
 				}
@@ -757,7 +778,7 @@ public partial class GameUI : CanvasLayer
 					foreach (var tileDto in response.SuggestedPath.Tiles)
 					{
 						var gridPos = new Vector2I(tileDto.GridX, tileDto.GridY);
-						buildingManager.CreatePaintedTileAt(gridPos, tileDto.Annotation);
+						buildingManager.CreatePaintedTileAt(gridPos, tileDto.Annotation, robot: robot);
 					}
 					
 					GD.Print($"Successfully imported {response.SuggestedPath.Tiles.Count} tiles (old format)");
@@ -871,7 +892,7 @@ public partial class GameUI : CanvasLayer
 					pathPos = robot.ComputeNextPosition(pathPos, move);
 					
 					// Create painted tile at this position (no annotation to avoid clutter)
-					buildingManager.CreatePaintedTileAt(pathPos, string.Empty);
+					buildingManager.CreatePaintedTileAt(pathPos, string.Empty, robot: robot);
 					totalPathTiles++;
 				}
 				
@@ -986,7 +1007,7 @@ public partial class GameUI : CanvasLayer
 						annotation = "LIFTING";
 					}
 					
-					buildingManager.CreatePaintedTileAt(pathPos, annotation);
+					buildingManager.CreatePaintedTileAt(pathPos, annotation, robot: robot);
 					totalPathTiles++;
 				}
 				

@@ -70,6 +70,8 @@ public partial class GridManager : Node
 	[Export]
 	private TileMapLayer baseTerrainTilemapLayer;
 	[Export]
+	private bool showHighlightedTiles = false;
+	[Export]
 	private TileMapLayer bridgeTileMapLayerBase;
 	[Export]
 	private TileMapLayer bridgeTileMapLayerElevation;
@@ -426,6 +428,7 @@ public partial class GridManager : Node
 
 	public void HighlightBuildableTiles(bool isAttackTiles = false)
 	{
+		if (!showHighlightedTiles) return;
 		foreach (var tilePosition in GetValidTileSet())
 		{
 			highlightTilemapLayer.SetCell(tilePosition, 0, Vector2I.Zero);

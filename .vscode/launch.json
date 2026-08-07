@@ -5,7 +5,7 @@
       "name": "Launch",
       "type": "coreclr",
       "request": "launch",
-      "program": "${config:godot-dotnet-tools.executablePath}",
+      "program": "/home/cavok3/Desktop/Apps/Godot/Godot_v4.3-stable_mono_linux.x86_64",
       "preLaunchTask": "build",
       "args": [
         "--path",
@@ -19,7 +19,7 @@
       "name": "Launch Editor",
       "type": "coreclr",
       "request": "launch",
-      "program": "${config:godot-dotnet-tools.executablePath}",
+      "program": "/home/cavok3/Desktop/Apps/Godot/Godot_v4.3-stable_mono_linux.x86_64",
       "preLaunchTask": "build",
       "args": [
         "--path",

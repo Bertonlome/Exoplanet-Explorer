@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://du6yrfdf7n3so"]
 
-[ext_resource type="Script" path="res://scenes/GameCamera.cs" id="1_t1kp6"]
+[ext_resource type="Script" path="res://scenes/manager/GameCamera.cs" id="1_t1kp6"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_b30tp"]
 noise_type = 3

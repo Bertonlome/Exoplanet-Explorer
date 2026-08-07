@@ -1,0 +1,58 @@
+[gd_scene load_steps=9 format=3 uid="uid://dc2xq2xonf7nc"]
+
+[ext_resource type="Texture2D" uid="uid://dufy0hucw7wv1" path="res://assets/ui/Thinking.png" id="1_hdsyk"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0x4c7"]
+atlas = ExtResource("1_hdsyk")
+region = Rect2(1, 0, 30, 21)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_bbnh8"]
+atlas = ExtResource("1_hdsyk")
+region = Rect2(31, 0, 30, 21)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_aclcd"]
+atlas = ExtResource("1_hdsyk")
+region = Rect2(61, 0, 30, 21)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_7v8b6"]
+atlas = ExtResource("1_hdsyk")
+region = Rect2(91, 0, 30, 21)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_05bfi"]
+atlas = ExtResource("1_hdsyk")
+region = Rect2(1, 21, 30, 21)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_rpwa8"]
+atlas = ExtResource("1_hdsyk")
+region = Rect2(31, 21, 30, 21)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_okg82"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_0x4c7")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_bbnh8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_aclcd")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_7v8b6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_05bfi")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_rpwa8")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[node name="LoadingIconAnimatedSprite2d" type="AnimatedSprite2D"]
+sprite_frames = SubResource("SpriteFrames_okg82")
+autoplay = "default"
+frame_progress = 0.318664

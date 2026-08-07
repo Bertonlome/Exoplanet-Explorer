@@ -790,7 +790,7 @@ public partial class BuildingComponent : Node2D
 			foreach (var move in path)
 			{
 				paintPosition = GetNextPosFromCurrentPos(paintPosition, move);
-				buildingManager.CreatePaintedTileAt(paintPosition);
+				buildingManager.CreatePaintedTileAt(paintPosition, robot: this);
 			}
 			
 			// Move along the path and place bridges as we go
@@ -1366,7 +1366,7 @@ public partial class BuildingComponent : Node2D
 				foreach (var tile in path)
 				{
 					nextPosition = GetNextPosFromCurrentPos(nextPosition, tile);
-					buildingManager.CreatePaintedTileAt(nextPosition);
+					buildingManager.CreatePaintedTileAt(nextPosition, robot: this);
 				}
 				// Execute the path move by move
 				foreach (var move in path)

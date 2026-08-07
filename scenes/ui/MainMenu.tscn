@@ -7,7 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://cv6tnl0bv6sfg" path="res://scenes/building/Base.tscn" id="3_p8kyu"]
 [ext_resource type="PackedScene" uid="uid://iv4rk5h4ybki" path="res://scenes/level/util/ElevationLayer.tscn" id="3_pnm4a"]
 [ext_resource type="PackedScene" uid="uid://cbehbevyhshu0" path="res://scenes/ui/ControlsMenu.tscn" id="4_mq4j0"]
-[ext_resource type="PackedScene" uid="uid://bky5c7di5gcc0" path="res://scenes/Monolith.tscn" id="4_smdta"]
+[ext_resource type="PackedScene" uid="uid://bky5c7di5gcc0" path="res://scenes/building/Monolith.tscn" id="4_smdta"]
 [ext_resource type="PackedScene" uid="uid://bb2ug053frok2" path="res://scenes/building/GroundRobot.tscn" id="4_tfh3j"]
 [ext_resource type="PackedScene" uid="uid://dr2vs3njjnlm4" path="res://scenes/ui/LevelSelectScreen.tscn" id="7_3j1st"]
 [ext_resource type="PackedScene" uid="uid://bkk040smvshyh" path="res://scenes/building/AerialRobot.tscn" id="8_cel4e"]
@@ -160,6 +160,7 @@ offset_right = 509.0
 offset_bottom = 251.0
 
 [node name="Label" type="Label" parent="CanvasLayer/HBoxContainer"]
+z_index = 3
 layout_mode = 2
 theme_override_constants/line_spacing = 26
 theme_override_font_sizes/font_size = 64
@@ -167,16 +168,21 @@ text = "EXOPLANET
 EXPLORATION
 GAME"
 
-[node name="Control" type="Control" parent="CanvasLayer/HBoxContainer"]
+[node name="Control" type="Control" parent="CanvasLayer/HBoxContainer/Label"]
 z_index = -1
 layout_mode = 2
+anchors_preset = 0
+offset_left = -12.0
+offset_top = -20.0
+offset_right = 492.0
+offset_bottom = 238.0
 
-[node name="TextureRect" type="TextureRect" parent="CanvasLayer/HBoxContainer/Control"]
+[node name="TextureRect" type="TextureRect" parent="CanvasLayer/HBoxContainer/Label/Control"]
 layout_mode = 2
-offset_left = -120.0
-offset_top = -16.0
-offset_right = 40.0
-offset_bottom = 144.0
+offset_left = 352.0
+offset_top = -22.0
+offset_right = 512.0
+offset_bottom = 138.0
 texture = ExtResource("9_54ckx")
 expand_mode = 2
 stretch_mode = 4

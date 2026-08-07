@@ -244,7 +244,6 @@ theme_override_constants/margin_bottom = 8
 layout_mode = 2
 
 [node name="HBoxContainer" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer"]
-visible = false
 layout_mode = 2
 theme_override_constants/separation = 18
 
@@ -254,7 +253,6 @@ theme_override_font_sizes/font_size = 16
 text = "<CHEAT DEV FUNCTION>"
 
 [node name="HBoxContainer2" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer"]
-visible = false
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
@@ -324,11 +322,12 @@ layout_mode = 2
 theme_override_constants/separation = 18
 alignment = 1
 
-[node name="Label" type="Label" parent="MarginContainer3/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="FoldButton" type="Button" parent="MarginContainer3/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
-text = "Deployed units"
-horizontal_alignment = 1
+text = "▶ Deployed units"
+flat = true
 
 [node name="UnitsContainer" type="VBoxContainer" parent="MarginContainer3/PanelContainer/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true

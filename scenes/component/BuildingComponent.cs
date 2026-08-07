@@ -302,26 +302,31 @@ public partial class BuildingComponent : Node2D
 
 	public HashSet<Vector2I> GetTilesWithinDistance(Vector2I startTile, int maxDistanceSensor)
 	{
-		var reachableTiles = new HashSet<Vector2I> { startTile }; // Start with the initial tile
-
-		for (int distance = 1; distance <= maxDistanceSensor; distance++)
+		var reachableTiles = new HashSet<Vector2I>();
+		for (int dx = -maxDistanceSensor; dx <= maxDistanceSensor; dx++)
 		{
-			var currentLevelTiles = new HashSet<Vector2I>();
-
-			foreach (var tile in reachableTiles)
+			int remainingDistance = maxDistanceSensor - Math.Abs(dx);
+			for (int dy = -remainingDistance; dy <= remainingDistance; dy++)
 			{
-				// Add all tiles reachable in one move from the current tile
-				currentLevelTiles.Add(new Vector2I(tile.X + 1, tile.Y));
-				currentLevelTiles.Add(new Vector2I(tile.X - 1, tile.Y));
-				currentLevelTiles.Add(new Vector2I(tile.X, tile.Y + 1));
-				currentLevelTiles.Add(new Vector2I(tile.X, tile.Y - 1));
+				reachableTiles.Add(new Vector2I(startTile.X + dx, startTile.Y + dy));
 			}
-
-			// Merge the newly found tiles into the main set
-			reachableTiles.UnionWith(currentLevelTiles);
 		}
 
 		return reachableTiles;
+	}
+
+	private HashSet<Vector2I> GetCoveredAntennaTiles(Vector2I centerTile, HashSet<Vector2I> antennaTiles, int scanRadius)
+	{
+		var coveredTiles = new HashSet<Vector2I>();
+		foreach (var tile in GetTilesWithinDistance(centerTile, scanRadius))
+		{
+			if (antennaTiles.Contains(tile))
+			{
+				coveredTiles.Add(tile);
+			}
+		}
+
+		return coveredTiles;
 	}
 
 
@@ -389,7 +394,7 @@ public partial class BuildingComponent : Node2D
 	{
 		GameEvents.EmitBuildingMoved(this);
 		buildingAnimatorComponent?.PlayMoveAnimation(originPos, destinationPos);
-		Initialize();
+		CalculateOccupiedCellPositions();
 		if (IsLifting)
 		{
 			if (Battery >= 0) Battery -= 20;
@@ -524,12 +529,14 @@ public partial class BuildingComponent : Node2D
 
 	private (List<string> path, HashSet<Vector2I> bridgeTiles) GetMovesWithAStarAndBridges(Vector2I currentPos, Vector2I targetPos, bool allowWaterCrossing = false)
 	{
-		// Determine the elevation level for bridge pathfinding
-		bool? bridgeElevationIsElevated = null;
-		HashSet<Vector2I> bridgeTiles = new HashSet<Vector2I>();
-		
-		if (allowWaterCrossing && !BuildingResource.IsAerial)
+		using (Telemetry.Scope("BuildingComponent.GetMovesWithAStarAndBridges"))
 		{
+			// Determine the elevation level for bridge pathfinding
+			bool? bridgeElevationIsElevated = null;
+			HashSet<Vector2I> bridgeTiles = new HashSet<Vector2I>();
+		
+			if (allowWaterCrossing && !BuildingResource.IsAerial)
+			{
 			// Check if start and target are at the same elevation level
 			var (startElevation, startIsElevated) = gridManager.GetElevationLayerForTile(currentPos);
 			var (targetElevation, targetIsElevated) = gridManager.GetElevationLayerForTile(targetPos);
@@ -546,35 +553,39 @@ public partial class BuildingComponent : Node2D
 			}
 		}
 		
-		var open = new List<NodeAStar>();
-		var closed = new HashSet<Vector2I>();
-		open.Add(new NodeAStar(currentPos, null, 0, Heuristic(currentPos, targetPos)));
-		var directions = new[] { MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT };
+			var open = new List<NodeAStar>();
+			var closed = new HashSet<Vector2I>();
+			open.Add(new NodeAStar(currentPos, null, 0, Heuristic(currentPos, targetPos)));
+			var directions = new[] { MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT };
 
-		int maxIterations = 1000;
-		int iteration = 0;
-		while (open.Count > 0 && iteration < maxIterations)
-		{
-			open.Sort((a, b) => a.F.CompareTo(b.F));
-			var current = open[0];
-			open.RemoveAt(0);
-			closed.Add(current.Position);
-
-			if (current.Position == targetPos)
+			int maxIterations = 1000;
+			int iteration = 0;
+			using (Telemetry.Scope("BuildingComponent.GetMovesWithAStarAndBridges.Search"))
+			while (open.Count > 0 && iteration < maxIterations)
 			{
-				// Reached the target, reconstruct the path and identify bridge tiles
-				var path = new List<string>();
-				var pathPositions = new List<Vector2I>();
-				var node = current;
-				while (node.Parent != null)
+				open.Sort((a, b) => a.F.CompareTo(b.F));
+				var current = open[0];
+				open.RemoveAt(0);
+				closed.Add(current.Position);
+
+				if (current.Position == targetPos)
 				{
-					var direction = GetDirection(node.Parent.Position, node.Position);
-					path.Add(direction);
-					pathPositions.Add(node.Position);
-					node = node.Parent;
-				}
-				path.Reverse();
-				pathPositions.Reverse();
+				// Reached the target, reconstruct the path and identify bridge tiles
+					var path = new List<string>();
+					var pathPositions = new List<Vector2I>();
+					using (Telemetry.Scope("BuildingComponent.GetMovesWithAStarAndBridges.Reconstruct"))
+					{
+						var node = current;
+						while (node.Parent != null)
+						{
+							var direction = GetDirection(node.Parent.Position, node.Position);
+							path.Add(direction);
+							pathPositions.Add(node.Position);
+							node = node.Parent;
+						}
+						path.Reverse();
+						pathPositions.Reverse();
+					}
 				
 				// Identify which tiles need bridges
 				if (allowWaterCrossing && bridgeElevationIsElevated.HasValue)
@@ -594,8 +605,8 @@ public partial class BuildingComponent : Node2D
 					}
 				}
 				
-				return (path, bridgeTiles);
-			}
+					return (path, bridgeTiles);
+				}
 
 			// Explore neighbors
 			foreach (var direction in directions)
@@ -651,9 +662,10 @@ public partial class BuildingComponent : Node2D
 					existing.Parent = current;
 				}
 			}
-			iteration ++;
+				iteration ++;
+			}
+			return (new List<string> {}, new HashSet<Vector2I>());
 		}
-		return (new List<string> {}, new HashSet<Vector2I>()); 
 	}
 	
 	private int Heuristic(Vector2I a, Vector2I b)
@@ -681,6 +693,41 @@ public partial class BuildingComponent : Node2D
 		if (delta == new Vector2I(-1, 0)) return MOVE_LEFT;
 		if (delta == new Vector2I(1, 0)) return MOVE_RIGHT;
 		return "";
+	}
+
+	private List<string> ConvertPathPositionsToMoves(List<Vector2I> pathPositions)
+	{
+		var moves = new List<string>();
+		if (pathPositions == null || pathPositions.Count < 2)
+		{
+			return moves;
+		}
+
+		for (int i = 1; i < pathPositions.Count; i++)
+		{
+			moves.Add(GetDirection(pathPositions[i - 1], pathPositions[i]));
+		}
+
+		return moves;
+	}
+
+	private async System.Threading.Tasks.Task<List<string>> RequestPathMovesAsync(Vector2I start, Vector2I target)
+	{
+		var tcs = new System.Threading.Tasks.TaskCompletionSource<List<Vector2I>>();
+		buildingAnimatorComponent?.ShowLoading();
+
+		buildingManager.RequestPath(
+			this,
+			start,
+			target,
+			allowBridges: false,
+			bridgeElevationIsElevated: null,
+			excludedPositions: null,
+			callback: path => tcs.TrySetResult(path));
+
+		var pathPositions = await tcs.Task;
+		buildingAnimatorComponent?.HideLoading();
+		return ConvertPathPositionsToMoves(pathPositions);
 	}
 
 	public async void MoveAlongPath(Vector2I targetPosition, bool astar=false)
@@ -717,7 +764,18 @@ public partial class BuildingComponent : Node2D
 		if (astar)
 		{
 			// First, try to find a land-only path
-			var (path, _) = GetMovesWithAStarAndBridges(GetGridCellPosition(), targetPosition, false);
+			List<string> path;
+			using (Telemetry.Scope("BuildingComponent.MoveAlongPath.Astar"))
+			{
+				if (BuildingResource.IsAerial)
+				{
+					path = await RequestPathMovesAsync(GetGridCellPosition(), targetPosition);
+				}
+				else
+				{
+					(path, _) = GetMovesWithAStarAndBridges(GetGridCellPosition(), targetPosition, false);
+				}
+			}
 			bool requiresBridge = false;
 			HashSet<Vector2I> bridgeTilesNeeded = new HashSet<Vector2I>();
 			
@@ -785,18 +843,22 @@ public partial class BuildingComponent : Node2D
 				return;
 			}
 			
-			// Paint the path
-			var paintPosition = GetGridCellPosition();
-			foreach (var move in path)
+			using (Telemetry.Scope("BuildingComponent.MoveAlongPath.PaintPath"))
 			{
-				paintPosition = GetNextPosFromCurrentPos(paintPosition, move);
-				buildingManager.CreatePaintedTileAt(paintPosition, robot: this);
+				var paintPosition = GetGridCellPosition();
+				foreach (var move in path)
+				{
+					paintPosition = GetNextPosFromCurrentPos(paintPosition, move);
+					buildingManager.CreatePaintedTileAt(paintPosition, robot: this);
+				}
 			}
 			
 			// Move along the path and place bridges as we go
 			int bridgesBuilt = 0;
 			for (int i = 0; i < path.Count; i++)
 			{
+				using (Telemetry.Scope("BuildingComponent.MoveAlongPath.FollowPath.Step"))
+				{
 				if (cancelMoveRequested) break;
 				if (currentExplorMode == ExplorMode.None) break;
 				if (IsStuck) break;
@@ -842,6 +904,7 @@ public partial class BuildingComponent : Node2D
 				
 				// Now move in this direction
 				buildingManager.MoveInDirectionAutomated(this, currentDirection);
+				}
 				await ToSignal(GetTree().CreateTimer(BuildingResource.moveInterval), "timeout");
 			}
 		}
@@ -1206,6 +1269,7 @@ public partial class BuildingComponent : Node2D
 
 		// 2. Set of scanned tiles
 		int scanRadius = BuildingResource.AnomalySensorRadius;
+		var coverageCache = new Dictionary<Vector2I, HashSet<Vector2I>>();
 
 		// 3. Start from base
 		var baseRect = buildingManager.gridManager.baseArea; // Rect2I
@@ -1219,30 +1283,48 @@ public partial class BuildingComponent : Node2D
 		int steps = 0;
 		while (scannedTiles.Count < antennaTiles.Count && steps < maxSteps && Battery > 50)
 		{
-			// Scan all tiles within radius
-			foreach (var tile in GetTilesWithinDistance(current, scanRadius))
+			using (Telemetry.Scope("BuildingComponent.RandomExplore.UpdateScannedTiles"))
 			{
-				if (antennaTiles.Contains(tile))
-					scannedTiles.Add(tile);
+				if (!coverageCache.TryGetValue(current, out var currentCoverage))
+				{
+					currentCoverage = GetCoveredAntennaTiles(current, antennaTiles, scanRadius);
+					coverageCache[current] = currentCoverage;
+				}
+
+				scannedTiles.UnionWith(currentCoverage);
 			}
 
 			// Find next best tile to move to (greedy: maximizes new coverage)
 			Vector2I? bestNext = null;
 			int bestNew = 0;
-			foreach (var candidate in antennaTiles)
+			using (Telemetry.Scope("BuildingComponent.RandomExplore.SelectNextTarget"))
 			{
-				if (candidate == current) continue;
-				// Only consider reachable tiles
-				var path = GetMovesToReachTile(current, candidate);
-				if (path.Count == 0) continue;
-				// How many new tiles would be scanned from there?
-				int newTiles = 0;
-				foreach (var t in GetTilesWithinDistance(candidate, scanRadius))
-					if (antennaTiles.Contains(t) && !scannedTiles.Contains(t)) newTiles++;
-				if (newTiles > bestNew)
+				foreach (var candidate in antennaTiles)
 				{
-					bestNew = newTiles;
-					bestNext = candidate;
+					if (candidate == current) continue;
+					var path = GetMovesToReachTile(current, candidate);
+					if (path.Count == 0) continue;
+
+					if (!coverageCache.TryGetValue(candidate, out var candidateCoverage))
+					{
+						candidateCoverage = GetCoveredAntennaTiles(candidate, antennaTiles, scanRadius);
+						coverageCache[candidate] = candidateCoverage;
+					}
+
+					int newTiles = 0;
+					foreach (var t in candidateCoverage)
+					{
+						if (!scannedTiles.Contains(t))
+						{
+							newTiles++;
+						}
+					}
+
+					if (newTiles > bestNew)
+					{
+						bestNew = newTiles;
+						bestNext = candidate;
+					}
 				}
 			}
 			if (bestNext == null || bestNew == 0)

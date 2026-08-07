@@ -25,6 +25,7 @@ SaveManager="*res://scenes/autoload/SaveManager.tscn"
 SettingManager="*res://scenes/autoload/SettingManager.tscn"
 Cursor="*res://scenes/autoload/Cursor.tscn"
 AudioHelpers="*res://scenes/autoload/AudioHelpers.tscn"
+Telemetry="*res://scenes/autoload/Telemetry.cs"
 
 [display]
 

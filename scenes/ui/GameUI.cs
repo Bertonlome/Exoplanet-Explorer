@@ -815,7 +815,7 @@ public partial class GameUI : CanvasLayer
 	/// <summary>
 	/// Preview the complete A* path through all waypoints before execution
 	/// </summary>
-	private void OnPreviewPathButtonPressed()
+	private async void OnPreviewPathButtonPressed()
 	{
 		var paintedTiles = buildingManager.GetAllPaintedTiles();
 		
@@ -876,22 +876,26 @@ public partial class GameUI : CanvasLayer
 					continue;
 				}
 				
-				// Use A* to find path from current position to this waypoint
-				var (moves, bridgeTiles) = robot.ComputeAStarPath(currentPos, waypoint.GridPosition);
-				
-				if (moves.Count == 0)
+				// Request planner for path from currentPos -> waypoint
+				var segTcs = new System.Threading.Tasks.TaskCompletionSource<List<Vector2I>>();
+				buildingManager.RequestPath(robot, currentPos, waypoint.GridPosition, false, null, null, (result) => segTcs.TrySetResult(result));
+				var segPositions = await segTcs.Task;
+				if (segPositions == null || segPositions.Count == 0)
 				{
 					GD.Print($"    No path found to waypoint at ({waypoint.GridPosition.X}, {waypoint.GridPosition.Y}), skipping...");
 					continue;
 				}
-				
-				// Create painted tiles for this path segment
+				// Convert to moves and create painted tiles
 				var pathPos = currentPos;
-				foreach (var move in moves)
+				for (int pi = 1; pi < segPositions.Count; pi++)
 				{
+					var delta = segPositions[pi] - segPositions[pi - 1];
+					string move = "";
+					if (delta == new Vector2I(0, -1)) move = "move_up";
+					else if (delta == new Vector2I(0, 1)) move = "move_down";
+					else if (delta == new Vector2I(-1, 0)) move = "move_left";
+					else if (delta == new Vector2I(1, 0)) move = "move_right";
 					pathPos = robot.ComputeNextPosition(pathPos, move);
-					
-					// Create painted tile at this position (no annotation to avoid clutter)
 					buildingManager.CreatePaintedTileAt(pathPos, string.Empty, robot: robot);
 					totalPathTiles++;
 				}
@@ -911,7 +915,7 @@ public partial class GameUI : CanvasLayer
 	/// <summary>
 	/// Generate A* path preview from strategic plans (waypoints + exclusions)
 	/// </summary>
-	private void GeneratePathPreview(List<Game.API.StrategicPlanDto> plans)
+	private async void GeneratePathPreview(List<Game.API.StrategicPlanDto> plans)
 	{
 		if (plans == null || plans.Count == 0)
 		{
@@ -963,36 +967,41 @@ public partial class GameUI : CanvasLayer
 					continue;
 				}
 				
-				// Use A* to find path from current position to this waypoint
-				var (moves, bridgeTiles) = robot.ComputeAStarPath(currentPos, targetPos);
-				
-				if (moves.Count == 0)
+				// Request planner for path
+				var segTcs = new System.Threading.Tasks.TaskCompletionSource<List<Vector2I>>();
+				buildingManager.RequestPath(robot, currentPos, targetPos, false, null, null, (result) => segTcs.TrySetResult(result));
+				var segPositions = await segTcs.Task;
+				if (segPositions == null || segPositions.Count == 0)
 				{
 					GD.Print($"    No path found to waypoint P{waypoint.Priority} at ({targetPos.X}, {targetPos.Y}), skipping...");
 					continue; // Skip this waypoint and try the next one
 				}
-				
 				// Create painted tiles for this path segment
 				var pathPos = currentPos;
-				foreach (var move in moves)
+				for (int pi = 1; pi < segPositions.Count; pi++)
 				{
+					var delta = segPositions[pi] - segPositions[pi - 1];
+					string move = "";
+					if (delta == new Vector2I(0, -1)) move = "move_up";
+					else if (delta == new Vector2I(0, 1)) move = "move_down";
+					else if (delta == new Vector2I(-1, 0)) move = "move_left";
+					else if (delta == new Vector2I(1, 0)) move = "move_right";
 					pathPos = robot.ComputeNextPosition(pathPos, move);
-					
+
 					// Check if this is the waypoint position - if so, use waypoint's reason as annotation
 					string annotation = string.Empty;
 					if (pathPos == targetPos && !string.IsNullOrEmpty(waypoint.Reason))
 					{
-						// Transfer LIFT/DROP/LIFTING reasons to the tile annotation
 						if (waypoint.Reason.Equals("LIFT", StringComparison.OrdinalIgnoreCase))
 						{
 							annotation = waypoint.Reason;
-							isCarryingRobot = true; // Start carrying after LIFT
+							isCarryingRobot = true;
 							GD.Print($"    Annotated waypoint at ({pathPos.X}, {pathPos.Y}) with '{annotation}'");
 						}
 						else if (waypoint.Reason.Equals("DROP", StringComparison.OrdinalIgnoreCase))
 						{
 							annotation = waypoint.Reason;
-							isCarryingRobot = false; // Stop carrying at DROP
+							isCarryingRobot = false;
 							GD.Print($"    Annotated waypoint at ({pathPos.X}, {pathPos.Y}) with '{annotation}'");
 						}
 						else if (waypoint.Reason.Equals("LIFTING", StringComparison.OrdinalIgnoreCase))
@@ -1003,10 +1012,8 @@ public partial class GameUI : CanvasLayer
 					}
 					else if (isCarryingRobot && string.IsNullOrEmpty(annotation))
 					{
-						// Intermediate tiles between LIFT and DROP get "LIFTING" annotation
 						annotation = "LIFTING";
 					}
-					
 					buildingManager.CreatePaintedTileAt(pathPos, annotation, robot: robot);
 					totalPathTiles++;
 				}

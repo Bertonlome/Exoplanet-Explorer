@@ -90,6 +90,15 @@ public partial class BuildingManager : Node
 	// Track required waypoint positions for each robot (for path recalculation when pushing tiles)
 	private Dictionary<BuildingComponent, List<Vector2I>> robotRequiredWaypoints = new();
 
+	// Planner job queue and scheduler (cooperative, time-sliced A*)
+	private Queue<PathPlannerJob> plannerQueue = new();
+	private List<PathPlannerJob> activePlannerJobs = new();
+
+	[Export]
+	private int PlannerStepsPerFrame = 200; // total A* expansions per frame to distribute
+	[Export]
+	private int MaxConcurrentPlannerJobs = 3; // how many jobs can be active concurrently
+
 	private enum State
 	{
 		Normal,
@@ -523,11 +532,36 @@ public partial class BuildingManager : Node
 
 	public override void _Process(double delta)
 	{
+		using (Telemetry.Scope("BuildingManager._Process"))
+		{
 		clockTickTimer += delta;
 		if (clockTickTimer >= 1.0)
 		{
 			clockTickTimer = 0.0;
 			EmitSignal(SignalName.ClockIsTicking);
+		}
+
+		// Advance planner jobs in a cooperative, time-sliced manner
+		if (plannerQueue.Count > 0 || activePlannerJobs.Count > 0)
+		{
+			// Activate queued jobs up to concurrency limit
+			while (plannerQueue.Count > 0 && activePlannerJobs.Count < MaxConcurrentPlannerJobs)
+			{
+				activePlannerJobs.Add(plannerQueue.Dequeue());
+			}
+
+			int jobCount = Math.Max(1, activePlannerJobs.Count);
+			int stepsPerJob = Math.Max(1, PlannerStepsPerFrame / jobCount);
+
+			for (int i = activePlannerJobs.Count - 1; i >= 0; i--)
+			{
+				var job = activePlannerJobs[i];
+				job.Step(stepsPerJob);
+				if (job.Completed)
+				{
+					activePlannerJobs.RemoveAt(i);
+				}
+			}
 		}
 		Vector2I mouseGridPosition = Vector2I.Zero;
 
@@ -616,12 +650,22 @@ public partial class BuildingManager : Node
 			UpdateHoveredGridArea();
 		}
 
+		}
 	}
 
 	public void SetStartingResourceCount(int count)
 	{
 		startingWoodCount = count;
 		EmitSignal(SignalName.AvailableResourceCountChanged, AvailableWoodCount);
+	}
+
+	/// <summary>
+	/// Request a path to be planned cooperatively. The provided callback will be invoked when the job completes (path or null).
+	/// </summary>
+	public void RequestPath(BuildingComponent robot, Vector2I start, Vector2I target, bool allowBridges, bool? bridgeElevationIsElevated, HashSet<Vector2I> excludedPositions, Action<List<Vector2I>> callback)
+	{
+		var job = new PathPlannerJob(gridManager, robot, start, target, allowBridges, bridgeElevationIsElevated, excludedPositions, callback);
+		plannerQueue.Enqueue(job);
 	}
 
 	public void SetStartingMaterialCount(int count)
@@ -1226,16 +1270,6 @@ public partial class BuildingManager : Node
 		liftedRobot.TryDropResourcesAtBase();
 		//EmitSignal(SignalName.AvailableResourceCountChanged, AvailableResourceCount);
 
-		var test = gridManager.CanMoveBuilding(liftedRobot);
-		if (!test)
-		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("liftedRobot out of antenna coverage", liftedRobot);
-			if (direction == MOVE_DOWN) MoveInDirection(liftedRobot, MOVE_UP);
-			else if (direction == MOVE_LEFT) MoveInDirection(liftedRobot, MOVE_RIGHT);
-			else if (direction == MOVE_RIGHT) MoveInDirection(liftedRobot, MOVE_LEFT);
-			else if (direction == MOVE_UP) MoveInDirection(liftedRobot, MOVE_DOWN);
-		}
-
 	}
 
 	public void MoveInDirection(BuildingComponent robot, StringName direction)
@@ -1300,117 +1334,109 @@ public partial class BuildingManager : Node
 		robot.UpdateMoveHistory(originPos, direction);
 
 		robot.FreeOccupiedCellPosition();
-		gridManager.UpdateBuildingComponentGridState(robot);
 
 		buildingNode.Position += directionVector * 64;
 		robot.Moved((Vector2I)originPos, destinationPosition);
 		robot.TryDropResourcesAtBase();
 		//EmitSignal(SignalName.AvailableResourceCountChanged, AvailableResourceCount);
-
-		var test = gridManager.CanMoveBuilding(robot);
-		if (!test)
-		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
-			if (direction == MOVE_DOWN) MoveInDirection(robot, MOVE_UP);
-			else if (direction == MOVE_LEFT) MoveInDirection(robot, MOVE_RIGHT);
-			else if (direction == MOVE_RIGHT) MoveInDirection(robot, MOVE_LEFT);
-			else if (direction == MOVE_UP) MoveInDirection(robot, MOVE_DOWN);
-		}
 		robot.SetToIdle();
 	}
 
 
 	public bool MoveInDirectionAutomated(BuildingComponent robot, StringName direction)
 	{
-		if (robot.IsStuck)
+		using (Telemetry.Scope("BuildingManager.MoveInDirectionAutomated"))
 		{
-			robot.currentExplorMode = BuildingComponent.ExplorMode.None;
-			return false;
-		}
-		if (robot.Battery <= 0)
-		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", robot);
-			robot.currentExplorMode = BuildingComponent.ExplorMode.None;
-			return false;
-		}
-
-
-		Vector2I directionVector;
-		if (direction == MOVE_UP) directionVector = new Vector2I(0, -1);
-		else if (direction == MOVE_DOWN) directionVector = new Vector2I(0, 1);
-		else if (direction == MOVE_LEFT) directionVector = new Vector2I(-1, 0);
-		else if (direction == MOVE_RIGHT) directionVector = new Vector2I(1, 0);
-		else return false;
-
-		Node2D buildingNode = (Node2D)robot.GetParent();
-		var originPos = robot.GetGridCellPosition();
-		var originArea = robot.GetAreaOccupied(originPos);
-		//originArea.Position = new Vector2I(originArea.Position.X / 64, originArea.Position.Y / 64);
-		Vector2I destinationPosition = new Vector2I((int)((buildingNode.Position.X + (directionVector.X * 64)) / 64), (int)((buildingNode.Position.Y + (directionVector.Y * 64)) / 64));
-		Rect2I destinationArea = robot.GetAreaOccupiedAfterMovingFromPos(destinationPosition);
-
-
-		if (!gridManager.CanMoveBuilding(robot, destinationArea))
-		{
-			robot.CanMove = false;
-			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
-			return false;
-		}
-
-		if (!IsMoveableAtArea(robot, originArea, destinationArea))
-		{
-			//FloatingTextManager.ShowMessageAtBuildingPosition("Can't move there!", buildingComponent);
-			return false;
-		}
-
-		if (gridManager.IsTileMud(destinationPosition))
-		{
-			//Higher chance to get stuck on mud
-			double mudChance = random.NextDouble();
-			if (mudChance <= robot.BuildingResource.StuckChancePerMove * 100)
+			using (Telemetry.Scope("BuildingManager.MoveInDirectionAutomated.Prechecks"))
 			{
-				MoveInDirectionAutomated(robot, GetRandomDirection());
-				FloatingTextManager.ShowMessageAtBuildingPosition("Robot is stuck in the mud :-(", robot);
-				robot.SetToStuck();
-				return false;
+				if (robot.IsStuck)
+				{
+					robot.currentExplorMode = BuildingComponent.ExplorMode.None;
+					return false;
+				}
+				if (robot.Battery <= 0)
+				{
+					FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", robot);
+					robot.currentExplorMode = BuildingComponent.ExplorMode.None;
+					return false;
+				}
 			}
-		}
-		else
-		{
-			double chance = random.NextDouble();
-			if (chance <= robot.BuildingResource.StuckChancePerMove)
+
+
+			Vector2I directionVector;
+			if (direction == MOVE_UP) directionVector = new Vector2I(0, -1);
+			else if (direction == MOVE_DOWN) directionVector = new Vector2I(0, 1);
+			else if (direction == MOVE_LEFT) directionVector = new Vector2I(-1, 0);
+			else if (direction == MOVE_RIGHT) directionVector = new Vector2I(1, 0);
+			else return false;
+
+			Node2D buildingNode = (Node2D)robot.GetParent();
+			var originPos = robot.GetGridCellPosition();
+			var originArea = robot.GetAreaOccupied(originPos);
+			Vector2I destinationPosition = new Vector2I((int)((buildingNode.Position.X + (directionVector.X * 64)) / 64), (int)((buildingNode.Position.Y + (directionVector.Y * 64)) / 64));
+			Rect2I destinationArea = robot.GetAreaOccupiedAfterMovingFromPos(destinationPosition);
+
+
+			using (Telemetry.Scope("BuildingManager.MoveInDirectionAutomated.NetworkCheck"))
 			{
-				MoveInDirectionAutomated(robot, GetRandomDirection());
-				FloatingTextManager.ShowMessageAtBuildingPosition("Robot is stuck", robot);
-				robot.SetToStuck();
-				return false;
+				if (!gridManager.CanMoveBuilding(robot, destinationArea))
+				{
+					robot.CanMove = false;
+					FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
+					return false;
+				}
 			}
+
+			using (Telemetry.Scope("BuildingManager.MoveInDirectionAutomated.CollisionCheck"))
+			{
+				if (!IsMoveableAtArea(robot, originArea, destinationArea))
+				{
+					return false;
+				}
+			}
+
+			using (Telemetry.Scope("BuildingManager.MoveInDirectionAutomated.StuckCheck"))
+			{
+				if (gridManager.IsTileMud(destinationPosition))
+				{
+					double mudChance = random.NextDouble();
+					if (mudChance <= robot.BuildingResource.StuckChancePerMove * 100)
+					{
+						MoveInDirectionAutomated(robot, GetRandomDirection());
+						FloatingTextManager.ShowMessageAtBuildingPosition("Robot is stuck in the mud :-(", robot);
+						robot.SetToStuck();
+						return false;
+					}
+				}
+				else
+				{
+					double chance = random.NextDouble();
+					if (chance <= robot.BuildingResource.StuckChancePerMove)
+					{
+						MoveInDirectionAutomated(robot, GetRandomDirection());
+						FloatingTextManager.ShowMessageAtBuildingPosition("Robot is stuck", robot);
+						robot.SetToStuck();
+						return false;
+					}
+				}
+			}
+
+			using (Telemetry.Scope("BuildingManager.MoveInDirectionAutomated.CommitMove"))
+			{
+				if (robot.currentExplorMode != BuildingComponent.ExplorMode.ReturnToBase)
+				{
+					robot.UpdateMoveHistory(originPos, direction);
+				}
+
+				robot.FreeOccupiedCellPosition();
+
+				buildingNode.Position += directionVector * 64;
+				robot.Moved((Vector2I)originPos, destinationPosition);
+				robot.TryDropResourcesAtBase();
+			}
+
+			return true;
 		}
-
-		if (robot.currentExplorMode != BuildingComponent.ExplorMode.ReturnToBase)
-		{
-			robot.UpdateMoveHistory(originPos, direction);
-		}
-
-		robot.FreeOccupiedCellPosition();
-		gridManager.UpdateBuildingComponentGridState(robot);
-
-		buildingNode.Position += directionVector * 64;
-		robot.Moved((Vector2I)originPos, destinationPosition);
-		robot.TryDropResourcesAtBase();
-
-		//EmitSignal(SignalName.AvailableResourceCountChanged, AvailableResourceCount);
-
-		var test = gridManager.CanMoveBuilding(robot);
-		if (!test)
-		{
-			//FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", buildingComponent);
-			if (direction == MOVE_DOWN) MoveInDirectionAutomated(robot, MOVE_UP);
-			else if (direction == MOVE_LEFT) MoveInDirectionAutomated(robot, MOVE_RIGHT);
-			else if (direction == MOVE_RIGHT) MoveInDirectionAutomated(robot, MOVE_LEFT);
-			else if (direction == MOVE_UP) MoveInDirectionAutomated(robot, MOVE_DOWN);
-		}
-		return true;
 	}
 
 
@@ -1442,11 +1468,14 @@ public partial class BuildingManager : Node
 
 	private void DestroyAllPaintedTiles()
 	{
-		foreach (var paintedTile in paintedTiles)
+		using (Telemetry.Scope("BuildingManager.DestroyAllPaintedTiles"))
 		{
-			paintedTile.QueueFree();
+			foreach (var paintedTile in paintedTiles)
+			{
+				paintedTile.QueueFree();
+			}
+			paintedTiles.Clear();
 		}
-		paintedTiles.Clear();
 	}
 	
 	/// <summary>
@@ -1454,6 +1483,8 @@ public partial class BuildingManager : Node
 	/// </summary>
 	public void ClearPaintedTilesForRobot(BuildingComponent robot)
 	{
+		using (Telemetry.Scope("BuildingManager.ClearPaintedTilesForRobot"))
+		{
 		if (robot == null) return;
 		
 		// Remove and free painted tiles associated with this robot
@@ -1466,6 +1497,7 @@ public partial class BuildingManager : Node
 		
 		// Clear the robot's own list
 		robot.paintedTiles.Clear();
+		}
 	}
 	
 	/// <summary>
@@ -1474,6 +1506,8 @@ public partial class BuildingManager : Node
 	/// </summary>
 	public void ClearAllPaintedTiles(BuildingComponent robot = null)
 	{
+		using (Telemetry.Scope("BuildingManager.ClearAllPaintedTiles"))
+		{
 		if (robot != null)
 		{
 			ClearPaintedTilesForRobot(robot);
@@ -1489,6 +1523,7 @@ public partial class BuildingManager : Node
 				r.paintedTiles.Clear();
 			}
 		}
+		}
 	}
 	
 	/// <summary>
@@ -1498,6 +1533,8 @@ public partial class BuildingManager : Node
 	/// <param name="robot">The robot this tile belongs to. Falls back to selectedBuildingComponent if null.</param>
 	public void CreatePaintedTileAt(Vector2I gridPosition, string annotation = "", bool isCheckpoint = false, BuildingComponent robot = null)
 	{
+		using (Telemetry.Scope("BuildingManager.CreatePaintedTileAt"))
+		{
 		var ownerRobot = robot ?? selectedBuildingComponent;
 		if (ownerRobot == null)
 		{
@@ -1564,6 +1601,7 @@ public partial class BuildingManager : Node
 		
 		ownerRobot.AddPaintedTile(paintedTile);
 		paintedTiles.Add(paintedTile);
+		}
 	}	private void RenumberPaintedTiles()
 	{
 		// Renumber all painted tiles sequentially

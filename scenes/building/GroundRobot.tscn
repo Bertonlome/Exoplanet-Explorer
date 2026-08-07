@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://ce2hqhobmdg47" path="res://scenes/component/BuildingComponent.tscn" id="3_0a6pq"]
 [ext_resource type="PackedScene" uid="uid://5c855rmarlp6" path="res://scenes/building/sprite/GroundRobotAnimatedSprite2D.tscn" id="3_rtdwq"]
-[ext_resource type="PackedScene" uid="uid://dc2xq2xonf7nc" path="res://scenes/building/sprite/loadingIconAnimatedSprite2D.tscn" id="4_47jof"]
+[ext_resource type="PackedScene" uid="uid://dc2xq2xonf7nc" path="res://scenes/building/sprite/LoadingIconAnimatedSprite2D.tscn" id="4_47jof"]
 [ext_resource type="PackedScene" uid="uid://dtadqyklji2e7" path="res://scenes/component/BuildingAnimatorComponent.tscn" id="4_ps8v2"]
 
 [node name="GroundRobot" type="Node2D"]

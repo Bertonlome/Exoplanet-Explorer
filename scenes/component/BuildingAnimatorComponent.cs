@@ -23,6 +23,7 @@ public partial class BuildingAnimatorComponent : Node2D
 	private Sprite2D maskNode;
 	private AudioStreamPlayer impactAudioStreamPlayer;
 	private AnimatedSprite2D robotSprite;
+    private AnimatedSprite2D loadingIcon;
 
 	public override void _Ready()
 	{
@@ -127,5 +128,58 @@ public partial class BuildingAnimatorComponent : Node2D
 
 		animationRootNode.AddChild(spriteNode);
 		spriteNode.Position = new Vector2(0, 0);
+
+
+		// Try to find an existing loading icon anywhere under the animation root or owner.
+		// Prefer the editor-placed node so its position/scale are preserved.
+		var found = FindAnimatedSpriteRecursive(animationRootNode, "LoadingIconAnimatedSprite2D");
+		if (found == null && Owner != null)
+		{
+			found = FindAnimatedSpriteRecursive(Owner, "LoadingIconAnimatedSprite2D");
+		}
+		if (found != null)
+		{
+			loadingIcon = found;
+			loadingIcon.Visible = false; // ensure hidden initially but keep editor transform
+		}
+		else
+		{
+			loadingIcon = new AnimatedSprite2D
+			{
+				Name = "LoadingIconAnimatedSprite2D",
+				Visible = false,
+				Position = new Vector2(0, -48),
+				Scale = new Vector2(0.5f, 0.5f)
+			};
+			animationRootNode.AddChild(loadingIcon);
+		}
+	}
+
+	private AnimatedSprite2D FindAnimatedSpriteRecursive(Node start, string name)
+	{
+		if (start == null) return null;
+		foreach (var childObj in start.GetChildren())
+		{
+			if (childObj is Node childNode)
+			{
+				if (childNode.Name == name && childNode is AnimatedSprite2D sprite)
+					return sprite;
+				var found = FindAnimatedSpriteRecursive(childNode, name);
+				if (found != null) return found;
+			}
+		}
+		return null;
+	}
+
+	public void ShowLoading()
+	{
+		if (loadingIcon == null) return;
+		loadingIcon.Visible = true;
+	}
+
+	public void HideLoading()
+	{
+		if (loadingIcon == null) return;
+		loadingIcon.Visible = false;
 	}
 }

@@ -57,6 +57,10 @@ public partial class GridManager : Node
 	public HashSet<Vector2I> baseAntennaCoveredTiles = new();
 	private HashSet<Vector2I> baseProximityTiles = new();
 	private HashSet<Vector2I> monolithTiles = new();
+	private bool buildableTileCacheDirty = true;
+	private HashSet<Vector2I> connectedNetworkCoverageTiles = new();
+	private HashSet<BuildingComponent> connectedNetworkBuildings = new();
+	private bool movementCoverageCacheInitialized = false;
 
 	public Rect2I baseArea = new();
 
@@ -157,6 +161,8 @@ public partial class GridManager : Node
 
 	public bool TryPlaceBridgeTile(Rect2I robotPosition, Rect2I bridgeArea, string orientation)
 	{
+		using (Telemetry.Scope("GridManager.TryPlaceBridgeTile"))
+		{
 		var (robotElevation, robotIsElevated) = GetElevationLayerForTile(robotPosition.Position);
 		var (targetElevation, targetIsElevated) = GetElevationLayerForTile(bridgeArea.Position);
 		var bridgeTileMapLayer = bridgeTileMapLayerBase;
@@ -185,6 +191,7 @@ public partial class GridManager : Node
 			bridgeTileMapLayer.SetCell(position, 14, new Vector2I(0, 2)); // Assuming 14 is the bridge tile ID
 		}
 		return true;
+		}
 	}
 
 	public string GetTileDiscoveredElements(Vector2I tilePosition)
@@ -200,11 +207,13 @@ public partial class GridManager : Node
 
 	public bool IsTilePositionInAnyBuildingRadius(Vector2I tilePosition)
 	{
+		EnsureBuildableTileCache();
 		return allTilesInBuildingRadius.Contains(tilePosition);
 	}
 
 	public bool IsTileAreaBuildable(Rect2I tileArea, bool isAttackTiles = false, bool isBase = false, bool isBridge = false)
 	{
+		EnsureBuildableTileCache();
 		IEnumerable<Vector2I> tileSetToCheck;
 		var tiles = tileArea.ToTiles();
 		if (tiles.Count == 0) return false;
@@ -248,87 +257,53 @@ public partial class GridManager : Node
 
 	public bool IsBuildingMovable(BuildingComponent buildingComponent, Rect2I originArea, Rect2I destinationArea, bool considerBridge = false, bool? bridgeElevationIsElevated = null)
 	{
-		IEnumerable<Vector2I> tileSetToCheckGround;
-		IEnumerable<Vector2I> tileSetToCheckAerial;
-
 		var tilesDestination = destinationArea.ToTiles();
 		var tilesOrigin = originArea.ToTiles();
 
 		if (tilesDestination.Count == 0) return false;
+		var originTiles = tilesOrigin.ToHashSet();
+		var originTile = tilesOrigin[0];
+
+		if (buildingComponent.BuildingResource.IsAerial)
+		{
+			return tilesDestination.All((tilePosition) =>
+			{
+				if (occupiedTiles.Contains(tilePosition) && !originTiles.Contains(tilePosition))
+				{
+					return false;
+				}
+
+				(_, bool isWood) = GetTileCustomData(tilePosition, IS_WOOD);
+				return !isWood;
+			});
+		}
 
 		(TileMapLayer firstTileMapLayer, _) = GetTileCustomData(tilesDestination[0], IS_ROUGH_TERRAIN);
 		var targetElevationLayer = firstTileMapLayer != null ? tileMapLayerToElevationLayer[firstTileMapLayer] : null;
 
-		(firstTileMapLayer, _) = GetTileCustomData(tilesOrigin[0], IS_ROUGH_TERRAIN);
+		(firstTileMapLayer, _) = GetTileCustomData(originTile, IS_ROUGH_TERRAIN);
 		var OriginElevationLayer = firstTileMapLayer != null ? tileMapLayerToElevationLayer[firstTileMapLayer] : null;
-
-		var transitionTile = originArea.ToTiles().Intersect(destinationArea.ToTiles()).ToHashSet();
-
-		//tileSetToCheckGround = GetBuildableTileSet().Union(transitionTile).ToHashSet(); //Buildable takes into account rocks and plants
-		tileSetToCheckGround = occupiedTiles.ToHashSet();
-		tileSetToCheckAerial = occupiedTiles.ToHashSet(); //UAV can fly over rocks and plants
-
-		foreach (var tilePosition in tilesDestination)
-		{
-			(TileMapLayer tileMapLayer, bool isRoulable) = GetTileCustomData(tilePosition, IS_ROUGH_TERRAIN);
-			var elevationLayer = tileMapLayer != null ? tileMapLayerToElevationLayer[tileMapLayer] : null;
-			(tileMapLayer, bool isWood) = GetTileCustomData(tilePosition, IS_WOOD);
-			(_, bool isInWood) = GetTileCustomData(tilesOrigin[0], IS_WOOD);
-			(_, bool isBridge) = GetTileCustomData(tilesOrigin[0], IS_BRIDGE);
-			(_, bool isInBridge) = GetTileCustomData(tilePosition, IS_BRIDGE);
-			(_, bool isWater) = GetTileCustomData(tilePosition, IS_WATER);
-			(_, bool isMud) = GetTileCustomData(tilePosition, IS_MUD);
-			(_, bool isInMud) = GetTileCustomData(tilesOrigin[0], IS_MUD);
-			var (robotElevation, robotIsElevated) = GetElevationLayerForTile(tilesOrigin[0]);
-			var (targetElevation, targetIsElevated) = GetElevationLayerForTile(tilePosition);
-
-			// When considerBridge is true and bridgeElevationIsElevated is set,
-			// we're simulating that the robot is on a bridge at that elevation level
-			bool canCrossWithBridge = false;
-			if (considerBridge && bridgeElevationIsElevated.HasValue)
-			{
-				// Allow movement if the target tile will have a bridge at the same elevation level
-				// This simulates: "pretend there's a bridge here at the path's elevation level"
-				canCrossWithBridge = true;
-			}
-
-
-			//Check for ground vehicle
-			var check1 = tileSetToCheckGround.Contains(tilePosition) ? false : true;
-			var check2 = elevationLayer == targetElevationLayer ? true : false;
-			var check3 = OriginElevationLayer == targetElevationLayer ? true : false || canCrossWithBridge || isWood || isInWood || isMud || isInMud;
-			var check7 = !isRoulable;
-			var check8 = !buildingComponent.BuildingResource.IsAerial;
-			//Check for aerial vehicle
-			var check4 = buildingComponent.BuildingResource.IsAerial;
-			var check5 = tileSetToCheckAerial.Contains(tilePosition) ? false : true;
-			var check6 = !isWood;
-		}
+		(_, bool isInMud) = GetTileCustomData(originTile, IS_MUD);
 
 		return tilesDestination.All((tilePosition) =>
 		{
 			(TileMapLayer tileMapLayer, bool isRoulable) = GetTileCustomData(tilePosition, IS_ROUGH_TERRAIN);
 			var elevationLayer = tileMapLayer != null ? tileMapLayerToElevationLayer[tileMapLayer] : null;
 			(tileMapLayer, bool isWood) = GetTileCustomData(tilePosition, IS_WOOD);
-			(_, bool isInWood) = GetTileCustomData(tilesOrigin[0], IS_WOOD);
-			(_, bool isBridge) = GetTileCustomData(tilesOrigin[0], IS_BRIDGE);
-			(_, bool isInBridge) = GetTileCustomData(tilePosition, IS_BRIDGE);
 			(_, bool isMud) = GetTileCustomData(tilePosition, IS_MUD);
-			(_, bool isInMud) = GetTileCustomData(tilesOrigin[0], IS_MUD);
 			(_, bool isWater) = GetTileCustomData(tilePosition, IS_WATER);
-			var (robotElevation, robotIsElevated) = GetElevationLayerForTile(tilesOrigin[0]);
 			var (targetElevation, targetIsElevated) = GetElevationLayerForTile(tilePosition);
 
 			// DEBUG: Log tile checking details
-			if (considerBridge && bridgeElevationIsElevated.HasValue)
-			{
-				GD.Print($"[Bridge Check] Tile {tilePosition}:");
-				GD.Print($"  - elevationLayer: {elevationLayer?.Name ?? "null"}");
-				GD.Print($"  - targetElevationLayer: {targetElevationLayer?.Name ?? "null"}");
-				GD.Print($"  - robotIsElevated: {robotIsElevated}, targetIsElevated: {targetIsElevated}");
-				GD.Print($"  - isWater: {isWater}, isRoulable: {isRoulable}, isWood: {isWood}");
-				GD.Print($"  - bridgeElevationIsElevated: {bridgeElevationIsElevated.Value}");
-			}
+			//if (considerBridge && bridgeElevationIsElevated.HasValue)
+			//{
+				//GD.Print($"[Bridge Check] Tile {tilePosition}:");
+				//GD.Print($"  - elevationLayer: {elevationLayer?.Name ?? "null"}");
+				//GD.Print($"  - targetElevationLayer: {targetElevationLayer?.Name ?? "null"}");
+				//GD.Print($"  - robotIsElevated: {robotIsElevated}, targetIsElevated: {targetIsElevated}");
+				//GD.Print($"  - isWater: {isWater}, isRoulable: {isRoulable}, isWood: {isWood}");
+				//GD.Print($"  - bridgeElevationIsElevated: {bridgeElevationIsElevated.Value}");
+			//}
 
 			// When considerBridge is true and bridgeElevationIsElevated is set,
 			// we're planning a bridge at a specific elevation level
@@ -354,42 +329,15 @@ public partial class GridManager : Node
 				}
 			}
 
-			// Check for GROUND vehicle (rovers)
-			if (!buildingComponent.BuildingResource.IsAerial)
-			{
-				var check1 = !tileSetToCheckGround.Contains(tilePosition); // Not occupied by another robot
-				// check2: Elevation layer check - relaxed when bridges allow crossing
-				var check2 = elevationLayer == targetElevationLayer || canCrossWithBridge;
-				// check3: Origin and target elevation must match unless bridges allow it
-				var check3 = OriginElevationLayer == targetElevationLayer || canCrossWithBridge || 
-				             (isMud && OriginElevationLayer == targetElevationLayer) || 
-				             (isInMud && OriginElevationLayer == targetElevationLayer);
-				var check7 = !isRoulable; // Not rough terrain (rocks, plants)
-				var check9 = !isWater || canCrossWithBridge; // Not water unless bridge allows it
-				
-				// DEBUG: Log check results
-				/*if (considerBridge && bridgeElevationIsElevated.HasValue)
-				{
-					GD.Print($"  - canCrossWithBridge: {canCrossWithBridge}");
-					GD.Print($"  - check1 (not occupied): {check1}");
-					GD.Print($"  - check2 (elevation layer): {check2}");
-					GD.Print($"  - check3 (origin/target match): {check3}");
-					GD.Print($"  - check7 (not rough): {check7}");
-					GD.Print($"  - check9 (water/bridge): {check9}");
-					GD.Print($"  - RESULT: {check1 && check2 && check3 && check7 && check9}");
-				}
-				*/
-				
-				return check1 && check2 && check3 && check7 && check9;
-			}
-			// Check for AERIAL vehicle (drones)
-			else
-			{
-				var check5 = !tileSetToCheckAerial.Contains(tilePosition); // Not occupied by another robot
-				var check6 = !isWood; // Cannot fly through trees
-				
-				return check5 && check6;
-			}
+			var check1 = !occupiedTiles.Contains(tilePosition) || originTiles.Contains(tilePosition);
+			var check2 = elevationLayer == targetElevationLayer || canCrossWithBridge;
+			var check3 = OriginElevationLayer == targetElevationLayer || canCrossWithBridge || 
+			             (isMud && OriginElevationLayer == targetElevationLayer) || 
+			             (isInMud && OriginElevationLayer == targetElevationLayer);
+			var check7 = !isRoulable;
+			var check9 = !isWater || canCrossWithBridge;
+
+			return check1 && check2 && check3 && check7 && check9;
 		});
 	}
 
@@ -419,19 +367,26 @@ public partial class GridManager : Node
 
 	public void HighlightDangerOccupiedTiles()
 	{
-		var atlasCoords = new Vector2I(2, 0);
-		foreach (var tilePosition in dangerOccupiedTiles)
+		using (Telemetry.Scope("GridManager.HighlightDangerOccupiedTiles"))
 		{
-			highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+			var atlasCoords = new Vector2I(2, 0);
+			foreach (var tilePosition in dangerOccupiedTiles)
+			{
+				highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+			}
 		}
 	}
 
 	public void HighlightBuildableTiles(bool isAttackTiles = false)
 	{
-		if (!showHighlightedTiles) return;
-		foreach (var tilePosition in GetValidTileSet())
+		using (Telemetry.Scope("GridManager.HighlightBuildableTiles"))
 		{
-			highlightTilemapLayer.SetCell(tilePosition, 0, Vector2I.Zero);
+			EnsureBuildableTileCache();
+			if (!showHighlightedTiles) return;
+			foreach (var tilePosition in GetValidTileSet())
+			{
+				highlightTilemapLayer.SetCell(tilePosition, 0, Vector2I.Zero);
+			}
 		}
 	}
 
@@ -445,42 +400,56 @@ public partial class GridManager : Node
 
 	public void HighlightExpandedBuildableTiles(Rect2I tileArea, int radius)
 	{
-		var validTiles = GetValidTilesInRadius(tileArea, radius).ToHashSet();
-		var expandedTiles = validTiles.Except(validBuildableTiles).Except(occupiedTiles);
-		var atlasCoords = new Vector2I(1, 0);
-		foreach (var tilePosition in expandedTiles)
+		using (Telemetry.Scope("GridManager.HighlightExpandedBuildableTiles"))
 		{
-			highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+			EnsureBuildableTileCache();
+			var validTiles = GetValidTilesInRadius(tileArea, radius).ToHashSet();
+			var expandedTiles = validTiles.Except(validBuildableTiles).Except(occupiedTiles);
+			var atlasCoords = new Vector2I(1, 0);
+			foreach (var tilePosition in expandedTiles)
+			{
+				highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+			}
 		}
 	}
 
 	public void HighlightAttackTiles(Rect2I tileArea, int radius)
 	{
-		var buildingAreaTiles = tileArea.ToTiles();
-		var validTiles = GetValidTilesInRadius(tileArea, radius).ToHashSet()
-			.Except(validBuildableAttackTiles)
-			.Except(buildingAreaTiles);
-
-		var atlasCoords = new Vector2I(1, 0);
-		foreach (var tilePosition in validTiles)
+		using (Telemetry.Scope("GridManager.HighlightAttackTiles"))
 		{
-			highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+			EnsureBuildableTileCache();
+			var buildingAreaTiles = tileArea.ToTiles();
+			var validTiles = GetValidTilesInRadius(tileArea, radius).ToHashSet()
+				.Except(validBuildableAttackTiles)
+				.Except(buildingAreaTiles);
+
+			var atlasCoords = new Vector2I(1, 0);
+			foreach (var tilePosition in validTiles)
+			{
+				highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+			}
 		}
 	}
 
 	public void HighlightResourceTiles(Rect2I tileArea, int radius)
 	{
-		var resourceTiles = GetWoodTilesInRadius(tileArea, radius);
-		var atlasCoords = new Vector2I(1, 0);
-		foreach (var tilePosition in resourceTiles)
+		using (Telemetry.Scope("GridManager.HighlightResourceTiles"))
 		{
-			highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+			var resourceTiles = GetWoodTilesInRadius(tileArea, radius);
+			var atlasCoords = new Vector2I(1, 0);
+			foreach (var tilePosition in resourceTiles)
+			{
+				highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+			}
 		}
 	}
 
 	public void ClearHighlightedTiles()
 	{
-		highlightTilemapLayer.Clear();
+		using (Telemetry.Scope("GridManager.ClearHighlightedTiles"))
+		{
+			highlightTilemapLayer.Clear();
+		}
 	}
 
 	public Vector2I GetMouseGridCellPositionWithDimensionOffset(Vector2 dimensions)
@@ -506,6 +475,8 @@ public partial class GridManager : Node
 
 	public bool CanMoveBuilding(BuildingComponent toMoveBuildingComponent, Rect2I destinationArea = new Rect2I())
 	{
+		EnsureMovementCoverageCache();
+
 		if(destinationArea.Area == 0)
 		{
 			destinationArea = toMoveBuildingComponent.GetAreaOccupied(ConvertWorldPositionToTilePosition(toMoveBuildingComponent.GlobalPosition));
@@ -515,13 +486,28 @@ public partial class GridManager : Node
 
 		if(toMoveBuildingComponent.BuildingResource.BuildableRadius > 0)
 		{
-			return IsRobotNetworkConnected(toMoveBuildingComponent, tilesInRadiusofRobotArrival) && IsGettingOutOfACoverage(toMoveBuildingComponent, destinationArea);
+			buildingToBuildableTiles.TryGetValue(toMoveBuildingComponent, out var currentCoverage);
+			foreach (var tilePosition in tilesInRadiusofRobotArrival)
+			{
+				if (baseAntennaCoveredTiles.Contains(tilePosition))
+				{
+					return true;
+				}
+
+				if (connectedNetworkCoverageTiles.Contains(tilePosition) && (currentCoverage == null || !currentCoverage.Contains(tilePosition)))
+				{
+					return true;
+				}
+			}
+
+			return false;
 		}
 		return false;
 	}
 
 	public bool CanDestroyBuilding(BuildingComponent toDestroyBuildingComponent)
 	{
+		EnsureBuildableTileCache();
 		if (toDestroyBuildingComponent.BuildingResource.BuildableRadius > 0)
 		{
 			return !WillBuildingDestructionCreateOrphanBuildings(toDestroyBuildingComponent) &&
@@ -721,9 +707,11 @@ public partial class GridManager : Node
 		}
 	}
 
-	private void UpdateValidBuildableTiles(BuildingComponent buildingComponent)
+	private void UpdateValidBuildableTiles(BuildingComponent buildingComponent, bool emitGridStateUpdated = true)
 	{
-		occupiedTiles.UnionWith(buildingComponent.GetOccupiedCellPositions());
+		using (Telemetry.Scope("GridManager.UpdateValidBuildableTiles"))
+		{
+			occupiedTiles.UnionWith(buildingComponent.GetOccupiedCellPositions());
 		var tileArea = buildingComponent.GetTileArea();
 
 		if (buildingComponent.BuildingResource.BuildableRadius > 0)
@@ -740,8 +728,12 @@ public partial class GridManager : Node
 		validBuildableTiles.ExceptWith(occupiedTiles);
 		validBuildableAttackTiles.UnionWith(validBuildableTiles);
 
-		validBuildableTiles.ExceptWith(dangerOccupiedTiles);
-		EmitSignal(SignalName.GridStateUpdated);
+			validBuildableTiles.ExceptWith(dangerOccupiedTiles);
+			if (emitGridStateUpdated)
+			{
+				EmitSignal(SignalName.GridStateUpdated);
+			}
+		}
 	}
 
 	private void SetBaseAntennaCoverage()
@@ -758,7 +750,7 @@ public partial class GridManager : Node
 		}
 	}
 
-	private void UpdateCollectedWoodTiles(BuildingComponent buildingComponent)
+	private void UpdateCollectedWoodTiles(BuildingComponent buildingComponent, bool emitGridStateUpdated = true)
 	{
 		if (buildingComponent.IsLifted) return;
 		var tileArea = buildingComponent.GetTileArea();
@@ -776,10 +768,13 @@ public partial class GridManager : Node
 			}
 		}
 
-		EmitSignal(SignalName.GridStateUpdated);
+		if (emitGridStateUpdated)
+		{
+			EmitSignal(SignalName.GridStateUpdated);
+		}
 	}
 
-	private void UpdateCollectedMineralTiles(BuildingComponent buildingComponent)
+	private void UpdateCollectedMineralTiles(BuildingComponent buildingComponent, bool emitGridStateUpdated = true)
 	{
 		var tileArea = buildingComponent.GetTileArea();
 		var mineralTilesWithType = GetMineralTilesInRadiusWithType(tileArea, buildingComponent.BuildingResource.ResourceRadius);
@@ -797,7 +792,10 @@ public partial class GridManager : Node
 				EmitSignal(SignalName.MineralTilesUpdated, collectedMineralTiles.Count, mineralType.ToString());
 			}
 		}
-		EmitSignal(SignalName.GridStateUpdated);
+		if (emitGridStateUpdated)
+		{
+			EmitSignal(SignalName.GridStateUpdated);
+		}
 	}
 
 	private void UpdateRechargeBattery(BuildingComponent buildingComponent)
@@ -813,7 +811,7 @@ public partial class GridManager : Node
 		}
 	}
 
-	private void UpdateDiscoveredTiles(BuildingComponent buildingComponent)
+	private void UpdateDiscoveredTiles(BuildingComponent buildingComponent, bool emitGridStateUpdated = true)
 	{
 		var tileArea = buildingComponent.GetTileArea();
 		var discoveredTiles = GetDiscoveredTilesInRadius(tileArea, buildingComponent.BuildingResource.VisionRadius);
@@ -828,7 +826,10 @@ public partial class GridManager : Node
 			EmitSignal(SignalName.DiscoveredTileUpdated, entry.Key, entry.Value);
 			}
 		}
-		EmitSignal(SignalName.GridStateUpdated);
+		if (emitGridStateUpdated)
+		{
+			EmitSignal(SignalName.GridStateUpdated);
+		}
 	}
 
 	private void RecalculateGrid()
@@ -849,8 +850,8 @@ public partial class GridManager : Node
 
 		foreach (var buildingComponent in buildingComponents)
 		{
-			UpdateBuildingComponentGridState(buildingComponent);
-			UpdateDiscoveredTiles(buildingComponent);
+			UpdateBuildingComponentGridState(buildingComponent, emitGridStateUpdated: false, updateBuildableCache: false);
+			UpdateDiscoveredTiles(buildingComponent, emitGridStateUpdated: false);
 			UpdateTilesToBuilding(buildingComponent);
 			CheckGroundRobotTouchingMonolith(buildingComponent);
 			CheckRobotHasVisualMonolith(buildingComponent);
@@ -1100,13 +1101,21 @@ public partial class GridManager : Node
 		return tileToLandscapeType;
 	}
 
-	public void UpdateBuildingComponentGridState(BuildingComponent buildingComponent)
+	public void UpdateBuildingComponentGridState(BuildingComponent buildingComponent, bool emitGridStateUpdated = true, bool updateBuildableCache = true)
 	{
 		var buildingOccupiedTiles = buildingComponent.GetOccupiedCellPositions();
-		UpdateValidBuildableTiles(buildingComponent);
+		if (updateBuildableCache)
+		{
+			UpdateValidBuildableTiles(buildingComponent, emitGridStateUpdated: false);
+			buildableTileCacheDirty = false;
+		}
 		UpdateRechargeBattery(buildingComponent);
-		UpdateCollectedWoodTiles(buildingComponent);
-		UpdateCollectedMineralTiles(buildingComponent);
+		UpdateCollectedWoodTiles(buildingComponent, emitGridStateUpdated: false);
+		UpdateCollectedMineralTiles(buildingComponent, emitGridStateUpdated: false);
+		if (emitGridStateUpdated)
+		{
+			EmitSignal(SignalName.GridStateUpdated);
+		}
 	}
 
 	public bool IsTileMud(Vector2I tilePosition)
@@ -1117,17 +1126,26 @@ public partial class GridManager : Node
 
 	private void OnBuildingPlaced(BuildingComponent buildingComponent)
 	{
-		UpdateBuildingComponentGridState(buildingComponent);
-		UpdateDiscoveredTiles(buildingComponent);
+		UpdateBuildingComponentGridState(buildingComponent, emitGridStateUpdated: false, updateBuildableCache: false);
+		UpdateDiscoveredTiles(buildingComponent, emitGridStateUpdated: false);
 		if(baseAntennaCoveredTiles.Count() == 0)
 		{
 			SetBaseAntennaCoverage();
 		}
+		buildableTileCacheDirty = true;
+		movementCoverageCacheInitialized = false;
+		EmitSignal(SignalName.GridStateUpdated);
 	}
 
 	private void OnBuildingMoved(BuildingComponent buildingComponent)
 	{
 		//ClearHighlightedTiles();
+		buildableTileCacheDirty = true;
+		if (movementCoverageCacheInitialized)
+		{
+			UpdateMovementCoverageForBuilding(buildingComponent);
+			RebuildConnectedNetworkCache();
+		}
 		CallDeferred("RecalculateGrid");
 		//HighlightBuildableTiles();
 	}
@@ -1145,17 +1163,137 @@ public partial class GridManager : Node
 
 	private void OnBuildingDestroyed(BuildingComponent buildingComponent)
 	{
+		buildableTileCacheDirty = true;
+		movementCoverageCacheInitialized = false;
 		RecalculateGrid();
 	}
 
 	private void OnBuildingEnabled(BuildingComponent buildingComponent)
 	{
-		UpdateBuildingComponentGridState(buildingComponent);
+		UpdateBuildingComponentGridState(buildingComponent, updateBuildableCache: false);
+		buildableTileCacheDirty = true;
+		movementCoverageCacheInitialized = false;
 	}
 
 	private void OnBuildingDisabled(BuildingComponent buildingComponent)
 	{
+		buildableTileCacheDirty = true;
+		movementCoverageCacheInitialized = false;
 		RecalculateGrid();
+	}
+
+	private void EnsureMovementCoverageCache()
+	{
+		if (movementCoverageCacheInitialized)
+		{
+			return;
+		}
+
+		buildingToBuildableTiles.Clear();
+		connectedNetworkCoverageTiles.Clear();
+		connectedNetworkBuildings.Clear();
+
+		foreach (var buildingComponent in BuildingComponent.GetValidBuildingComponents(this))
+		{
+			UpdateMovementCoverageForBuilding(buildingComponent);
+		}
+
+		RebuildConnectedNetworkCache();
+		movementCoverageCacheInitialized = true;
+	}
+
+	private void UpdateMovementCoverageForBuilding(BuildingComponent buildingComponent)
+	{
+		if (buildingComponent.BuildingResource.BuildableRadius <= 0)
+		{
+			buildingToBuildableTiles.Remove(buildingComponent);
+			return;
+		}
+
+		buildingToBuildableTiles[buildingComponent] = GetValidTilesInRadius(
+			buildingComponent.GetTileArea(),
+			buildingComponent.BuildingResource.BuildableRadius).ToHashSet();
+	}
+
+	private void EnsureBuildableTileCache()
+	{
+		if (!buildableTileCacheDirty)
+		{
+			return;
+		}
+
+		using (Telemetry.Scope("GridManager.EnsureBuildableTileCache"))
+		{
+			EnsureMovementCoverageCache();
+			validBuildableTiles.Clear();
+			validBuildableAttackTiles.Clear();
+			allTilesInBuildingRadius.Clear();
+
+			foreach (var entry in buildingToBuildableTiles)
+			{
+				allTilesInBuildingRadius.UnionWith(entry.Value);
+				validBuildableTiles.UnionWith(entry.Value);
+			}
+			validBuildableTiles.ExceptWith(occupiedTiles);
+			validBuildableAttackTiles.UnionWith(validBuildableTiles);
+			validBuildableTiles.ExceptWith(dangerOccupiedTiles);
+
+			buildableTileCacheDirty = false;
+		}
+	}
+
+	private void RebuildConnectedNetworkCache()
+	{
+		var networkBuildings = buildingToBuildableTiles.Keys
+			.Where(buildingComponent => buildingComponent.BuildingResource.BuildableRadius > 0)
+			.ToList();
+
+		var baseBuilding = networkBuildings.FirstOrDefault(buildingComponent => buildingComponent.BuildingResource.IsBase);
+		if (baseBuilding == null)
+		{
+			return;
+		}
+
+		var pendingBuildings = new Queue<BuildingComponent>();
+		pendingBuildings.Enqueue(baseBuilding);
+		connectedNetworkBuildings.Add(baseBuilding);
+
+		if (buildingToBuildableTiles.TryGetValue(baseBuilding, out var baseCoverage))
+		{
+			connectedNetworkCoverageTiles.UnionWith(baseCoverage);
+		}
+
+		while (pendingBuildings.Count > 0)
+		{
+			var currentBuilding = pendingBuildings.Dequeue();
+			if (!buildingToBuildableTiles.TryGetValue(currentBuilding, out var currentCoverage))
+			{
+				continue;
+			}
+
+			connectedNetworkCoverageTiles.UnionWith(currentCoverage);
+
+			foreach (var candidate in networkBuildings)
+			{
+				if (connectedNetworkBuildings.Contains(candidate))
+				{
+					continue;
+				}
+
+				if (!buildingToBuildableTiles.TryGetValue(candidate, out var candidateCoverage))
+				{
+					continue;
+				}
+
+				if (!candidateCoverage.Any(tilePosition => connectedNetworkCoverageTiles.Contains(tilePosition)))
+				{
+					continue;
+				}
+
+				connectedNetworkBuildings.Add(candidate);
+				pendingBuildings.Enqueue(candidate);
+			}
+		}
 	}
 	private void ClearAll()
 	{
@@ -1174,6 +1312,10 @@ public partial class GridManager : Node
     TileToBuilding.Clear();
     buildingToBuildableTiles.Clear();
     buildingStuckToTiles.Clear();
+	    connectedNetworkCoverageTiles.Clear();
+	    connectedNetworkBuildings.Clear();
+	    movementCoverageCacheInitialized = false;
+	    buildableTileCacheDirty = true;
     // Reset other state as needed
 	}
 }

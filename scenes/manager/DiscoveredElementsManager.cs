@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Game.Autoload;
 using Game.UI;
 using Godot;
 
@@ -64,6 +65,8 @@ public partial class DiscoveredElementsManager : Node
 	/// </summary>
 	private void OnGridStateUpdated()
 	{
+		using (Telemetry.Scope("DiscoveredElementsManager.OnGridStateUpdated"))
+		{
 		// Get all buildings with vision
 		var allBuildings = Game.Component.BuildingComponent.GetValidBuildingComponents(this);
 		
@@ -104,10 +107,13 @@ public partial class DiscoveredElementsManager : Node
 			// Args: cells array, terrain set (0), terrain ID (-1 for empty/clear)
 			cloudLayer.SetCellsTerrainConnect(tilesToClearArray, 0, -1);
 		}
+		}
 	}
 
 	private void UpdateIndicators(Vector2I tile, string type)
 	{
+		using (Telemetry.Scope("DiscoveredElementsManager.UpdateIndicators"))
+		{
 		if (displayedElementTiles.Contains(tile)) return;
 
 		var elementNode2D = discoveredElements.GetNode<Node2D>("%ElementNode2D");
@@ -176,6 +182,7 @@ public partial class DiscoveredElementsManager : Node
 		}
 
 		displayedElementTiles.Add(tile);
+		}
 
 
 

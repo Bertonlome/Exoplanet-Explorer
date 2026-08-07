@@ -141,7 +141,7 @@ public partial class UnitSection : PanelContainer
 			|| string.Equals(mode, "Idle", StringComparison.OrdinalIgnoreCase)
 			|| string.Equals(mode, "Charging", StringComparison.OrdinalIgnoreCase);
 
-		GD.Print($"Updating Stop Button State: Mode = {mode}, IsIdleMode = {isIdleMode}");
+		//GD.Print($"Updating Stop Button State: Mode = {mode}, IsIdleMode = {isIdleMode}");
 		stopButton.SetDisabled(isIdleMode);
 		stopButton.MouseFilter = isIdleMode ? Control.MouseFilterEnum.Ignore : Control.MouseFilterEnum.Stop;
 		stopButton.Modulate = isIdleMode ? new Color(0.6f, 0.6f, 0.6f, 1f) : new Color(1f, 1f, 1f, 1f);

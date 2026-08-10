@@ -35,6 +35,8 @@ public partial class BuildingManager : Node
 	[Signal]
 	public delegate void AvailableMaterialCountChangedEventHandler(int availableMaterialCount);
 	[Signal]
+	public delegate void AvailableMineralCountChangedEventHandler(string[] mineralsInBase);
+	[Signal]
 	public delegate void BuildingPlacedEventHandler(BuildingComponent buildingComponent, BuildingResource resource);
 	[Signal]
 	public delegate void BasePlacedEventHandler();
@@ -113,6 +115,7 @@ public partial class BuildingManager : Node
 	}
 
 	private int currentWoodCount;
+	private int currentMineralCount;
 	private int currentlyUsedWoodCount;
 	private BuildingResource toPlaceBuildingResource;
 	public Rect2I hoveredGridArea = new(Vector2I.Zero, Vector2I.One);
@@ -127,6 +130,7 @@ public partial class BuildingManager : Node
 	private int currentMaterialCount;
 	public int mineralAnalyzedCount;
 	private int currentlyUsedMaterialCount;
+	private int currentlyUsedMineralCount;
 	private int startingMaterialCount;
 	public static BuildingComponent selectedBuildingComponent { get; private set; } = null;
 	private static Random random = new Random();
@@ -134,8 +138,10 @@ public partial class BuildingManager : Node
 	private bool isErasingWithMouse = false;
 	private Vector2I lastPaintedTile = new Vector2I(int.MinValue, int.MinValue);
 	private Vector2I lastErasedTile = new Vector2I(int.MinValue, int.MinValue);
+	private List<string> mineralsInBase = new();
 
 	public int AvailableWoodCount => startingWoodCount + currentWoodCount - currentlyUsedWoodCount;
+	public int AvailableMineralCount => currentMineralCount - currentlyUsedMineralCount;
 	public int AvailableMaterialCount => startingMaterialCount + currentMaterialCount - currentlyUsedMaterialCount;
 	public bool IsInPaintingMode => currentState == State.PaintingPath || currentState == State.AnnotatingPath;
 
@@ -684,16 +690,51 @@ public partial class BuildingManager : Node
 			}
 			else if (resource == "red_ore" || resource == "green_ore" || resource == "blue_ore")
 			{
+				currentMineralCount++;
 				// Only count if this ore type hasn't been analyzed yet
 				if (!analyzedMineralTypes.Contains(resource))
 				{
 					analyzedMineralTypes.Add(resource);
 					mineralAnalyzedCount++;
 				}
+			mineralsInBase.Add(resource);
+			EmitSignal(SignalName.AvailableMineralCountChanged, mineralsInBase.ToArray());
 			}
 		}
 		EmitSignal(SignalName.AvailableResourceCountChanged, AvailableWoodCount);
 		EmitSignal(SignalName.NewMineralAnalyzed, mineralAnalyzedCount);
+	}
+
+	public void CreateMaterialFromMineral()
+	{
+		if(mineralsInBase.Count == 0 || AvailableMineralCount <= 0)
+		{
+			Game.UI.GameUI.PushMessage("No minerals to process!", "red", false);
+			return;
+		}
+		else if (!mineralsInBase.Contains("red_ore"))
+		{
+			Game.UI.GameUI.PushMessage("No red ore available!", "red", false);
+		}
+		else if (!mineralsInBase.Contains("green_ore"))
+		{
+			Game.UI.GameUI.PushMessage("No green ore available!", "red", false);
+		}
+		else if (!mineralsInBase.Contains("blue_ore"))
+		{
+			Game.UI.GameUI.PushMessage("No blue ore available!", "red", false);
+		}
+		else
+		{
+			Game.UI.GameUI.PushMessage("Processing mineral into material...", "green", false);
+			currentlyUsedMineralCount+= 3;
+			mineralsInBase.Remove("red_ore");
+			mineralsInBase.Remove("green_ore");
+			mineralsInBase.Remove("blue_ore");
+			currentMaterialCount += 2;
+		}
+		EmitSignal(SignalName.AvailableMaterialCountChanged, AvailableMaterialCount);
+		EmitSignal(SignalName.AvailableMineralCountChanged, mineralsInBase.ToArray());
 	}
 
 	private void UpdateGridDisplay()

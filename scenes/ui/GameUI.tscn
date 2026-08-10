@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://dqoljijx36x6a"]
+[gd_scene load_steps=14 format=3 uid="uid://dqoljijx36x6a"]
 
 [ext_resource type="Script" path="res://scenes/ui/GameUI.cs" id="1_ig7ao"]
 [ext_resource type="Resource" uid="uid://0b7icpp7al8y" path="res://resources/building/aerial_robot.tres" id="2_2jsg4"]
@@ -9,7 +9,10 @@
 [ext_resource type="Texture2D" uid="uid://bhebwhpdwalvc" path="res://assets/ui/wood_icon_cropped.png" id="7_yyrf8"]
 [ext_resource type="Texture2D" uid="uid://lcjpfgcwel8q" path="res://assets/ui/material_icon.png" id="8_783ri"]
 [ext_resource type="PackedScene" uid="uid://dqtmd1oy0b3m2" path="res://scenes/building/Rake.tscn" id="9_4ecoi"]
+[ext_resource type="Texture2D" uid="uid://dl5jfyv6i7snt" path="res://assets/tiles/blueOre.png" id="9_xpy15"]
+[ext_resource type="Texture2D" uid="uid://cmga11jrxgui1" path="res://assets/tiles/redOre.png" id="10_gh456"]
 [ext_resource type="Script" path="res://scenes/services/GeminiApiService.cs" id="10_y0kjh"]
+[ext_resource type="Texture2D" uid="uid://h05bn8w8fjap" path="res://assets/tiles/greenOre.png" id="11_aqa2k"]
 
 [node name="GameUI" type="CanvasLayer" node_paths=PackedStringArray("geminiApiService")]
 script = ExtResource("1_ig7ao")
@@ -152,6 +155,65 @@ text = "4"
 custom_minimum_size = Vector2(30, 0)
 layout_mode = 2
 texture = ExtResource("8_783ri")
+
+[node name="AddMaterialButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer4"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+text = "+"
+
+[node name="HBoxContainer6" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 18
+alignment = 1
+
+[node name="BlueOreLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer6"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0.619608, 0.529412, 0.462745, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 30
+text = "0"
+
+[node name="MaterialIcon3" type="TextureRect" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer6"]
+custom_minimum_size = Vector2(36, 0)
+layout_mode = 2
+texture = ExtResource("9_xpy15")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="RedOreLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer6"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0.619608, 0.529412, 0.462745, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 30
+text = "0"
+
+[node name="MaterialIcon2" type="TextureRect" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer6"]
+custom_minimum_size = Vector2(36, 0)
+layout_mode = 2
+texture = ExtResource("10_gh456")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="GreenOreLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer6"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0.619608, 0.529412, 0.462745, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 30
+text = "0"
+
+[node name="MaterialIcon" type="TextureRect" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer6"]
+custom_minimum_size = Vector2(36, 0)
+layout_mode = 2
+texture = ExtResource("11_aqa2k")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="DisplayTraceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true

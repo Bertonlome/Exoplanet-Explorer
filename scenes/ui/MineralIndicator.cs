@@ -15,7 +15,7 @@ public partial class MineralIndicator : Node2D
 	private Texture2D blueOreTexture;
 
 	// Called when the node enters the scene tree for the first time.
-	public override void _Ready()
+	public override async void _Ready()
 	{
 		Sprite2D = GetNode<Sprite2D>("%Sprite2D");
 
@@ -29,6 +29,10 @@ public partial class MineralIndicator : Node2D
 		activeTween.TweenProperty(Sprite2D, "position", Vector2.Down * 4, duration)
 			.SetTrans(Tween.TransitionType.Quad)
 			.SetEase(Tween.EaseType.InOut);
+
+		var life = GD.RandRange(2, 3);
+		await ToSignal(GetTree().CreateTimer(life), SceneTreeTimer.SignalName.Timeout);
+		Destroy();
 	}
 
 	public void Destroy()

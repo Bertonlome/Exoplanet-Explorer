@@ -54,8 +54,12 @@ public partial class GameUI : CanvasLayer
 	private Label resourceLabel;
 	private Label materialLabel;
 	private Label mineralLabel;
+	private Label blueOreLabel;
+	private Label redOreLabel;
+	private Label greenOreLabel;
 	private Label timeLeftLabel;
 	private Button stopRobotButton;
+	private Button addMaterialButton;
 	private Button displayAnomalyMapButton;
 	private Button sendPathToRobotButton;
 	private Button executePathButton;
@@ -97,6 +101,9 @@ public partial class GameUI : CanvasLayer
 		resourceLabel = GetNode<Label>("%ResourceLabel");
 		materialLabel = GetNode<Label>("%MaterialLabel");
 		mineralLabel = GetNode<Label>("%MineralLabel");
+		blueOreLabel = GetNode<Label>("%BlueOreLabel");
+		redOreLabel = GetNode<Label>("%RedOreLabel");
+		greenOreLabel = GetNode<Label>("%GreenOreLabel");
 		timeLeftLabel = GetNode<Label>("%TimeLeftLabel");
 		stopRobotButton = GetNode<Button>("%StopRobotButton");
 		displayAnomalyMapButton = GetNode<Button>("%DisplayAnomalyMapButton");
@@ -109,6 +116,7 @@ public partial class GameUI : CanvasLayer
 		adviceLabel = GetNode<Label>("%AdviceLabel");
 		rakePanel = GetNode<Panel>("%RakePanel");
 		sendPathToRobotButton = GetNode<Button>("%SendPathToRobotButton");
+		addMaterialButton = GetNode<Button>("%AddMaterialButton");
 		
 		// Try to get preview button (may not exist in older scenes)
 		previewPathButton = GetNodeOrNull<Button>("%PreviewPathButton");
@@ -142,6 +150,8 @@ public partial class GameUI : CanvasLayer
 		displayAnomalyMapButton.Pressed += OnDisplayAnomalyMapButtonPressed;
 		buildingManager.AvailableResourceCountChanged += OnAvailableResourceCountChanged;
 		buildingManager.AvailableMaterialCountChanged += OnAvailableMaterialCountChanged;
+		buildingManager.AvailableMineralCountChanged += OnAvailableMineralCountChanged;
+		addMaterialButton.Pressed += OnAddMaterialButtonPressed;
 		buildingManager.NewMineralAnalyzed += OnNewMineralAnalyzed;
 		buildingManager.ClockIsTicking += OnClockIsTicking;
 		displayTraceButton.Toggled += OnDisplayTraceToggled;
@@ -569,6 +579,11 @@ public partial class GameUI : CanvasLayer
 				}
 			}
 		}
+	}
+	
+	private void OnAddMaterialButtonPressed()
+	{
+		buildingManager.CreateMaterialFromMineral();
 	}
 	
 	private async void OnSendPathToRobotButtonPressed()
@@ -1299,6 +1314,13 @@ private void ExecuteCustomPath(BuildingComponent robot, List<PaintedTile> waypoi
 	private void OnAvailableMaterialCountChanged(int availableMaterialCount)
 	{
 		materialLabel.Text = availableMaterialCount.ToString();
+	}
+
+	private void OnAvailableMineralCountChanged(string[] resources)
+	{
+		greenOreLabel.Text = resources.Count(x => x == "green_ore").ToString();
+		redOreLabel.Text = resources.Count(x => x == "red_ore").ToString();
+		blueOreLabel.Text = resources.Count(x => x == "blue_ore").ToString();
 	}
 
 	private void OnNewMineralAnalyzed(int mineralAnalyzedCount)

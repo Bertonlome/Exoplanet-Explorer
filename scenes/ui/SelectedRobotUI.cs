@@ -47,6 +47,7 @@ public partial class SelectedRobotUI : CanvasLayer
 	private Button placeAntennaButton;
 	private Button liftRobotButton;
 	private Button analyseSampleButton;
+	private Button dropResourcesButton;
 
 	private MultiPurposeButtonState currentButtonState;
 	public BuildingComponent selectedBuildingComponent;
@@ -141,6 +142,7 @@ public partial class SelectedRobotUI : CanvasLayer
 		liftRobotButton = GetNode<Button>("%LiftRobotButton");
 		analyseSampleButton = GetNode<Button>("%AnalyseSampleButton");
 		placeAntennaButton = GetNode<Button>("%PlaceAntennaButton");
+		dropResourcesButton = GetNode<Button>("%DropResourcesButton");
 		placeBridgeButton.Hide();
 		liftRobotButton.Hide();
 		analyseSampleButton.Hide();
@@ -161,6 +163,7 @@ public partial class SelectedRobotUI : CanvasLayer
 		returnToBaseButton.Pressed += OnReturnToBaseButtonPressed;
 		stopExplorbutton.Pressed += OnStopExplorButtonPressed;
 		trackRobotButton.Pressed += OnTrackRobotButtonPressed;
+		dropResourcesButton.Pressed += OnDropResourcesButtonPressed;
 		toggleSoundGeigerButton.Pressed += () =>
 		{
 			if (AudioHelpers.geigerActive)
@@ -336,6 +339,11 @@ public partial class SelectedRobotUI : CanvasLayer
 			SettingManager.EmitTrackingRobot(selectedBuildingComponent);
 			trackRobotButton.Text = "Stop tracking";
 		}
+	}
+
+	private void OnDropResourcesButtonPressed()
+	{
+		selectedBuildingComponent.TryDropResourcesAtBase();
 	}
 
 	private void OnPlaceAntennaButtonPressed()

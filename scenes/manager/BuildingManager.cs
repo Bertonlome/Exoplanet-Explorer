@@ -1271,7 +1271,7 @@ public partial class BuildingManager : Node
 
 		buildingNode.Position += directionVector * 64;
 		liftedRobot.Moved((Vector2I)originPos, destinationPosition);
-		liftedRobot.TryDropResourcesAtBase();
+		//liftedRobot.TryDropResourcesAtBase();
 		//EmitSignal(SignalName.AvailableResourceCountChanged, AvailableResourceCount);
 
 	}
@@ -1346,7 +1346,7 @@ public partial class BuildingManager : Node
 
 		buildingNode.Position += directionVector * 64;
 		robot.Moved((Vector2I)originPos, destinationPosition);
-		robot.TryDropResourcesAtBase();
+		//robot.TryDropResourcesAtBase();
 		//EmitSignal(SignalName.AvailableResourceCountChanged, AvailableResourceCount);
 		robot.SetToIdle();
 	}
@@ -1445,7 +1445,7 @@ public partial class BuildingManager : Node
 
 				buildingNode.Position += directionVector * 64;
 				robot.Moved((Vector2I)originPos, destinationPosition);
-				robot.TryDropResourcesAtBase();
+				//robot.TryDropResourcesAtBase();
 			}
 
 			return true;

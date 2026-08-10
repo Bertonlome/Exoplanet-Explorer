@@ -20,6 +20,14 @@ public partial class GridManager : Node
 		BlueMineral,
 		None
 	}
+
+	public enum MinimapTerrainType
+	{
+		None,
+		Base,
+		Elevated,
+		Water
+	}
 	private const string IS_BUILDABLE = "is_buildable";
 	private const string IS_WOOD = "is_wood";
 	private const string IS_MINERAL = "is_mineral";
@@ -166,6 +174,23 @@ public partial class GridManager : Node
 		var fallbackElevationLayer = tileMapLayerToElevationLayer.GetValueOrDefault(baseTerrainTilemapLayer);
 		bool fallbackIsElevated = fallbackElevationLayer != null && fallbackElevationLayer.Name.ToString().StartsWith("ElevationLayer", StringComparison.Ordinal);
 		return (fallbackElevationLayer, fallbackIsElevated);
+	}
+
+	public MinimapTerrainType GetMinimapTerrainType(Vector2I tilePosition)
+	{
+		var (tileMapLayer, isWater) = GetTileCustomData(tilePosition, IS_WATER);
+		if (tileMapLayer == null)
+		{
+			return MinimapTerrainType.None;
+		}
+
+		if (isWater)
+		{
+			return MinimapTerrainType.Water;
+		}
+
+		var (_, isElevated) = GetElevationLayerForTile(tilePosition);
+		return isElevated ? MinimapTerrainType.Elevated : MinimapTerrainType.Base;
 	}
 
 	public bool TryPlaceBridgeTile(Rect2I robotPosition, Rect2I bridgeArea, string orientation)

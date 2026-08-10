@@ -79,6 +79,7 @@ public partial class GameUI : CanvasLayer
 	private HashSet<Vector2I> _previouslyDiscoveredTiles = new(); // Track to calculate delta
 	private RichTextLabel messageLogLabel;
 	private ScrollContainer messageLogScrollContainer;
+	private MinimapViewport minimapViewport;
 
 	[Export]
 	private GravitationalAnomalyMap gravitationalAnomalyMap;
@@ -171,7 +172,48 @@ public partial class GameUI : CanvasLayer
 		messageLogLabel = GetNode<RichTextLabel>("%MessageLogLabel");
 		messageLogScrollContainer = messageLogLabel.GetParent() as ScrollContainer;
 		messageLogLabel.BbcodeEnabled = true;
+		minimapViewport = GetNodeOrNull<MinimapViewport>("%MinimapViewport");
+		CallDeferred(nameof(SetupMinimap));
+		GameEvents.Instance.Connect(GameEvents.SignalName.BuildingDestroyed, Callable.From<BuildingComponent>(OnMinimapBuildingChanged));
+		GameEvents.Instance.Connect(GameEvents.SignalName.BuildingDisabled, Callable.From<BuildingComponent>(OnMinimapBuildingChanged));
+		GameEvents.Instance.Connect(GameEvents.SignalName.BuildingEnabled, Callable.From<BuildingComponent>(OnMinimapBuildingChanged));
+		GameEvents.Instance.Connect(GameEvents.SignalName.NoMoreRobotSelected, Callable.From<BuildingComponent>(OnMinimapSelectionCleared));
 		FlushPendingLogEntries();
+	}
+
+	public void SetupMinimap()
+	{
+		if (minimapViewport == null || !IsInstanceValid(minimapViewport)) return;
+
+		var baseLevel = GetParent() as BaseLevel;
+		var gameCamera = baseLevel?.GetNodeOrNull<GameCamera>("GameCamera");
+		var gridManager = baseLevel?.GetNodeOrNull<GridManager>("GridManager");
+		if (baseLevel == null || gameCamera == null || gridManager == null || buildingManager == null)
+		{
+			GD.PushWarning("GameUI could not initialize the minimap because a level dependency is missing.");
+			return;
+		}
+
+		minimapViewport.Initialize(
+			baseLevel.GetLevelTileBounds(),
+			gameCamera,
+			gridManager,
+			buildingManager);
+	}
+
+	public void RefreshMinimap()
+	{
+		minimapViewport?.RefreshMinimapData();
+	}
+
+	private void OnMinimapBuildingChanged(BuildingComponent buildingComponent)
+	{
+		RefreshMinimap();
+	}
+
+	private void OnMinimapSelectionCleared(BuildingComponent buildingComponent)
+	{
+		minimapViewport?.SetSelectedBuilding(null);
 	}
 
 	public static void PushMessage(string text, string color = "white", bool bold = false, BuildingComponent buildingComponent = null)
@@ -311,6 +353,7 @@ public partial class GameUI : CanvasLayer
 
 	public void OnRobotMoved(BuildingComponent buildingComponent)
 	{
+		RefreshMinimap();
 		if (isTraceActive)
 		{
 			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -356,6 +399,7 @@ public partial class GameUI : CanvasLayer
 	public void OnRobotSelected(BuildingComponent buildingComponent)
 	{
 		adviceLabel.Text = "Press 'B' to enter painting path mode.";
+		minimapViewport?.SetSelectedBuilding(buildingComponent);
 	}
 
 	public void SetTimeToCompleteLevel(int timeResource)
@@ -481,11 +525,13 @@ public partial class GameUI : CanvasLayer
 	private void OnBasePlaced()
 	{
 		CreateBuildingSections();
+		RefreshMinimap();
 	}
 
 
 	private void OnNewBuildingPlaced(BuildingComponent buildingComponent, BuildingResource buildingResource)
 	{
+		RefreshMinimap();
 		if (buildingResource.DisplayName == "Base" || buildingResource.DisplayName == "Bridge" || buildingResource.DisplayName == "Antenna") return;
 
 

@@ -193,6 +193,57 @@ public partial class GameCamera : Camera2D
 		GlobalPosition = position;
 	}
 
+	public void CenterOnPositionClamped(Vector2 position)
+	{
+		OnStopTrackingRobot();
+		GlobalPosition = ClampCenterToWorld(position);
+	}
+
+	public Rect2 GetVisibleWorldRect()
+	{
+		var viewportSize = GetViewportRect().Size;
+		var visibleSize = new Vector2(
+			viewportSize.X / MathF.Max(Zoom.X, 0.001f),
+			viewportSize.Y / MathF.Max(Zoom.Y, 0.001f));
+		return new Rect2(GlobalPosition - visibleSize * 0.5f, visibleSize);
+	}
+
+	public Rect2 GetWorldBounds()
+	{
+		return new Rect2(
+			new Vector2(LimitLeft, LimitTop),
+			new Vector2(LimitRight - LimitLeft, LimitBottom - LimitTop));
+	}
+
+	public void SetCameraZoomStep(float factor)
+	{
+		if (factor <= 0f) return;
+
+		float newZoom = Mathf.Clamp(Zoom.X * factor, minZoom, maxZoom);
+		Zoom = Vector2.One * newZoom;
+		GlobalPosition = ClampCenterToWorld(GlobalPosition);
+		EmitSignal(SignalName.CameraZoom);
+	}
+
+	private Vector2 ClampCenterToWorld(Vector2 position)
+	{
+		var visibleSize = GetVisibleWorldRect().Size;
+		return new Vector2(
+			ClampCameraAxis(position.X, LimitLeft, LimitRight, visibleSize.X * 0.5f),
+			ClampCameraAxis(position.Y, LimitTop, LimitBottom, visibleSize.Y * 0.5f));
+	}
+
+	private static float ClampCameraAxis(float value, float lowerLimit, float upperLimit, float halfViewSize)
+	{
+		float minimum = lowerLimit + halfViewSize;
+		float maximum = upperLimit - halfViewSize;
+		if (minimum > maximum)
+		{
+			return (lowerLimit + upperLimit) * 0.5f;
+		}
+		return Mathf.Clamp(value, minimum, maximum);
+	}
+
 	private void ApplyCameraShake(double delta)
 	{
 		if (currentShakePercentage > 0)

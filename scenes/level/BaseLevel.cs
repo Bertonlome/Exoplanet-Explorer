@@ -76,6 +76,11 @@ public partial class BaseLevel : Node
 			.First((buildingComponent) => buildingComponent.BuildingResource.IsBase);
 	}
 
+	public Rect2I GetLevelTileBounds()
+	{
+		return baseTerrainTilemapLayer?.GetUsedRect() ?? new Rect2I();
+	}
+
 	public override void _UnhandledInput(InputEvent evt)
 	{
 		if (evt.IsActionPressed(ESCAPE_ACTION))

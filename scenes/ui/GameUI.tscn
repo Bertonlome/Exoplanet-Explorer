@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://dqoljijx36x6a"]
+[gd_scene load_steps=16 format=3 uid="uid://dqoljijx36x6a"]
 
 [ext_resource type="Script" path="res://scenes/ui/GameUI.cs" id="1_ig7ao"]
 [ext_resource type="Resource" uid="uid://0b7icpp7al8y" path="res://resources/building/aerial_robot.tres" id="2_2jsg4"]
@@ -14,6 +14,7 @@
 [ext_resource type="Script" path="res://scenes/services/GeminiApiService.cs" id="10_y0kjh"]
 [ext_resource type="Texture2D" uid="uid://h05bn8w8fjap" path="res://assets/tiles/greenOre.png" id="11_aqa2k"]
 [ext_resource type="Script" path="res://scenes/ui/ResizeHandle.cs" id="12_ksd74"]
+[ext_resource type="Script" path="res://scenes/ui/MinimapViewport.cs" id="13_minimap"]
 
 [node name="GameUI" type="CanvasLayer" node_paths=PackedStringArray("geminiApiService")]
 script = ExtResource("1_ig7ao")
@@ -21,6 +22,26 @@ geminiApiService = NodePath("GeminiApiService")
 buildingResources = Array[Object]([ExtResource("3_7ve0q"), ExtResource("2_2jsg4")])
 buildingSectionScene = ExtResource("4_bv77p")
 UnitSectionScene = ExtResource("5_ds8w2")
+
+[node name="MinimapPanel" type="PanelContainer" parent="."]
+z_index = 20
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -288.0
+offset_top = 840.0
+offset_right = -4.0
+offset_bottom = 1080.0
+grow_horizontal = 0
+theme = ExtResource("5_to3pn")
+
+[node name="MinimapViewport" type="Control" parent="MinimapPanel"]
+unique_name_in_owner = true
+clip_contents = true
+custom_minimum_size = Vector2(284, 240)
+layout_mode = 2
+mouse_default_cursor_shape = 3
+script = ExtResource("13_minimap")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 anchors_preset = 15

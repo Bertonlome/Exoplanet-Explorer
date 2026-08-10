@@ -29,7 +29,7 @@ offset_top = -293.0
 offset_right = 1900.0
 grow_vertical = 0
 size_flags_horizontal = 2
-theme_override_constants/margin_left = -100
+theme_override_constants/margin_left = -500
 
 [node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer"]
 layout_mode = 2

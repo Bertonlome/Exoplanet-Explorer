@@ -30,6 +30,7 @@ offset_bottom = 40.0
 color = Color(0.301961, 1, 0, 0.866667)
 
 [node name="LoadingIconAnimatedSprite2d" parent="BuildingAnimatorComponent" instance=ExtResource("4_47jof")]
+unique_name_in_owner = true
 visible = false
 z_index = 1
 y_sort_enabled = true

@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=4 uid="uid://c2im13c7kn4xj"]
+[gd_scene load_steps=15 format=4 uid="uid://c2im13c7kn4xj"]
 
 [ext_resource type="Script" path="res://scenes/ui/MainMenu.cs" id="1_k6ppd"]
 [ext_resource type="TileSet" uid="uid://dvqwr0ci0x55u" path="res://resources/tiles.tres" id="2_jc5mq"]
@@ -12,6 +12,8 @@
 [ext_resource type="PackedScene" uid="uid://dr2vs3njjnlm4" path="res://scenes/ui/LevelSelectScreen.tscn" id="7_3j1st"]
 [ext_resource type="PackedScene" uid="uid://bkk040smvshyh" path="res://scenes/building/AerialRobot.tscn" id="8_cel4e"]
 [ext_resource type="Texture2D" uid="uid://dnmtseao4q3vg" path="res://assets/HAT_game_logo_cropped.png" id="9_54ckx"]
+[ext_resource type="Texture2D" uid="uid://yff45kyaew3b" path="res://assets/ui/Star splash screen.png" id="11_qspnd"]
+[ext_resource type="Script" path="res://scenes/ui/MovingBadge.cs" id="12_ci52c"]
 
 [node name="MainMenu" type="Node"]
 script = ExtResource("1_k6ppd")
@@ -77,6 +79,15 @@ position = Vector2(817, 295)
 position = Vector2(704, 560)
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="MovingBadge" type="TextureRect" parent="CanvasLayer"]
+offset_left = 3.0
+offset_top = 263.0
+offset_right = 661.0
+offset_bottom = 735.0
+texture = ExtResource("11_qspnd")
+script = ExtResource("12_ci52c")
+Speed = 120.0
 
 [node name="MainMenuContainer" type="MarginContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
@@ -146,7 +157,7 @@ size_flags_vertical = 8
 
 [node name="Label" type="Label" parent="CanvasLayer/MainMenuContainer/PanelContainer2"]
 layout_mode = 2
-text = "MIT License Copyright (c) 2025 Benjamin R. Berton - Polytechnique Montréal
+text = "MIT License Copyright (c) 2026 Benjamin R. Berton - Polytechnique Montréal
 "
 
 [node name="LevelSelectScreen" parent="CanvasLayer" instance=ExtResource("7_3j1st")]

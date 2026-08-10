@@ -257,6 +257,11 @@ unique_name_in_owner = true
 layout_mode = 2
 stretch_mode = 5
 
+[node name="DropResourcesButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Drop ressources"
+
 [node name="MarginContainer2" type="MarginContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/margin_left = 16

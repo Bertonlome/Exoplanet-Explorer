@@ -9,11 +9,11 @@ public partial class Resourceindicator : Node2D
 	private Tween activeTween;
 
 	// Called when the node enters the scene tree for the first time.
-	public override void _Ready()
+	public override async void _Ready()
 	{
 		animatedSprite2D = GetNode<AnimatedSprite2D>("%AnimatedSprite2D");
 
-		var duration = GD.RandRange(.4, .5);
+		var duration = GD.RandRange(.7, 1);
 
 		activeTween = CreateTween();
 		activeTween.SetLoops();
@@ -23,6 +23,10 @@ public partial class Resourceindicator : Node2D
 		activeTween.TweenProperty(animatedSprite2D, "position", Vector2.Down * 4, duration)
 			.SetTrans(Tween.TransitionType.Quad)
 			.SetEase(Tween.EaseType.InOut);
+		
+		var life = GD.RandRange(2, 3);
+		await ToSignal(GetTree().CreateTimer(life), SceneTreeTimer.SignalName.Timeout);
+		Destroy();
 	}
 
 	public void Destroy()

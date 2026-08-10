@@ -15,6 +15,25 @@ namespace Game.UI;
 
 public partial class GameUI : CanvasLayer
 {
+	private sealed class MessageLogEntry
+	{
+		public string Text;
+		public string Color;
+		public bool Bold;
+		public string SpeakerName;
+
+		public MessageLogEntry(string text, string color, bool bold, string speakerName)
+		{
+			Text = text;
+			Color = color;
+			Bold = bold;
+			SpeakerName = speakerName;
+		}
+	}
+
+	public static GameUI Instance { get; private set; }
+	private static readonly List<MessageLogEntry> PendingLogEntries = new();
+
 	[Signal]
 	public delegate void BuildingResourceSelectedEventHandler(BuildingResource buildingResource);
 	[Signal]
@@ -43,6 +62,7 @@ public partial class GameUI : CanvasLayer
 	private Button previewPathButton;
 	private Button configureApiKeyButton;
 	private Button foldButton;
+	private Button foldBuildingSectionButton;
 	private CheckButton displayTraceButton;
 	private MarginContainer specialFunctionsContainer;
 	private PanelContainer sendPathButtonPanelContainer;
@@ -50,8 +70,11 @@ public partial class GameUI : CanvasLayer
 	private Panel rakePanel;
 	private ApiKeyDialog apiKeyDialog;
 	private bool isTraceActive = false;
+	private bool areBuildingSectionsVisible = true;
 	private readonly StringName ACTION_SPACEBAR = "spacebar";
 	private HashSet<Vector2I> _previouslyDiscoveredTiles = new(); // Track to calculate delta
+	private RichTextLabel messageLogLabel;
+	private ScrollContainer messageLogScrollContainer;
 
 	[Export]
 	private GravitationalAnomalyMap gravitationalAnomalyMap;
@@ -68,6 +91,7 @@ public partial class GameUI : CanvasLayer
 
 	public override void _Ready()
 	{
+		Instance = this;
 		buildingSectionContainer = GetNode<VBoxContainer>("%BuildingSectionContainer");
 		unitsSectionContainer = GetNode<VBoxContainer>("%UnitsContainer");
 		resourceLabel = GetNode<Label>("%ResourceLabel");
@@ -78,6 +102,7 @@ public partial class GameUI : CanvasLayer
 		displayAnomalyMapButton = GetNode<Button>("%DisplayAnomalyMapButton");
 		displayTraceButton = GetNode<CheckButton>("%DisplayTraceButton");
 		foldButton = GetNode<Button>("%FoldButton");
+		foldBuildingSectionButton = GetNodeOrNull<Button>("%FoldBuildingSectionButton");
 		specialFunctionsContainer = GetNode<MarginContainer>("%SpecialFunctionsContainer");
 		sendPathButtonPanelContainer = GetNode<PanelContainer>("%SendPathButtonPanelContainer");
 		executePathButton = GetNode<Button>("%ExecutePathButton");
@@ -90,6 +115,11 @@ public partial class GameUI : CanvasLayer
 		
 		UpdateFoldButtonState();
 		foldButton.Pressed += OnFoldButtonPressed;
+		UpdateFoldBuildingSectionButtonState();
+		if (foldBuildingSectionButton != null)
+		{
+			foldBuildingSectionButton.Pressed += OnFoldBuildingSectionButtonPressed;
+		}
 		
 		// Create API key dialog
 		apiKeyDialog = new ApiKeyDialog();
@@ -128,12 +158,104 @@ public partial class GameUI : CanvasLayer
 		GameEvents.Instance.Connect(GameEvents.SignalName.BuildingMoved, Callable.From<BuildingComponent>(OnRobotMoved));
 		GameEvents.Instance.Connect(GameEvents.SignalName.RobotSelected, Callable.From<BuildingComponent>(OnRobotSelected));
 		GameEvents.Instance.Connect(GameEvents.SignalName.RobotBackToIdle, Callable.From<BuildingComponent>(OnRobotBackToIdle));
+		messageLogLabel = GetNode<RichTextLabel>("%MessageLogLabel");
+		messageLogScrollContainer = messageLogLabel.GetParent() as ScrollContainer;
+		messageLogLabel.BbcodeEnabled = true;
+		FlushPendingLogEntries();
+	}
+
+	public static void PushMessage(string text, string color = "white", bool bold = false, BuildingComponent buildingComponent = null)
+	{
+		if (string.IsNullOrEmpty(text))
+		{
+			return;
+		}
+
+		var speakerName = buildingComponent?.BuildingResource?.DisplayName;
+
+		if (Instance != null && IsInstanceValid(Instance))
+		{
+			Instance.AppendMessageToLog(text, color, bold, speakerName);
+			return;
+		}
+
+		PendingLogEntries.Add(new MessageLogEntry(text, color, bold, speakerName));
+	}
+
+	private void FlushPendingLogEntries()
+	{
+		if (PendingLogEntries.Count == 0)
+		{
+			return;
+		}
+
+		foreach (var entry in PendingLogEntries)
+		{
+			AppendMessageToLog(entry.Text, entry.Color, entry.Bold, entry.SpeakerName);
+		}
+
+		PendingLogEntries.Clear();
+	}
+
+	private void AppendMessageToLog(string text, string color, bool bold, string speakerName = null)
+	{
+		if (messageLogLabel == null || !IsInstanceValid(messageLogLabel))
+		{
+			return;
+		}
+
+		var safeText = EscapeBbCode(text);
+		var safeColor = string.IsNullOrWhiteSpace(color) ? "white" : color;
+		var message = safeText;
+		var prefix = string.Empty;
+
+		if (!string.IsNullOrWhiteSpace(speakerName))
+		{
+			var safeSpeakerName = EscapeBbCode(speakerName);
+			prefix = $"[b][color=#8fd3ff]{safeSpeakerName}:[/color][/b] ";
+		}
+
+		if (bold)
+		{
+			message = $"[b]{message}[/b]";
+		}
+
+		message = $"[color={safeColor}]{message}[/color]";
+		messageLogLabel.AppendText(prefix + message + "\n");
+		CallDeferred(nameof(ScrollMessageLogToBottom));
+	}
+
+	private void ScrollMessageLogToBottom()
+	{
+		if (messageLogScrollContainer == null || !IsInstanceValid(messageLogScrollContainer))
+		{
+			return;
+		}
+
+		messageLogScrollContainer.ScrollVertical = int.MaxValue;
+	}
+
+	private static string EscapeBbCode(string text)
+	{
+		if (string.IsNullOrEmpty(text))
+		{
+			return string.Empty;
+		}
+
+		return text.Replace("[", "[[");
 	}
 
 	private void OnFoldButtonPressed()
 	{
 		unitsSectionContainer.Visible = !unitsSectionContainer.Visible;
 		UpdateFoldButtonState();
+	}
+
+	private void OnFoldBuildingSectionButtonPressed()
+	{
+		areBuildingSectionsVisible = !areBuildingSectionsVisible;
+		ApplyBuildingSectionVisibility();
+		UpdateFoldBuildingSectionButtonState();
 	}
 
 	private void UpdateFoldButtonState()
@@ -144,6 +266,37 @@ public partial class GameUI : CanvasLayer
 		}
 
 		foldButton.Text = unitsSectionContainer.Visible ? "▼ Deployed units" : "▶ Deployed units";
+	}
+
+	private void UpdateFoldBuildingSectionButtonState()
+	{
+		if (foldBuildingSectionButton == null)
+		{
+			return;
+		}
+
+		foldBuildingSectionButton.Text = areBuildingSectionsVisible ? "▼ Deploy robots" : "▶ Deploy robots";
+	}
+
+	private void ApplyBuildingSectionVisibility()
+	{
+		if (buildingSectionContainer == null)
+		{
+			return;
+		}
+
+		foreach (Node child in buildingSectionContainer.GetChildren())
+		{
+			if (child == foldBuildingSectionButton)
+			{
+				continue;
+			}
+
+			if (child is CanvasItem canvasItem)
+			{
+				canvasItem.Visible = areBuildingSectionsVisible;
+			}
+		}
 	}
 
 	public void OnRobotMoved(BuildingComponent buildingComponent)
@@ -268,6 +421,11 @@ public partial class GameUI : CanvasLayer
 		// Clear existing building sections first
 		foreach (Node child in buildingSectionContainer.GetChildren())
 		{
+			if (child == foldBuildingSectionButton)
+			{
+				continue;
+			}
+
 			child.QueueFree();
 		}
 		
@@ -305,6 +463,9 @@ public partial class GameUI : CanvasLayer
 				}
 			}
 		}
+
+		ApplyBuildingSectionVisibility();
+		UpdateFoldBuildingSectionButtonState();
 	}
 
 	private void OnBasePlaced()

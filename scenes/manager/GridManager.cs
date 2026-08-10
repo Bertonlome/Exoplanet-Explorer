@@ -31,9 +31,9 @@ public partial class GridManager : Node
 	public const string IS_WATER = "is_water";
 
 	[Signal]
-	public delegate void ResourceTilesUpdatedEventHandler(int collectedTiles, string resourceType);
+	public delegate void ResourceTilesUpdatedEventHandler(Vector2I tile, int collectedTiles, string resourceType);
 	[Signal]
-	public delegate void MineralTilesUpdatedEventHandler(int collectedTiles, string mineralType);
+	public delegate void MineralTilesUpdatedEventHandler(Vector2I tile, int collectedTiles, string mineralType);
 	[Signal]
 	public delegate void DiscoveredTileUpdatedEventHandler(Vector2I tile, string type);
 	[Signal]
@@ -268,6 +268,13 @@ public partial class GridManager : Node
 		{
 			return tilesDestination.All((tilePosition) =>
 			{
+				// Aerial units must stay on valid map tiles; otherwise A* can expand forever off-map.
+				(TileMapLayer tileMapLayer, _) = GetTileCustomData(tilePosition, IS_BUILDABLE);
+				if (tileMapLayer == null)
+				{
+					return false;
+				}
+
 				if (occupiedTiles.Contains(tilePosition) && !originTiles.Contains(tilePosition))
 				{
 					return false;
@@ -338,11 +345,11 @@ public partial class GridManager : Node
 			var check7 = !isRoulable;
 			var check9 = !isWater || canCrossWithBridge;
 
-			GD.Print($"  - check1 (not occupied or origin tile): {check1}");
-			GD.Print($"  - check2 (same elevation as target or bridge-cross): {check2}");
-			GD.Print($"  - check3 (origin elevation compatible or bridge-cross): {check3}");
-			GD.Print($"  - check7 (not rough terrain): {check7}");
-			GD.Print($"  - check9 (not water or bridge-cross): {check9}");
+			//GD.Print($"  - check1 (not occupied or origin tile): {check1}");
+			//GD.Print($"  - check2 (same elevation as target or bridge-cross): {check2}");
+			//GD.Print($"  - check3 (origin elevation compatible or bridge-cross): {check3}");
+			//GD.Print($"  - check7 (not rough terrain): {check7}");
+			//GD.Print($"  - check9 (not water or bridge-cross): {check9}");
 
 			var canMoveOnThisTile = check1 && check2 && check3 && check7 && check9;
 			if (!canMoveOnThisTile)
@@ -353,9 +360,9 @@ public partial class GridManager : Node
 				if (!check3) failedChecks.Add("check3");
 				if (!check7) failedChecks.Add("check7");
 				if (!check9) failedChecks.Add("check9");
-				GD.Print($"  - FAILED checks: {string.Join(", ", failedChecks)}");
+				//GD.Print($"  - FAILED checks: {string.Join(", ", failedChecks)}");
 			}
-			GD.Print($"  - tileResult: {canMoveOnThisTile}");
+			//GD.Print($"  - tileResult: {canMoveOnThisTile}");
 
 			return canMoveOnThisTile;
 		});
@@ -784,7 +791,7 @@ public partial class GridManager : Node
 			{
 				collectedResourceTiles.Add(tile);
 				buildingComponent.CollectResource(WOOD);
-				EmitSignal(SignalName.ResourceTilesUpdated, collectedResourceTiles.Count, WOOD);
+				EmitSignal(SignalName.ResourceTilesUpdated, tile, collectedResourceTiles.Count, WOOD);
 			}
 		}
 
@@ -809,7 +816,7 @@ public partial class GridManager : Node
 				buildingComponent.CollectResource(mineralType.ToString());
 
 				// Emit the signal with tile count and mineral type as string
-				EmitSignal(SignalName.MineralTilesUpdated, collectedMineralTiles.Count, mineralType.ToString());
+				EmitSignal(SignalName.MineralTilesUpdated, tile, collectedMineralTiles.Count, mineralType.ToString());
 			}
 		}
 		if (emitGridStateUpdated)

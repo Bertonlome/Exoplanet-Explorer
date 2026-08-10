@@ -16,6 +16,8 @@ public partial class DiscoveredElementsManager : Node
 	[Export]
 	private PackedScene treeScene;
 	[Export]
+	private PackedScene trunkScene;
+	[Export]
 	private PackedScene plantScene;
 	[Export]
 	private PackedScene plantBigScene;
@@ -54,12 +56,27 @@ public partial class DiscoveredElementsManager : Node
 	public override void _Ready()
 	{
 		gridManager.DiscoveredTileUpdated += OnDiscoveredTileUpdated;
+		gridManager.ResourceTilesUpdated += OnResourceTilesUpdated;
+		//gridManager.MineralTilesUpdated += OnResourceTilesUpdated;
 		gridManager.GridStateUpdated += OnGridStateUpdated;
 		discoveredElements = DiscoveredElementsScene.Instantiate<DiscoveredElements>();
 		AddChild(discoveredElements);
 		cloudLayer = GetNode<TileMapLayer>("%CloudLayer");
 	}
 	
+	private void OnResourceTilesUpdated(Vector2I tile, int _, string resourceType)
+	{
+		switch (resourceType)
+		{
+			case "red_ore":
+			case "blue_ore":
+			case "green_ore":
+			case "wood":
+				// Switch the indicators to TrunkElement
+				UpdateIndicators(tile, "trunk");
+				break;
+		}
+	}
 	/// <summary>
 	/// Clear fog of war (cloud tiles) in the vision radius when grid state updates
 	/// </summary>
@@ -114,7 +131,19 @@ public partial class DiscoveredElementsManager : Node
 	{
 		using (Telemetry.Scope("DiscoveredElementsManager.UpdateIndicators"))
 		{
-		if (displayedElementTiles.Contains(tile)) return;
+		if (displayedElementTiles.Contains(tile) && type != "trunk") return;
+
+		// A trunk replaces the element already displayed on this tile. This must
+		// happen before tileToDiscoveredElements[tile] is assigned to the new
+		// holder, otherwise we lose the reference to the holder containing the tree.
+		if (type == "trunk" && tileToDiscoveredElements.TryGetValue(tile, out var existingElement))
+		{
+			if (IsInstanceValid(existingElement))
+			{
+				existingElement.QueueFree();
+			}
+			tileToDiscoveredElements.Remove(tile);
+		}
 
 		var elementNode2D = discoveredElements.GetNode<Node2D>("%ElementNode2D");
 
@@ -161,6 +190,10 @@ public partial class DiscoveredElementsManager : Node
 				break;
 			case "tree":
 				elementScene = treeScene.Instantiate<AnimatedSprite2D>();
+				elementHolder.AddChild(elementScene);
+				break;
+			case "trunk":
+				elementScene = trunkScene.Instantiate<Sprite2D>();
 				elementHolder.AddChild(elementScene);
 				break;
 			case "red_ore":

@@ -742,17 +742,20 @@ public partial class BuildingComponent : Node2D
 
 		if (currentExplorMode != ExplorMode.None && currentExplorMode != ExplorMode.ReturnToBase && currentExplorMode != ExplorMode.Random)
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Already moving!", this);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("Already moving!", this);
+			Game.UI.GameUI.PushMessage("Already moving!", "red", true, this);
 			return;
 		}
 		if (IsStuck)
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Cannot move while stuck", this);
+			Game.UI.GameUI.PushMessage("Cannot move while stuck", "red", true, this);
 			return;
 		}
 		if (Battery <= 15)
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Battery depleted!", this);
+			Game.UI.GameUI.PushMessage("Battery depleted!", "red", true, this);
 			currentExplorMode = ExplorMode.None;
 			return;
 		}
@@ -788,6 +791,7 @@ public partial class BuildingComponent : Node2D
 				if (robotIsElevated != targetIsElevated)
 				{
 					FloatingTextManager.ShowMessageAtBuildingPosition("No path found", this);
+					Game.UI.GameUI.PushMessage("No path found", "red", true, this);
 					currentExplorMode = ExplorMode.None;
 					EmitSignal(SignalName.ModeChanged, currentExplorMode.ToString());
 					return;
@@ -804,13 +808,15 @@ public partial class BuildingComponent : Node2D
 					if (numberOfWoodCarried < woodNeeded)
 					{
 						FloatingTextManager.ShowMessageAtBuildingPosition($"Need {woodNeeded} wood for bridges, but only have {numberOfWoodCarried}!", this);
+						Game.UI.GameUI.PushMessage($"Need {woodNeeded} wood for bridges, but only have {numberOfWoodCarried}!", "yellow", false, this);
 						currentExplorMode = ExplorMode.None;
 						EmitSignal(SignalName.ModeChanged, currentExplorMode.ToString());
 						return;
 					}
 					else
 					{
-						FloatingTextManager.ShowMessageAtBuildingPosition($"Path requires {woodNeeded} bridge", this);
+						//FloatingTextManager.ShowMessageAtBuildingPosition($"Path requires {woodNeeded} bridge", this);
+						Game.UI.GameUI.PushMessage($"Path requires {woodNeeded} bridge", "yellow", false, this);
 					}
 				}
 			}
@@ -821,12 +827,14 @@ public partial class BuildingComponent : Node2D
 			{
 				if (numberOfWoodCarried > 0)
 				{
-					FloatingTextManager.ShowMessageAtBuildingPosition("Building a bridge to cross water!", this);
+					//FloatingTextManager.ShowMessageAtBuildingPosition("Building a bridge to cross water!", this);
+					Game.UI.GameUI.PushMessage("Building a bridge to cross water!", "green", false, this);
 					//buildingManager.BuildBridgeAtPosition(targetPosition, this);
 				}
 				else if (!requiresBridge) // Only show this if we haven't already shown the bridge message
 				{
 					FloatingTextManager.ShowMessageAtBuildingPosition("Need wood to build a bridge!", this);
+					Game.UI.GameUI.PushMessage("Need wood to build a bridge!", "yellow", false, this);
 					currentExplorMode = ExplorMode.None;
 					EmitSignal(SignalName.ModeChanged, currentExplorMode.ToString());
 					return;
@@ -837,6 +845,7 @@ public partial class BuildingComponent : Node2D
 			if (path.Count == 0)
 			{
 				FloatingTextManager.ShowMessageAtBuildingPosition("No path found!", this);
+				Game.UI.GameUI.PushMessage("No path found!", "red", true, this);
 				GD.Print("No path found for " + GetGridCellPosition() + " to " + targetPosition);
 				currentExplorMode = ExplorMode.None;
 				EmitSignal(SignalName.ModeChanged, currentExplorMode.ToString());
@@ -874,7 +883,8 @@ public partial class BuildingComponent : Node2D
 					// Double-check we have wood (safety check)
 					if (numberOfWoodCarried <= 0)
 					{
-						FloatingTextManager.ShowMessageAtBuildingPosition("Ran out of wood for bridges!", this);
+						//FloatingTextManager.ShowMessageAtBuildingPosition("Ran out of wood for bridges!", this);
+						Game.UI.GameUI.PushMessage("Ran out of wood for bridges!", "red", true, this);
 						currentExplorMode = ExplorMode.None;
 						EmitSignal(SignalName.ModeChanged, currentExplorMode.ToString());
 						buildingManager.ClearAllPaintedTiles(this);
@@ -894,9 +904,15 @@ public partial class BuildingComponent : Node2D
 						bridgesBuilt++;
 						GD.Print($"Built bridge {bridgesBuilt}/{bridgeTilesNeeded.Count} at {nextPos}");
 						if (orientation == "vertical")
-							FloatingTextManager.ShowMessageAtBuildingPosition($"Built bridge {bridgesBuilt}/{bridgeTilesNeeded.Count}", this);
+						{
+							//FloatingTextManager.ShowMessageAtBuildingPosition($"Built bridge {bridgesBuilt}/{bridgeTilesNeeded.Count}", this);
+							Game.UI.GameUI.PushMessage($"Built bridge {bridgesBuilt}/{bridgeTilesNeeded.Count}", "green", false, this);
+						}
 						else
-							FloatingTextManager.ShowMessageAtMousePosition($"Built bridge {bridgesBuilt}/{bridgeTilesNeeded.Count}");
+						{
+							//FloatingTextManager.ShowMessageAtMousePosition($"Built bridge {bridgesBuilt}/{bridgeTilesNeeded.Count}");
+							Game.UI.GameUI.PushMessage($"Built bridge {bridgesBuilt}/{bridgeTilesNeeded.Count}", "green", false, this);
+						}
 						// Wait a moment after placing bridge
 						await ToSignal(GetTree().CreateTimer(BuildingResource.moveInterval), "timeout");
 					}
@@ -940,12 +956,14 @@ public partial class BuildingComponent : Node2D
 		// Validation checks
 		if (currentExplorMode != ExplorMode.None && currentExplorMode != ExplorMode.ReturnToBase && currentExplorMode != ExplorMode.Random)
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Already moving!", this);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("Already moving!", this);
+			Game.UI.GameUI.PushMessage("Already moving!", "yellow", false, this);
 			return;
 		}
 		if (IsStuck)
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Cannot move while stuck", this);
+			Game.UI.GameUI.PushMessage("Cannot move while stuck", "red", true, this);
 			buildingManager.ClearAllPaintedTiles(this);
 			GameEvents.EmitRobotBackToIdle(this);
 			EmitSignal(SignalName.ModeChanged, currentExplorMode.ToString());
@@ -954,6 +972,7 @@ public partial class BuildingComponent : Node2D
 		if (Battery <= 15)
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Battery depleted!", this);
+			Game.UI.GameUI.PushMessage("Battery depleted!", "red", true, this);
 			buildingManager.ClearAllPaintedTiles(this);
 			GameEvents.EmitRobotBackToIdle(this);
 			currentExplorMode = ExplorMode.None;
@@ -1006,7 +1025,8 @@ public partial class BuildingComponent : Node2D
 			{
 				// Still no path after trying both land and bridges - skip this waypoint
 				GD.PrintErr($"No path found to waypoint {waypoint}, skipping...");
-				FloatingTextManager.ShowMessageAtBuildingPosition($"Skipped unreachable waypoint ({waypoint.X}, {waypoint.Y})", this);
+				//FloatingTextManager.ShowMessageAtBuildingPosition($"Skipped unreachable waypoint ({waypoint.X}, {waypoint.Y})", this);
+				Game.UI.GameUI.PushMessage($"Skipped unreachable waypoint ({waypoint.X}, {waypoint.Y})", "yellow", false, this);
 				continue; // Skip this waypoint and try the next one
 			}
 			
@@ -1024,7 +1044,7 @@ public partial class BuildingComponent : Node2D
 		if (completePath.Count == 0)
 		{
 			GD.Print($"{BuildingResource.DisplayName}: No valid path generated - all waypoints were unreachable or at current position");
-			FloatingTextManager.ShowMessageAtBuildingPosition("No valid path to execute", this);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("No valid path to execute", this);
 			buildingManager.ClearAllPaintedTiles(this);
 			GameEvents.EmitRobotBackToIdle(this);
 			currentExplorMode = ExplorMode.None;
@@ -1064,13 +1084,15 @@ public partial class BuildingComponent : Node2D
 					{
 						AttachToRobot(robotToLift);
 						robotToLift.AttachToRobot(this);
-						FloatingTextManager.ShowMessageAtBuildingPosition($"Lifted {robotToLift.BuildingResource.DisplayName}!", this);
+						//FloatingTextManager.ShowMessageAtBuildingPosition($"Lifted {robotToLift.BuildingResource.DisplayName}!", this);
+						Game.UI.GameUI.PushMessage($"Lifted {robotToLift.BuildingResource.DisplayName}!", "green", false, this);
 						GD.Print($"{BuildingResource.DisplayName} lifted {robotToLift.BuildingResource.DisplayName} at {groundPosition}");
 						await ToSignal(GetTree().CreateTimer(0.3f), "timeout"); // Pause for lift animation
 					}
 					else
 					{
 						FloatingTextManager.ShowMessageAtBuildingPosition("No robot found to lift!", this);
+						Game.UI.GameUI.PushMessage("No robot found to lift!", "yellow", false, this);
 						GD.PrintErr($"No ground robot found at {groundPosition} for lifting");
 					}
 				}
@@ -1080,7 +1102,8 @@ public partial class BuildingComponent : Node2D
 					var droppedRobot = AttachedRobot;
 					DetachRobot();
 					droppedRobot.DetachRobot();
-					FloatingTextManager.ShowMessageAtBuildingPosition($"Dropped {droppedRobot.BuildingResource.DisplayName}!", this);
+					//FloatingTextManager.ShowMessageAtBuildingPosition($"Dropped {droppedRobot.BuildingResource.DisplayName}!", this);
+					Game.UI.GameUI.PushMessage($"Dropped {droppedRobot.BuildingResource.DisplayName}!", "green", false, this);
 					GD.Print($"{BuildingResource.DisplayName} dropped {droppedRobot.BuildingResource.DisplayName} at {currentGridPos}");
 					await ToSignal(GetTree().CreateTimer(0.3f), "timeout"); // Pause for drop animation
 				}
@@ -1098,7 +1121,8 @@ public partial class BuildingComponent : Node2D
 				{
 					RemoveResource("wood");
 					bridgesBuilt++;
-					FloatingTextManager.ShowMessageAtBuildingPosition($"Bridge {bridgesBuilt}/{allBridgeTiles.Count}", this);
+					//FloatingTextManager.ShowMessageAtBuildingPosition($"Bridge {bridgesBuilt}/{allBridgeTiles.Count}", this);
+					Game.UI.GameUI.PushMessage($"Bridge {bridgesBuilt}/{allBridgeTiles.Count}", "green", false, this);
 					await ToSignal(GetTree().CreateTimer(BuildingResource.moveInterval), "timeout");
 				}
 			}
@@ -1252,7 +1276,8 @@ public partial class BuildingComponent : Node2D
 			buildingManager.DropResourcesAtBase(resourceCollected);
 			resourceCollected.Clear();
 			GameEvents.EmitCarriedResourceCountChanged(resourceCollected.Count);
-			FloatingTextManager.ShowMessageAtBuildingPosition("Resources dropped at base", this);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("Resources dropped at base", this);
+			Game.UI.GameUI.PushMessage("Resources dropped at base", "green", false, this);
 		}
 	}
 
@@ -1396,6 +1421,7 @@ public partial class BuildingComponent : Node2D
 					{
 						reachedMaxima = true;
 						FloatingTextManager.ShowMessageAtBuildingPosition("Oscillating - Reached Maxima", this);
+						Game.UI.GameUI.PushMessage("Oscillating - Reached Maxima", "yellow", false, this);
 						EmitSignal(SignalName.ModeChanged, "Reached Maxima (Oscillation Detected)");
 						break;
 					}
@@ -1440,6 +1466,7 @@ public partial class BuildingComponent : Node2D
 				{
 					reachedMaxima = true;
 					FloatingTextManager.ShowMessageAtBuildingPosition("Reached Maxima", this);
+					Game.UI.GameUI.PushMessage("Reached Maxima", "yellow", false, this);
 					EmitSignal(SignalName.ModeChanged, "Reached Maxima");
 					break;
 				}

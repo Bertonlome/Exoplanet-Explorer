@@ -1,9 +1,10 @@
-[gd_scene load_steps=15 format=3 uid="uid://bllsmwyng6v5f"]
+[gd_scene load_steps=16 format=3 uid="uid://bllsmwyng6v5f"]
 
 [ext_resource type="Script" path="res://scenes/manager/DiscoveredElementsManager.cs" id="1_svhsh"]
 [ext_resource type="PackedScene" uid="uid://bl8iq7elbw4og" path="res://scenes/LandscapeElements/DiscoveredElements.tscn" id="2_cjj8q"]
 [ext_resource type="PackedScene" uid="uid://jnnidhkyd3ai" path="res://scenes/LandscapeElements/TreeElement.tscn" id="3_c58fu"]
 [ext_resource type="PackedScene" uid="uid://de70vqw1rx75w" path="res://scenes/LandscapeElements/PlantScene.tscn" id="4_32w8n"]
+[ext_resource type="PackedScene" uid="uid://b1xif0dm6wvrn" path="res://scenes/LandscapeElements/TrunkElement.tscn" id="4_oq4ns"]
 [ext_resource type="PackedScene" uid="uid://bmc62y7janbvu" path="res://scenes/LandscapeElements/PlantBigScene.tscn" id="5_bwfd1"]
 [ext_resource type="PackedScene" uid="uid://dnwrkxsjh3b2a" path="res://scenes/LandscapeElements/MediumBushScene.tscn" id="6_73nv1"]
 [ext_resource type="PackedScene" uid="uid://5l4qenm6ohdm" path="res://scenes/LandscapeElements/BigBushScene.tscn" id="7_tgww8"]
@@ -19,6 +20,7 @@
 script = ExtResource("1_svhsh")
 DiscoveredElementsScene = ExtResource("2_cjj8q")
 treeScene = ExtResource("3_c58fu")
+trunkScene = ExtResource("4_oq4ns")
 plantScene = ExtResource("4_32w8n")
 plantBigScene = ExtResource("5_bwfd1")
 mediumBushScene = ExtResource("6_73nv1")

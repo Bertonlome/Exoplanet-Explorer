@@ -36,7 +36,7 @@ public partial class GameCamera : Camera2D
 	[Export]
 	private BuildingManager buildingManager;
 	[Export]
-	private float zoomStep = 0.01f;
+	private float zoomStep = 0.1f;
 	[Export]
 	private float minZoom = 0.3f;
 	[Export]

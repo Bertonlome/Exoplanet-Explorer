@@ -49,17 +49,15 @@ theme_override_constants/margin_bottom = 8
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HBoxContainer3" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 4
-alignment = 1
 
-[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="Label2" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
-text = "Resources"
+text = "Time Left:"
 
-[node name="ResourceLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="TimeLeftLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_shadow_color = Color(0.619608, 0.529412, 0.462745, 1)
@@ -67,38 +65,9 @@ theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 1
 theme_override_font_sizes/font_size = 48
 text = "4"
-
-[node name="WoodIcon" type="TextureRect" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
-custom_minimum_size = Vector2(64, 0)
-layout_mode = 2
-texture = ExtResource("7_yyrf8")
-expand_mode = 1
-
-[node name="HBoxContainer4" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/separation = 18
-alignment = 1
-
-[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer4"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Material"
-
-[node name="MaterialLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer4"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0.619608, 0.529412, 0.462745, 1)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 48
-text = "4"
-
-[node name="MaterialIcon" type="TextureRect" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer4"]
-custom_minimum_size = Vector2(30, 0)
-layout_mode = 2
-texture = ExtResource("8_783ri")
 
 [node name="HBoxContainer5" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 18
 alignment = 1
@@ -125,26 +94,64 @@ theme_override_constants/shadow_offset_y = 1
 theme_override_font_sizes/font_size = 48
 text = "/3"
 
-[node name="HBoxContainer3" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="BuildingSectionContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Label2" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
+[node name="FoldBuildingSectionButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/BuildingSectionContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "▶ Deploy robots"
+flat = true
+
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
-text = "Time Left:"
+text = "Resources in base:"
 
-[node name="TimeLeftLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+
+[node name="ResourceLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_shadow_color = Color(0.619608, 0.529412, 0.462745, 1)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 48
+theme_override_font_sizes/font_size = 40
 text = "4"
 
-[node name="BuildingSectionContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="WoodIcon" type="TextureRect" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+texture = ExtResource("7_yyrf8")
+expand_mode = 1
+
+[node name="HBoxContainer4" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 18
+alignment = 1
+
+[node name="MaterialLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer4"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0.619608, 0.529412, 0.462745, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 40
+text = "4"
+
+[node name="MaterialIcon" type="TextureRect" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer4"]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+texture = ExtResource("8_783ri")
 
 [node name="DisplayTraceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
@@ -180,48 +187,46 @@ theme_override_constants/margin_bottom = 16
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="PanelContainer2" type="PanelContainer" parent="SpecialFunctionsContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 8
-size_flags_vertical = 0
-theme = ExtResource("5_to3pn")
-
-[node name="Panel" type="Panel" parent="SpecialFunctionsContainer/HBoxContainer/PanelContainer2"]
+[node name="MessageLogContainer" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="SpecialFunctionsContainer/HBoxContainer/PanelContainer2"]
+[node name="PanelContainer3" type="PanelContainer" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer"]
+layout_mode = 2
+theme_type_variation = &"PanelContainerAlternate"
+
+[node name="Panel" type="Panel" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3"]
 layout_mode = 2
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="VBoxContainer" type="VBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/PanelContainer2/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3/MarginContainer"]
 layout_mode = 2
+theme_override_constants/separation = 8
 
-[node name="HBoxContainer" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/PanelContainer2/MarginContainer/VBoxContainer"]
+[node name="Label" type="Label" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 18
+theme_override_font_sizes/font_size = 20
+text = "---MESSAGE LOG---"
+horizontal_alignment = 1
 
-[node name="AdviceLabel" type="Label" parent="SpecialFunctionsContainer/HBoxContainer/PanelContainer2/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(650, 70)
+layout_mode = 2
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+
+[node name="MessageLogLabel" type="RichTextLabel" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3/MarginContainer/VBoxContainer/ScrollContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "Press 'B' to enter painting path mode"
-
-[node name="RakePanelContainer" type="PanelContainer" parent="SpecialFunctionsContainer/HBoxContainer"]
-layout_mode = 2
-
-[node name="Rake" parent="SpecialFunctionsContainer/HBoxContainer/RakePanelContainer" instance=ExtResource("9_4ecoi")]
-layout_mode = 2
-
-[node name="RakePanel" type="Panel" parent="SpecialFunctionsContainer/HBoxContainer/RakePanelContainer/Rake"]
-unique_name_in_owner = true
-layout_mode = 0
-offset_left = -8.0
-offset_top = -8.0
-offset_right = 72.0
-offset_bottom = 64.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+fit_content = true
 
 [node name="SendPathButtonPanelContainer" type="PanelContainer" parent="SpecialFunctionsContainer/HBoxContainer"]
 unique_name_in_owner = true
@@ -243,25 +248,76 @@ theme_override_constants/margin_bottom = 8
 [node name="VBoxContainer" type="VBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer"]
 layout_mode = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer"]
+[node name="HBoxContainer2" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2"]
+layout_mode = 2
+
+[node name="PanelContainer2" type="PanelContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 0
+theme = ExtResource("5_to3pn")
+
+[node name="Panel" type="Panel" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer/PanelContainer2"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer/PanelContainer2"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer/PanelContainer2/MarginContainer"]
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer/PanelContainer2/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 18
 
-[node name="Label" type="Label" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="AdviceLabel" type="Label" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer/PanelContainer2/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Press 'B' to enter painting path mode"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 18
+alignment = 2
+
+[node name="Label" type="Label" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "<CHEAT DEV FUNCTION>"
 
-[node name="HBoxContainer2" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer"]
+[node name="HBoxContainer2" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
 
-[node name="DisplayAnomalyMapButton" type="Button" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2"]
+[node name="DisplayAnomalyMapButton" type="Button" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer/HBoxContainer/HBoxContainer2"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "DISPLAY ANOMALY MAP"
+
+[node name="RakePanelContainer" type="PanelContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2"]
+layout_mode = 2
+
+[node name="Rake" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/RakePanelContainer" instance=ExtResource("9_4ecoi")]
+layout_mode = 2
+
+[node name="RakePanel" type="Panel" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer2/RakePanelContainer/Rake"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 72.0
+offset_bottom = 64.0
 
 [node name="HBoxContainer4" type="HBoxContainer" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -272,14 +328,14 @@ size_flags_vertical = 4
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
-theme_override_font_sizes/font_size = 40
+theme_override_font_sizes/font_size = 30
 text = "SEND PATH TO AI"
 
 [node name="ExecutePathButton" type="Button" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer4"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
-theme_override_font_sizes/font_size = 40
+theme_override_font_sizes/font_size = 30
 text = "EXECUTE PATH"
 
 [node name="MarginContainer3" type="MarginContainer" parent="."]

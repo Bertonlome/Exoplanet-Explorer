@@ -277,25 +277,45 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void OnOptionsButtonItemSelected(long index)
 	{
-		if (index == 0)
+		if (!selectedBuildingComponent.BuildingResource.IsAerial)
 		{
-			currentexplorMode = ExplorMode.Random;
+			if(index == 0)
+			{
+				currentexplorMode = ExplorMode.Gradient;
+			}
+			else if (index == 1)
+			{
+				currentexplorMode = ExplorMode.ReturnToBase;
+			}
 		}
-		else if (index == 1)
+		else if (selectedBuildingComponent.BuildingResource.IsAerial)
 		{
-			currentexplorMode = ExplorMode.Gradient;
-		}
-		else if (index == 2)
-		{
-			currentexplorMode = ExplorMode.ReturnToBase;
+			if (index == 0)
+			{
+				currentexplorMode = ExplorMode.Random;
+			}
+			else if (index == 1)
+			{
+				currentexplorMode = ExplorMode.Gradient;
+			}
+			else if (index == 2)
+			{
+				currentexplorMode = ExplorMode.ReturnToBase;
+			}
 		}
 	}
 
 	private void OnStartExplorButtonSelected()
 	{
-		if (currentexplorMode == ExplorMode.Random || explorModeOptionsButton.Selected == 0) OnRandomExplorButtonPressed();
-		else if (currentexplorMode == ExplorMode.Gradient || explorModeOptionsButton.Selected == 1) OnGradientSearchButtonPressed();
-		else if (currentexplorMode == ExplorMode.ReturnToBase || explorModeOptionsButton.Selected == 2) OnReturnToBaseButtonPressed();
+		if (currentexplorMode == ExplorMode.None && selectedBuildingComponent.BuildingResource.IsAerial)
+		{
+			//assume it's random
+			currentexplorMode = ExplorMode.Random;
+			OnRandomExplorButtonPressed();
+		}
+		else if (currentexplorMode == ExplorMode.Random) OnRandomExplorButtonPressed();
+		else if (currentexplorMode == ExplorMode.Gradient) OnGradientSearchButtonPressed();
+		else if (currentexplorMode == ExplorMode.ReturnToBase) OnReturnToBaseButtonPressed();
 	}
 
 	private void OnStopExplorButtonPressed()

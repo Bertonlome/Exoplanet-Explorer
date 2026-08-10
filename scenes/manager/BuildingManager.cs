@@ -752,9 +752,11 @@ public partial class BuildingManager : Node
 	
 	private void CheckAndEmitBasePlaced()
 	{
-		var baseBuilding = BuildingComponent.GetBaseBuilding(this);
-		if (baseBuilding.Any())
+		var baseBuilding = BuildingComponent.GetBaseBuilding(this).FirstOrDefault();
+		if (baseBuilding != null)
 		{
+			var gameCamera = GetNodeOrNull<GameCamera>("../GameCamera");
+			gameCamera?.CenterOnPosition(baseBuilding.GlobalPosition);
 			IsBasePlaced = true;
 			EmitSignal(SignalName.BasePlaced);
 		}
@@ -1237,6 +1239,7 @@ public partial class BuildingManager : Node
 		if (liftedRobot.BuildingResource.IsAerial && liftedRobot.Battery <= 0)
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", liftedRobot);
+			Game.UI.GameUI.PushMessage("Robot out of battery", "red", true, liftedRobot);
 			return;
 		}
 
@@ -1256,7 +1259,8 @@ public partial class BuildingManager : Node
 
 		if (!gridManager.CanMoveBuilding(liftedRobot, destinationArea))
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("liftedRobot out of antenna coverage", liftedRobot);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("liftedRobot out of antenna coverage", liftedRobot);
+			Game.UI.GameUI.PushMessage("liftedRobot out of antenna coverage", "red", true, liftedRobot);
 			return;
 		}
 
@@ -1279,6 +1283,7 @@ public partial class BuildingManager : Node
 		if (robot.Battery <= 0)
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", robot);
+			Game.UI.GameUI.PushMessage("Robot out of battery", "red", true, robot);
 			return;
 		}
 
@@ -1300,12 +1305,14 @@ public partial class BuildingManager : Node
 		if (!gridManager.CanMoveBuilding(robot, destinationArea))
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
+			Game.UI.GameUI.PushMessage("Robot out of antenna coverage", "red", true);
 			return;
 		}
 
 		if (!IsMoveableAtArea(robot, originArea, destinationArea))
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Can't move there!", robot);
+			Game.UI.GameUI.PushMessage("Can't move there!", "red", true);
 			return;
 		}
 
@@ -1317,6 +1324,7 @@ public partial class BuildingManager : Node
 			{
 				MoveInDirectionAutomated(robot, GetRandomDirection());
 				FloatingTextManager.ShowMessageAtBuildingPosition("Robot is stuck in the mud :-(", robot);
+				Game.UI.GameUI.PushMessage("Robot is stuck in the mud :-(", "red", true);
 				robot.SetToStuck();
 			}
 		}
@@ -1327,6 +1335,7 @@ public partial class BuildingManager : Node
 			{
 				MoveInDirectionAutomated(robot, GetRandomDirection());
 				FloatingTextManager.ShowMessageAtBuildingPosition("Robot is stuck", robot);
+				Game.UI.GameUI.PushMessage("Robot is stuck", "red", true);
 				robot.SetToStuck();
 			}
 		}
@@ -1357,6 +1366,7 @@ public partial class BuildingManager : Node
 				if (robot.Battery <= 0)
 				{
 					FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", robot);
+					Game.UI.GameUI.PushMessage("Robot out of battery", "red", true);
 					robot.currentExplorMode = BuildingComponent.ExplorMode.None;
 					return false;
 				}
@@ -1383,6 +1393,7 @@ public partial class BuildingManager : Node
 				{
 					robot.CanMove = false;
 					FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
+					Game.UI.GameUI.PushMessage("Robot out of antenna coverage", "red", true);
 					return false;
 				}
 			}
@@ -1404,6 +1415,7 @@ public partial class BuildingManager : Node
 					{
 						MoveInDirectionAutomated(robot, GetRandomDirection());
 						FloatingTextManager.ShowMessageAtBuildingPosition("Robot is stuck in the mud :-(", robot);
+						Game.UI.GameUI.PushMessage("Robot is stuck in the mud :-(", "red", true);
 						robot.SetToStuck();
 						return false;
 					}
@@ -1415,6 +1427,7 @@ public partial class BuildingManager : Node
 					{
 						MoveInDirectionAutomated(robot, GetRandomDirection());
 						FloatingTextManager.ShowMessageAtBuildingPosition("Robot is stuck", robot);
+						Game.UI.GameUI.PushMessage("Robot is stuck", "red", true);
 						robot.SetToStuck();
 						return false;
 					}
@@ -2053,7 +2066,7 @@ public partial class BuildingManager : Node
 		}
 	}
 
-	private void OnResourceTilesUpdated(int resourceCount, string resourceType)
+	private void OnResourceTilesUpdated(Vector2I tile, int resourceCount, string resourceType)
 	{
 		//currentResourceCount = resourceCount;
 		//EmitSignal(SignalName.AvailableResourceCountChanged, AvailableResourceCount);
@@ -2110,17 +2123,20 @@ public partial class BuildingManager : Node
 		if (buildingComponent == null) return;
 		if (buildingComponent.IsStuck)
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Cannot place bridge while stuck", buildingComponent);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("Cannot place bridge while stuck", buildingComponent);
+			Game.UI.GameUI.PushMessage("Cannot place bridge while stuck", "red", true);
 			return;
 		}
 		if (buildingComponent.Battery <= 0)
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", buildingComponent);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", buildingComponent);
+			Game.UI.GameUI.PushMessage("Robot out of battery", "red", true);
 			return;
 		}
 		if (!buildingComponent.resourceCollected.Contains(WOOD))
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Not enough wood to place bridge", buildingComponent);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("Not enough wood to place bridge", buildingComponent);
+			Game.UI.GameUI.PushMessage("Not enough wood to place bridge", "red", true);
 			return;
 		}
 		ChangeState(State.PlacingBridge);
@@ -2138,17 +2154,19 @@ public partial class BuildingManager : Node
 		if (buildingComponent == null) return;
 		if (buildingComponent.IsStuck)
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Cannot place antenna while stuck", buildingComponent);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("Cannot place antenna while stuck", buildingComponent);
+			Game.UI.GameUI.PushMessage("Cannot place antenna while stuck", "red", true);
 			return;
 		}
 		if (buildingComponent.Battery <= 0)
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", buildingComponent);
+			//FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", buildingComponent);
+			Game.UI.GameUI.PushMessage("Robot out of battery", "red", true);
 			return;
 		}
 		if (AvailableMaterialCount < 1)
 		{
-			FloatingTextManager.ShowMessageAtBuildingPosition("Not enough material to place antenna", buildingComponent);
+			Game.UI.GameUI.PushMessage("Not enough material to place antenna", "red", true);
 			return;
 		}
 		ChangeState(State.PlacingBuilding);
@@ -2170,6 +2188,7 @@ public partial class BuildingManager : Node
 		else
 		{
 			FloatingTextManager.ShowMessageAtMousePosition("Not enough resources to charge!");
+			Game.UI.GameUI.PushMessage("Not enough resources to charge!", "red", true);
 		}
 	}
 

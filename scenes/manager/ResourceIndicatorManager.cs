@@ -80,7 +80,7 @@ public partial class ResourceIndicatorManager : Node
 		UpdateIndicators(newlyIndicatedTiles, toRemoveTiles, resourceType);
 	}
 
-	private void OnResourceTilesUpdated(int _, string resourceType)
+	private void OnResourceTilesUpdated(Vector2I _, int __, string resourceType)
 	{
 		Callable.From(() => HandleResourceTilesUpdated(resourceType)).CallDeferred();
 	}

@@ -130,6 +130,7 @@ public partial class BuildingAnimatorComponent : Node2D
 		spriteNode.Position = new Vector2(0, 0);
 
 
+		loadingIcon = GetNodeOrNull<AnimatedSprite2D>("%LoadingIconAnimatedSprite2D");
 		// Try to find an existing loading icon anywhere under the animation root or owner.
 		// Prefer the editor-placed node so its position/scale are preserved.
 		var found = FindAnimatedSpriteRecursive(animationRootNode, "LoadingIconAnimatedSprite2D");

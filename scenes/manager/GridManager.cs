@@ -135,7 +135,16 @@ public partial class GridManager : Node
 		{
 			var customData = layer.GetCellTileData(tilePosition);
 			if (customData == null || (bool)customData.GetCustomData(IS_IGNORED)) continue;
-			return (layer, (bool)customData.GetCustomData(dataName));
+
+			var value = (bool)customData.GetCustomData(dataName);
+			// The TileSet still identifies a harvested tree tile as wood, but at
+			// runtime that tree has become a trunk and no longer blocks movement.
+			if (dataName == IS_WOOD && collectedResourceTiles.Contains(tilePosition))
+			{
+				value = false;
+			}
+
+			return (layer, value);
 		}
 		return (null, false);
 	}

@@ -12,6 +12,7 @@ public partial class MiniMapController : Node
     private Vector2I _mapSize;
     private BuildingComponent _robot;
     private bool _isRobotWindowMode = false;
+    private bool _isOrbiting = false;
     private Vector2I _windowSize = new Vector2I(64, 64);
     
     public override void _Ready()
@@ -19,6 +20,37 @@ public partial class MiniMapController : Node
         // Navigate: Container -> SubViewport -> AnomalyMiniMap
         var viewport = Container.GetChild<SubViewport>(0);
         _mini = viewport.GetChild<AnomalyMiniMap>(0);
+        Container.MouseFilter = Control.MouseFilterEnum.Stop;
+        Container.GuiInput += OnMiniMapGuiInput;
+    }
+
+    private void OnMiniMapGuiInput(InputEvent inputEvent)
+    {
+        if (inputEvent is InputEventMouseButton mouseButton)
+        {
+            if (mouseButton.ButtonIndex == MouseButton.Left)
+            {
+                _isOrbiting = mouseButton.Pressed;
+                Container.AcceptEvent();
+                return;
+            }
+
+            if (mouseButton.Pressed &&
+                (mouseButton.ButtonIndex == MouseButton.WheelUp ||
+                 mouseButton.ButtonIndex == MouseButton.WheelDown))
+            {
+                float direction = mouseButton.ButtonIndex == MouseButton.WheelUp ? 1f : -1f;
+                _mini.ZoomCamera(direction * mouseButton.Factor);
+                Container.AcceptEvent();
+                return;
+            }
+        }
+
+        if (inputEvent is InputEventMouseMotion mouseMotion && _isOrbiting)
+        {
+            _mini.OrbitCamera(mouseMotion.Relative);
+            Container.AcceptEvent();
+        }
     }
 
     public void Initialize(BuildingComponent robot, GravitationalAnomalyMap anomalyMap, Vector2I mapSize)

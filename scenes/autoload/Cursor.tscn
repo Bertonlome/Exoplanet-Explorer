@@ -1,11 +1,14 @@
-[gd_scene load_steps=3 format=3 uid="uid://qjoxkcwbct8m"]
+[gd_scene load_steps=4 format=3 uid="uid://qjoxkcwbct8m"]
 
 [ext_resource type="Texture2D" uid="uid://b48nyyhu47oy4" path="res://assets/ui/cursor.png" id="1_qqclf"]
 [ext_resource type="Script" path="res://scenes/autoload/Cursor.cs" id="1_vlnxe"]
+[ext_resource type="Texture2D" uid="uid://ducq7lghfwjj6" path="res://assets/ui/region_bottom_right.png" id="3_gr5pl"]
 
 [node name="Cursor" type="CanvasLayer"]
 layer = 10
 script = ExtResource("1_vlnxe")
+DefaultTexture = ExtResource("1_qqclf")
+VerticalResizeTexture = ExtResource("3_gr5pl")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture = ExtResource("1_qqclf")

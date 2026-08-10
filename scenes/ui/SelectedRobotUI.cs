@@ -132,6 +132,8 @@ public partial class SelectedRobotUI : CanvasLayer
 		if (!selectedBuildingComponent.BuildingResource.IsAerial)
 		{
 			explorModeOptionsButton.RemoveItem(0); // Removes the first item (index 0)
+			explorModeOptionsButton.Select(0); // Preselect "Search high anomaly", now at index 0
+			currentexplorMode = ExplorMode.Gradient;
 		}
 		gradientSearchButton = GetNode<Button>("%GradientSearchButton");
 		returnToBaseButton = GetNode<Button>("%ReturnToBaseButton");

@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://dqoljijx36x6a"]
+[gd_scene load_steps=15 format=3 uid="uid://dqoljijx36x6a"]
 
 [ext_resource type="Script" path="res://scenes/ui/GameUI.cs" id="1_ig7ao"]
 [ext_resource type="Resource" uid="uid://0b7icpp7al8y" path="res://resources/building/aerial_robot.tres" id="2_2jsg4"]
@@ -13,6 +13,7 @@
 [ext_resource type="Texture2D" uid="uid://cmga11jrxgui1" path="res://assets/tiles/redOre.png" id="10_gh456"]
 [ext_resource type="Script" path="res://scenes/services/GeminiApiService.cs" id="10_y0kjh"]
 [ext_resource type="Texture2D" uid="uid://h05bn8w8fjap" path="res://assets/tiles/greenOre.png" id="11_aqa2k"]
+[ext_resource type="Script" path="res://scenes/ui/ResizeHandle.cs" id="12_ksd74"]
 
 [node name="GameUI" type="CanvasLayer" node_paths=PackedStringArray("geminiApiService")]
 script = ExtResource("1_ig7ao")
@@ -259,6 +260,7 @@ theme_type_variation = &"PanelContainerAlternate"
 
 [node name="Panel" type="Panel" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3"]
 layout_mode = 2
+mouse_filter = 2
 
 [node name="MarginContainer" type="MarginContainer" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3"]
 layout_mode = 2
@@ -289,6 +291,15 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 fit_content = true
+
+[node name="ResizeHandle" type="Control" parent="SpecialFunctionsContainer/HBoxContainer/MessageLogContainer/PanelContainer3" node_paths=PackedStringArray("Target")]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 8
+mouse_default_cursor_shape = 9
+script = ExtResource("12_ksd74")
+Target = NodePath("../..")
 
 [node name="SendPathButtonPanelContainer" type="PanelContainer" parent="SpecialFunctionsContainer/HBoxContainer"]
 unique_name_in_owner = true

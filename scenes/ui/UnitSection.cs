@@ -81,10 +81,9 @@ public partial class UnitSection : PanelContainer
 	{
 		statusLabel.Text = mode switch
 		{
-			"Random" => "Random Exploration",
-			"GradientSearch" => "Gradient Search",
-			"RewindMoves" => "Rewind Moves",
-			"ReturnToBase" => "Returning to Base",
+			"Random" => "EXPLR",
+			"GradientSearch" => "SRCH",
+			"ReturnToBase" => "RTRN",
 			"MoveToPos" => "Moving",
 			"None" => "Idle",
 			_ => !string.IsNullOrEmpty(mode) ? mode : "Idle"
@@ -115,18 +114,21 @@ public partial class UnitSection : PanelContainer
 	{
 		batteryLabel.Text = "Charging";
 		batteryLabel.AddThemeColorOverride("font_color", new Color(0, 1, 0)); // Green color for charging status
-		stopButton.SetDisabled(true);
-		stopButton.MouseFilter = Control.MouseFilterEnum.Ignore;
-		stopButton.Modulate = new Color(0.6f, 0.6f, 0.6f, 1f);
+		RefreshStopButtonState();
 	}
 
 	public void OnStopCharging()
 	{
 		batteryLabel.Text = "Battery";
 		statusLabel.AddThemeColorOverride("font_color", new Color(1, 1, 1)); // Reset to default color
-		stopButton.SetDisabled(true);
-		stopButton.MouseFilter = Control.MouseFilterEnum.Ignore;
-		stopButton.Modulate = new Color(0.6f, 0.6f, 0.6f, 1f);
+		// Charging state is recalculated after every movement step. It must not
+		// override the stop button while a multi-step movement is still active.
+		RefreshStopButtonState();
+	}
+
+	private void RefreshStopButtonState()
+	{
+		UpdateStopButtonState(buildingComponent?.currentExplorMode.ToString());
 	}
 
 	private void UpdateStopButtonState(string mode)

@@ -202,7 +202,12 @@ public partial class BuildingComponent : Node2D
 		IsLifted = false;
 		IsLifting = false;
 		RetractGrapple();
-		EmitSignal(SignalName.ModeChanged, "Idle");
+		// Detaching is part of several automated operations. Do not overwrite
+		// their UI status with "Idle" while that operation is still active.
+		if (currentExplorMode == ExplorMode.None)
+		{
+			EmitSignal(SignalName.ModeChanged, "Idle");
+		}
 	}
 
 	private List<StringName> GenerateHistoryMoveList()
@@ -759,7 +764,10 @@ public partial class BuildingComponent : Node2D
 			currentExplorMode = ExplorMode.None;
 			return;
 		}
-		if (currentExplorMode != ExplorMode.Random)
+		// Keep the high-level automated mode visible while this helper executes
+		// its individual movement steps. A direct destination click still uses
+		// MoveToPos, but returning to base remains ReturnToBase until completion.
+		if (currentExplorMode != ExplorMode.Random && currentExplorMode != ExplorMode.ReturnToBase)
 		{
 			currentExplorMode = ExplorMode.MoveToPos;
 			EmitSignal(SignalName.ModeChanged, currentExplorMode.ToString());

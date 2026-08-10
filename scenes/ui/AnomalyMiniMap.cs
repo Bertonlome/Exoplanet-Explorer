@@ -9,16 +9,28 @@ public partial class AnomalyMiniMap : Node3D
     [Export] public MeshInstance3D RobotMarker;      // assign in inspector
     [Export] public Camera3D Cam;                    // assign in inspector
     [Export] public DirectionalLight3D Light;        // assign in inspector (optional)
-    [Export] public int GridW = 32;                  // Display resolution (reduce for robot window mode)
-    [Export] public int GridH = 32;                  // Display resolution (reduce for robot window mode)
+    [Export] public int GridW = 64;                  // Display resolution (reduce for robot window mode)
+    [Export] public int GridH = 64;                  // Display resolution (reduce for robot window mode)
     [Export] public float CellSize = 0.15f;          // spacing in minimap world units (wider bars)
     [Export] public float HeightScale = 0.01f;       // height multiplier for better visibility
-    [Export] public float MaxBarHeight = 2.0f;       // Maximum bar height in world units (tallest bar)
+    [Export] public float MaxBarHeight = 1.0f;       // Maximum bar height in world units (tallest bar)
     [Export] public float MaxValue = 500f;
     [Export] public float Gamma = 0.6f;
     [Export] public bool UsePerspective = true;      // false = ortho
+    [Export] public float OrbitSensitivity = 0.01f;
+    [Export] public float ZoomSensitivity = 0.12f;
+    [Export] public float MinZoomFactor = 0.35f;
+    [Export] public float MaxZoomFactor = 3.0f;
 
     private MultiMesh _mm;
+    private Vector3 _cameraTarget;
+    private float _cameraDistance;
+    private float _initialCameraDistance;
+    private float _initialOrthographicSize;
+    private float _cameraYaw;
+    private float _cameraPitch;
+    private Node3D _orientationIndicators;
+    private float _robotMarkerStemHeight;
 
     // Cached “view window” in map tile coords
     private Rect2I _window;            // which map area is shown
@@ -85,6 +97,8 @@ public partial class AnomalyMiniMap : Node3D
         }
 
         ConfigureCamera();
+        SetupOrientationIndicators();
+        SetupRobotMarker();
         _grid = new float[GridW, GridH];
         // pre-place instances (XZ positions) once
         PreplaceInstances();
@@ -119,8 +133,8 @@ public partial class AnomalyMiniMap : Node3D
             
             // Pull camera back further to see the whole scene
             // Position at a good angle with more distance
+            _cameraTarget = new Vector3(-0.25f, 0.85f, 0);
             Cam.GlobalPosition = new Vector3(maxExtent * 2.5f, maxExtent * 3.0f, maxExtent * 4.0f);
-            Cam.LookAt(new Vector3(-0.25f, 0.85f, 0), Vector3.Up); // Look at slightly elevated center
             Cam.Fov = 35.0f; // Wider field of view
         }
         else
@@ -128,9 +142,251 @@ public partial class AnomalyMiniMap : Node3D
             Cam.Projection = Camera3D.ProjectionType.Orthogonal;
             var half = MathF.Max(GridW, GridH) * CellSize * 0.55f;
             Cam.Size = half * 2.0f;
+            _cameraTarget = Vector3.Zero;
             Cam.GlobalPosition = new Vector3(0, 10f, 0);
-            Cam.LookAt(Vector3.Zero, Vector3.Back); // top-down
         }
+
+        InitializeCameraOrbit();
+    }
+
+    private void InitializeCameraOrbit()
+    {
+        var offset = Cam.GlobalPosition - _cameraTarget;
+        _cameraDistance = MathF.Max(offset.Length(), 0.01f);
+        _initialCameraDistance = _cameraDistance;
+        _initialOrthographicSize = Cam.Size;
+        _cameraYaw = MathF.Atan2(offset.X, offset.Z);
+        _cameraPitch = MathF.Asin(Mathf.Clamp(offset.Y / _cameraDistance, -1f, 1f));
+        _cameraPitch = Mathf.Clamp(_cameraPitch, Mathf.DegToRad(10f), Mathf.DegToRad(85f));
+        ApplyCameraOrbit();
+    }
+
+    public void OrbitCamera(Vector2 dragDelta)
+    {
+        if (Cam == null) return;
+
+        _cameraYaw -= dragDelta.X * OrbitSensitivity;
+        _cameraPitch = Mathf.Clamp(
+            _cameraPitch - dragDelta.Y * OrbitSensitivity,
+            Mathf.DegToRad(10f),
+            Mathf.DegToRad(85f));
+
+        ApplyCameraOrbit();
+    }
+
+    public void ZoomCamera(float wheelSteps)
+    {
+        if (Cam == null || Mathf.IsZeroApprox(wheelSteps)) return;
+
+        float zoomBase = Mathf.Clamp(1f - ZoomSensitivity, 0.01f, 0.99f);
+        float zoomMultiplier = MathF.Pow(zoomBase, wheelSteps);
+
+        if (Cam.Projection == Camera3D.ProjectionType.Orthogonal)
+        {
+            Cam.Size = Mathf.Clamp(
+                Cam.Size * zoomMultiplier,
+                _initialOrthographicSize * MinZoomFactor,
+                _initialOrthographicSize * MaxZoomFactor);
+            return;
+        }
+
+        _cameraDistance = Mathf.Clamp(
+            _cameraDistance * zoomMultiplier,
+            _initialCameraDistance * MinZoomFactor,
+            _initialCameraDistance * MaxZoomFactor);
+        ApplyCameraOrbit();
+    }
+
+    private void ApplyCameraOrbit()
+    {
+        float horizontalDistance = _cameraDistance * MathF.Cos(_cameraPitch);
+        var offset = new Vector3(
+            horizontalDistance * MathF.Sin(_cameraYaw),
+            _cameraDistance * MathF.Sin(_cameraPitch),
+            horizontalDistance * MathF.Cos(_cameraYaw));
+
+        Cam.GlobalPosition = _cameraTarget + offset;
+        Cam.LookAt(_cameraTarget, Vector3.Up);
+    }
+
+    private void SetupOrientationIndicators()
+    {
+        if (IsInstanceValid(_orientationIndicators))
+        {
+            _orientationIndicators.QueueFree();
+        }
+
+        _orientationIndicators = new Node3D { Name = "OrientationIndicators" };
+        AddChild(_orientationIndicators);
+
+        // Keep the compass spacing proportional to the graph dimensions.
+        float extentX = GridW * CellSize * .7f;
+        float extentZ = GridH * CellSize * .7f;
+        float arrowLength = CellSize * 1.8f;
+        float arrowWidth = CellSize * 1.2f;
+        float shaftWidth = CellSize * 0.16f;
+        float edgeGap = CellSize * 0.95f;
+        float labelGap = CellSize * 1.5f;
+        float arrowY = 0.04f;
+
+        var north = new Vector3(0, 0, -1);
+        var south = new Vector3(0, 0, 1);
+        var east = new Vector3(1, 0, 0);
+        var west = new Vector3(-1, 0, 0);
+
+        var northCenter = new Vector3(0, arrowY, -(extentZ + edgeGap));
+        var southCenter = new Vector3(0, arrowY, extentZ + edgeGap);
+        var eastCenter = new Vector3(extentX + edgeGap, arrowY, 0);
+        var westCenter = new Vector3(-(extentX + edgeGap), arrowY, 0);
+
+        var arrowMesh = new ImmediateMesh();
+        var arrowMaterial = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            VertexColorUseAsAlbedo = true,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled
+        };
+
+        arrowMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, arrowMaterial);
+        var arrowStart = new Vector3(0, arrowY, 0);
+        AddArrow(arrowMesh, arrowStart, northCenter, north, arrowLength, arrowWidth, shaftWidth, new Color(1f, 0.25f, 0.2f));
+        AddArrow(arrowMesh, arrowStart, southCenter, south, arrowLength, arrowWidth, shaftWidth, Colors.White);
+        AddArrow(arrowMesh, arrowStart, eastCenter, east, arrowLength, arrowWidth, shaftWidth, Colors.White);
+        AddArrow(arrowMesh, arrowStart, westCenter, west, arrowLength, arrowWidth, shaftWidth, Colors.White);
+        arrowMesh.SurfaceEnd();
+
+        _orientationIndicators.AddChild(new MeshInstance3D { Mesh = arrowMesh });
+
+        AddGroundDirectionLabel("N", northCenter + north * (arrowLength * 0.5f + labelGap), new Color(1f, 0.25f, 0.2f));
+        AddGroundDirectionLabel("S", southCenter + south * (arrowLength * 0.5f + labelGap), Colors.White);
+        AddGroundDirectionLabel("E", eastCenter + east * (arrowLength * 0.5f + labelGap), Colors.White);
+        AddGroundDirectionLabel("W", westCenter + west * (arrowLength * 0.5f + labelGap), Colors.White);
+    }
+
+    private static void AddArrow(
+        ImmediateMesh mesh,
+        Vector3 start,
+        Vector3 headCenter,
+        Vector3 direction,
+        float headLength,
+        float headWidth,
+        float shaftWidth,
+        Color color)
+    {
+        var perpendicular = new Vector3(-direction.Z, 0, direction.X);
+        var tip = headCenter + direction * (headLength * 0.5f);
+        var headBase = headCenter - direction * (headLength * 0.5f);
+        var shaftOffset = perpendicular * (shaftWidth * 0.5f);
+
+        // Shaft: two triangles forming a rectangle from graph center to head.
+        AddColoredVertex(mesh, start + shaftOffset, color);
+        AddColoredVertex(mesh, start - shaftOffset, color);
+        AddColoredVertex(mesh, headBase - shaftOffset, color);
+
+        AddColoredVertex(mesh, start + shaftOffset, color);
+        AddColoredVertex(mesh, headBase - shaftOffset, color);
+        AddColoredVertex(mesh, headBase + shaftOffset, color);
+
+        // Arrowhead.
+        AddColoredVertex(mesh, tip, color);
+        AddColoredVertex(mesh, headBase + perpendicular * (headWidth * 0.5f), color);
+        AddColoredVertex(mesh, headBase - perpendicular * (headWidth * 0.5f), color);
+    }
+
+    private static void AddColoredVertex(ImmediateMesh mesh, Vector3 vertex, Color color)
+    {
+        mesh.SurfaceSetColor(color);
+        mesh.SurfaceAddVertex(vertex);
+    }
+
+    private void AddGroundDirectionLabel(string text, Vector3 position, Color color)
+    {
+        var label = new Label3D
+        {
+            Text = text,
+            Position = new Vector3(position.X, 0.05f, position.Z),
+            RotationDegrees = new Vector3(-90f, 0, 0),
+            Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
+            FixedSize = false,
+            DoubleSided = true,
+            NoDepthTest = false,
+            FontSize = 128,
+            PixelSize = CellSize / 30f,
+            OutlineSize = 6,
+            Modulate = color,
+            OutlineModulate = new Color(0.02f, 0.03f, 0.08f, 1f)
+        };
+
+        _orientationIndicators.AddChild(label);
+    }
+
+    private void SetupRobotMarker()
+    {
+        if (RobotMarker == null) return;
+
+        foreach (var child in RobotMarker.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        _robotMarkerStemHeight = MaxBarHeight + CellSize * 2.0f;
+        float stemWidth = CellSize * 0.16f;
+        float aircraftThickness = CellSize * 0.14f;
+
+        var markerMaterial = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            AlbedoColor = Colors.White,
+            EmissionEnabled = true,
+            Emission = Colors.White,
+            EmissionEnergyMultiplier = 2.5f
+        };
+
+        RobotMarker.Mesh = new BoxMesh
+        {
+            Size = new Vector3(stemWidth, _robotMarkerStemHeight, stemWidth)
+        };
+        RobotMarker.MaterialOverride = markerMaterial;
+        RobotMarker.Scale = Vector3.One;
+
+        var aircraft = new Node3D
+        {
+            Name = "OwnshipAircraft",
+            Position = Vector3.Up * (_robotMarkerStemHeight * 0.5f + aircraftThickness * 0.5f)
+        };
+        RobotMarker.AddChild(aircraft);
+
+        // A simple top-down aircraft silhouette: fuselage, main wings and tail.
+        AddAircraftPart(
+            aircraft,
+            new Vector3(CellSize * 0.28f, aircraftThickness, CellSize * 1.5f),
+            Vector3.Zero,
+            markerMaterial);
+        AddAircraftPart(
+            aircraft,
+            new Vector3(CellSize * 1.4f, aircraftThickness, CellSize * 0.28f),
+            new Vector3(0, 0, -CellSize * 0.12f),
+            markerMaterial);
+        AddAircraftPart(
+            aircraft,
+            new Vector3(CellSize * 0.7f, aircraftThickness, CellSize * 0.22f),
+            new Vector3(0, 0, CellSize * 0.55f),
+            markerMaterial);
+    }
+
+    private static void AddAircraftPart(
+        Node3D aircraft,
+        Vector3 size,
+        Vector3 position,
+        Material material)
+    {
+        var part = new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = size },
+            Position = position,
+            MaterialOverride = material
+        };
+        aircraft.AddChild(part);
     }
 
     private void PreplaceInstances()
@@ -331,8 +587,9 @@ public partial class AnomalyMiniMap : Node3D
         if (_currentMode == Mode.RobotWindow)
         {
             RobotMarker.Visible = true;
-            RobotMarker.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(0, 0.02f, 0));
-            RobotMarker.Scale = new Vector3(CellSize * 0.5f, CellSize * 0.5f, CellSize * 0.5f);
+            RobotMarker.GlobalTransform = new Transform3D(
+                Basis.Identity,
+                new Vector3(0, _robotMarkerStemHeight * 0.5f, 0));
             return;
         }
 
@@ -353,8 +610,9 @@ public partial class AnomalyMiniMap : Node3D
         float z = (gy - GridH * 0.5f + 0.5f) * CellSize;
 
         RobotMarker.Visible = true;
-        RobotMarker.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(x, 0.02f, z));
-        RobotMarker.Scale = new Vector3(CellSize * 0.5f, CellSize * 0.5f, CellSize * 0.5f);
+        RobotMarker.GlobalTransform = new Transform3D(
+            Basis.Identity,
+            new Vector3(x, _robotMarkerStemHeight * 0.5f, z));
     }
 
     private static Color HeatColor(float t)

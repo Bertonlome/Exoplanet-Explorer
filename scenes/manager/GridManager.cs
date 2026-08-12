@@ -167,15 +167,41 @@ public partial class GridManager : Node
 		return (null, false);
 	}
 
-	public (ElevationLayer elevationLayer, bool isElevated) GetElevationLayerForTile(Vector2I tilePosition)
+	/// <summary>
+	/// Returns terrain data used by ground movement, ignoring a tree tile that is
+	/// drawn over the actual terrain. This is especially important on elevated
+	/// terrain: some levels keep their TreeLayer outside the ElevationLayer, so
+	/// using the tree layer for elevation checks incorrectly makes the tile look
+	/// like base terrain. Harvested trees remain present in the TileMap and are
+	/// represented visually as trunks, so the raw is_wood flag is used here.
+	/// </summary>
+	private (TileMapLayer, bool) GetGroundTerrainCustomData(Vector2I tilePosition, string dataName)
 	{
 		foreach (var layer in allTilemapLayers)
 		{
 			var customData = layer.GetCellTileData(tilePosition);
-			if (customData == null || (bool)customData.GetCustomData(IS_IGNORED)) continue;
-			
-			// Found the first valid layer for this tile
-			var elevationLayer = tileMapLayerToElevationLayer.GetValueOrDefault(layer);
+			if (customData == null || (bool)customData.GetCustomData(IS_IGNORED))
+			{
+				continue;
+			}
+
+			if ((bool)customData.GetCustomData(IS_WOOD))
+			{
+				continue;
+			}
+
+			return (layer, (bool)customData.GetCustomData(dataName));
+		}
+
+		return (null, false);
+	}
+
+	public (ElevationLayer elevationLayer, bool isElevated) GetElevationLayerForTile(Vector2I tilePosition)
+	{
+		var (terrainLayer, _) = GetGroundTerrainCustomData(tilePosition, IS_BUILDABLE);
+		if (terrainLayer != null)
+		{
+			var elevationLayer = tileMapLayerToElevationLayer.GetValueOrDefault(terrainLayer);
 			bool isElevated = elevationLayer != null && elevationLayer.Name.ToString().StartsWith("ElevationLayer", StringComparison.Ordinal);
 			return (elevationLayer, isElevated);
 		}
@@ -329,21 +355,20 @@ public partial class GridManager : Node
 			});
 		}
 
-		(TileMapLayer firstTileMapLayer, _) = GetTileCustomData(tilesDestination[0], IS_ROUGH_TERRAIN);
+		(TileMapLayer firstTileMapLayer, _) = GetGroundTerrainCustomData(tilesDestination[0], IS_ROUGH_TERRAIN);
 		var targetElevationLayer = firstTileMapLayer != null ? tileMapLayerToElevationLayer[firstTileMapLayer] : null;
 
-		(firstTileMapLayer, _) = GetTileCustomData(originTile, IS_ROUGH_TERRAIN);
+		(firstTileMapLayer, _) = GetGroundTerrainCustomData(originTile, IS_ROUGH_TERRAIN);
 		var OriginElevationLayer = firstTileMapLayer != null ? tileMapLayerToElevationLayer[firstTileMapLayer] : null;
 		var (robotElevation, robotIsElevated) = GetElevationLayerForTile(originTile);
-		(_, bool isInMud) = GetTileCustomData(originTile, IS_MUD);
+		(_, bool isInMud) = GetGroundTerrainCustomData(originTile, IS_MUD);
 
 		return tilesDestination.All((tilePosition) =>
 		{
-			(TileMapLayer roughLayer, bool isRoulable) = GetTileCustomData(tilePosition, IS_ROUGH_TERRAIN);
+			(TileMapLayer roughLayer, bool isRoulable) = GetGroundTerrainCustomData(tilePosition, IS_ROUGH_TERRAIN);
 			var elevationLayer = roughLayer != null ? tileMapLayerToElevationLayer[roughLayer] : null;
-			(TileMapLayer woodLayer, bool isWood) = GetTileCustomData(tilePosition, IS_WOOD);
-			(TileMapLayer mudLayer, bool isMud) = GetTileCustomData(tilePosition, IS_MUD);
-			(TileMapLayer waterLayer, bool isWater) = GetTileCustomData(tilePosition, IS_WATER);
+			(TileMapLayer mudLayer, bool isMud) = GetGroundTerrainCustomData(tilePosition, IS_MUD);
+			(TileMapLayer waterLayer, bool isWater) = GetGroundTerrainCustomData(tilePosition, IS_WATER);
 			var (targetElevation, targetIsElevated) = GetElevationLayerForTile(tilePosition);
 
 			// DEBUG: Log tile checking details

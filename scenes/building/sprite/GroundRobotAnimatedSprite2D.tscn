@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://5c855rmarlp6"]
+[gd_scene load_steps=21 format=3 uid="uid://5c855rmarlp6"]
 
 [ext_resource type="Texture2D" uid="uid://csifi0fgq36j3" path="res://assets/buildings/robots.png" id="1_s0hyw"]
 
@@ -34,6 +34,46 @@ region = Rect2(672, 576, 96, 96)
 atlas = ExtResource("1_s0hyw")
 region = Rect2(768, 576, 96, 96)
 
+[sub_resource type="AtlasTexture" id="AtlasTexture_kildk"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(0, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fmlar"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(96, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4jhak"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(192, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_obqrf"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(288, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_wkw12"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(384, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nuact"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(384, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_itg3e"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(288, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8nktu"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(192, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_o1oik"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(96, 672, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ccu7g"]
+atlas = ExtResource("1_s0hyw")
+region = Rect2(0, 672, 96, 96)
+
 [sub_resource type="SpriteFrames" id="SpriteFrames_au46q"]
 animations = [{
 "frames": [{
@@ -64,11 +104,52 @@ animations = [{
 "loop": true,
 "name": &"default",
 "speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_kildk")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fmlar")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4jhak")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_obqrf")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_wkw12")
+}],
+"loop": false,
+"name": &"drop",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_nuact")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_itg3e")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8nktu")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_o1oik")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ccu7g")
+}],
+"loop": false,
+"name": &"lift",
+"speed": 5.0
 }]
 
 [node name="GroundRobotAnimatedSprite2D" type="AnimatedSprite2D"]
 position = Vector2(32, 58)
 sprite_frames = SubResource("SpriteFrames_au46q")
+animation = &"drop"
 autoplay = "default"
 centered = false
 offset = Vector2(-48, -90)

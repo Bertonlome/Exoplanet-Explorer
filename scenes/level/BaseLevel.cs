@@ -153,6 +153,11 @@ public partial class BaseLevel : Node
 
 	private void OnRobotSelected(BuildingComponent buildingComponent)
 	{
+		if (GodotObject.IsInstanceValid(selectedRobotUI))
+		{
+			selectedRobotUI.QueueFree();
+		}
+
 		selectedRobotUI = selectedRobotUIScene.Instantiate<SelectedRobotUI>();
 		AddChild(selectedRobotUI);
 		//selectedRobotUI.selectedBuildingComponent = buildingComponent;

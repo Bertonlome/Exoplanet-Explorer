@@ -71,16 +71,16 @@ public partial class BuildingComponent : Node2D
 	private string previousDir = "";
 	private int numberOfWoodCarried => resourceCollected.Count(res => res == "wood");
 
-	private BuildingComponent AttachedRobot;
+	public BuildingComponent AttachedRobot { get; private set; }
 
 	// Timer variables
 	private float timerMove = 0.0f; // Tracks time since last move
 	private float timerRecharge = 0.0f; // Tracks time since last move
 	public const float RECHARGE_INTERVAL = 3.0f;
 
-	private Sprite2D grappleComponent;
-	private Node grappleRoot;
+	private Node2D grappleRoot;
 	private bool IsGrappleExtended = false;
+	private AnimatedSprite2D robotSprite;
 
 	public enum ExplorMode
 	{
@@ -151,6 +151,39 @@ public partial class BuildingComponent : Node2D
 		Battery = this.BuildingResource.BatteryMax;
 		gravitationalAnomalyMap = level.GetFirstNodeOfType<GravitationalAnomalyMap>();
 
+		if(!BuildingResource.IsAerial && !BuildingResource.IsBase)
+		{
+		GameEvents.Instance.Connect(
+			GameEvents.SignalName.DropRobotButtonPressed,
+			Callable.From<BuildingComponent, BuildingComponent>(OnDropRobotButtonPressed));
+		GameEvents.Instance.Connect(
+			GameEvents.SignalName.LiftRobotButtonPressed,
+			Callable.From<BuildingComponent, BuildingComponent>(OnLiftRobotButtonPressed));
+		robotSprite = GetNode<AnimatedSprite2D>("%GroundRobotAnimatedSprite2D");
+		}
+	}
+
+	private void OnLiftRobotButtonPressed(BuildingComponent buildingComponent, BuildingComponent groundRobot)
+	{
+		if (groundRobot != this)
+			return;
+
+		robotSprite.Play("lift");
+	}
+
+	private async void OnDropRobotButtonPressed(BuildingComponent buildingComponent, BuildingComponent groundRobot)
+	{
+		if (groundRobot != this)
+			return;
+
+		robotSprite.Play("drop");
+
+		await ToSignal(
+			robotSprite,
+			AnimatedSprite2D.SignalName.AnimationFinished
+		);
+
+		robotSprite.Play("default");
 	}
 
     public override void _Process(double delta)
@@ -1521,95 +1554,41 @@ public partial class BuildingComponent : Node2D
 
 	private void ExtendGrapple()
 	{
-	// Only create the grapple if we don't already have one
-	if (grappleComponent == null && !IsGrappleExtended)
-	{
-		var packed = GD.Load<PackedScene>("res://scenes/building/sprite/GrappleSprite2D.tscn");
-		if (packed == null)
+		// Only create the grapple if we don't already have one.
+		if (!GodotObject.IsInstanceValid(grappleRoot) && !IsGrappleExtended)
 		{
-			GD.PrintErr("Failed to load GrappleSprite2D scene.");
-			return;
-		}
+			var packed = GD.Load<PackedScene>("res://scenes/building/sprite/GrappleSprite2D.tscn");
+			if (packed == null)
+			{
+				GD.PrintErr("Failed to load GrappleSprite2D scene.");
+				return;
+			}
 
-		// Instantiate the scene (root may not be Sprite2D)
-		var root = packed.Instantiate();
-		if (root == null)
-		{
-			GD.PrintErr("Failed to instantiate GrappleSprite2D (root is null).");
-			return;
-		}
+			Node2D root = packed.InstantiateOrNull<Node2D>();
+			if (root == null)
+			{
+				GD.PrintErr("Failed to instantiate GrappleSprite2D (root is null).");
+				return;
+			}
 
-		// Add the instantiated root to this node
-		AddChild(root);
-		grappleRoot = root;
+			AddChild(root);
+			grappleRoot = root;
+			root.Position = new Vector2(32, 32);
+			root.ZIndex = 1;
 
-		// Try to find a Sprite2D to use as grappleComponent. The scene's root may be a Node2D
-		Sprite2D sprite = null;
-		if (root is Sprite2D rs)
-		{
-			sprite = rs;
+			IsGrappleExtended = true;
 		}
-		else
-		{
-			sprite = FindFirstSprite2D(root);
-		}
-
-		// Position / z-order the instantiated node appropriately
-		if (root is Node2D root2d)
-		{
-			root2d.Position = new Vector2(32, 32);
-			// If the scene root has ZIndex, set it; otherwise try to set sprite ZIndex
-			try { root2d.ZIndex = 1; } catch { }
-		}
-		else if (sprite != null)
-		{
-			sprite.Position = new Vector2(0, 0);
-			try { sprite.ZIndex = 1; } catch { }
-		}
-
-		if (sprite == null)
-		{
-			GD.PrintErr("Grapple instantiated but no Sprite2D found in the scene. The root has been added anyway.");
-		}
-		else
-		{
-			grappleComponent = sprite;
-		}
-
-		IsGrappleExtended = true;
-	}
-}
-
-	// Recursively search a node tree for the first Sprite2D instance
-	private Sprite2D FindFirstSprite2D(Node node)
-	{
-		if (node == null) return null;
-		if (node is Sprite2D s) return s;
-		foreach (var childObj in node.GetChildren())
-		{
-			if (childObj is not Node child) continue;
-			var found = FindFirstSprite2D(child);
-			if (found != null) return found;
-		}
-		return null;
 	}
 
 	private void RetractGrapple()
 	{
 		if (!IsGrappleExtended) return;
 		// Prefer removing the root node if we have it
-		if (grappleRoot != null)
+		if (GodotObject.IsInstanceValid(grappleRoot))
 		{
-			try { RemoveChild(grappleRoot); } catch { }
 			grappleRoot.QueueFree();
-			grappleRoot = null;
 		}
-		else if (grappleComponent != null)
-		{
-			try { RemoveChild(grappleComponent); } catch { }
-			grappleComponent.QueueFree();
-			grappleComponent = null;
-		}
+		grappleRoot = null;
 		IsGrappleExtended = false;
 	}
 

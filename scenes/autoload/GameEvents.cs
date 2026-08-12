@@ -36,6 +36,8 @@ public partial class GameEvents : Node
 	[Signal]
 	public delegate void LiftRobotButtonPressedEventHandler(BuildingComponent buildingComponent, BuildingComponent groundRobot);
 	[Signal]
+	public delegate void DropRobotButtonPressedEventHandler(BuildingComponent buildingComponent, BuildingComponent groundRobot);
+	[Signal]
 	public delegate void GroundRobotBelowUavEventHandler(BuildingComponent groundRobot);
 	[Signal]
 	public delegate void NoGroundRobotBelowUavEventHandler();
@@ -126,7 +128,12 @@ public partial class GameEvents : Node
 
 	public static void EmitLiftRobotButtonPressed(BuildingComponent buildingComponent, BuildingComponent groundRobot)
 	{
-		Instance.EmitSignal(SignalName.LiftRobotButtonPressed, buildingComponent);
+		Instance.EmitSignal(SignalName.LiftRobotButtonPressed, buildingComponent, groundRobot);
+	}
+
+	public static void EmitDropRobotButtonPressed(BuildingComponent buildingComponent, BuildingComponent groundRobot)
+	{
+		Instance.EmitSignal(SignalName.DropRobotButtonPressed, buildingComponent, groundRobot);
 	}
 
 	public static void EmitGroundRobotBelowUav(BuildingComponent groundRobot)

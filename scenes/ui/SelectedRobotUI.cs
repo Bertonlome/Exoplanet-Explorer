@@ -50,6 +50,7 @@ public partial class SelectedRobotUI : CanvasLayer
 	private Button dropResourcesButton;
 
 	private MultiPurposeButtonState currentButtonState;
+	private bool signalsDisconnected;
 	public BuildingComponent selectedBuildingComponent;
 	public BuildingComponent groundRobotBelowUav;
 	private MiniMapController miniMapController;
@@ -204,6 +205,7 @@ public partial class SelectedRobotUI : CanvasLayer
 			}
 			if (selectedBuildingComponent.IsLifting)
 			{
+				groundRobotBelowUav = selectedBuildingComponent.AttachedRobot;
 				ChangeStateMultiPurposeButton(MultiPurposeButtonState.DropRobot);
 			}
 			else
@@ -231,7 +233,9 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void OnGroundRobotBelowUav(BuildingComponent groundRobot)
 	{
-		if (selectedBuildingComponent.BuildingResource.IsAerial)
+		if (GodotObject.IsInstanceValid(selectedBuildingComponent) &&
+			selectedBuildingComponent.BuildingResource.IsAerial &&
+			!selectedBuildingComponent.IsLifting)
 		{
 			groundRobotBelowUav = groundRobot;
 		}
@@ -239,7 +243,9 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void OnNoGroundRobotBelowUav()
 	{
-		if (selectedBuildingComponent.BuildingResource.IsAerial)
+		if (GodotObject.IsInstanceValid(selectedBuildingComponent) &&
+			selectedBuildingComponent.BuildingResource.IsAerial &&
+			!selectedBuildingComponent.IsLifting)
 		{
 			groundRobotBelowUav = null;
 		}
@@ -247,6 +253,7 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void OnNoMoreRobotSelected(BuildingComponent component)
 	{
+		if (component != selectedBuildingComponent) return;
 		// Stop Geiger counter when robot is deselected
 		AudioHelpers.StopGeigerCounter();
 		DisconnectSignals();
@@ -562,6 +569,8 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void DisconnectSignals()
 	{
+		if (signalsDisconnected) return;
+		signalsDisconnected = true;
 		// Safely disconnect signals before the object is freed - check connection first
 		if (randomExplorButton.IsConnected("pressed", Callable.From(OnRandomExplorButtonPressed)))
 		{
@@ -617,7 +626,20 @@ public partial class SelectedRobotUI : CanvasLayer
 		}
 		if (selectedBuildingComponent != null)
 		{
+			selectedBuildingComponent.ModeChanged -= OnModeChanged;
 			selectedBuildingComponent.NewAnomalyReading -= OnNewAnomalyReading;
+			selectedBuildingComponent.BatteryChange -= OnBatteryChange;
+		}
+
+		if (GameEvents.Instance != null)
+		{
+			DisconnectGameEvent(GameEvents.SignalName.NoMoreRobotSelected, Callable.From<BuildingComponent>(OnNoMoreRobotSelected));
+			DisconnectGameEvent(GameEvents.SignalName.BuildingStuck, Callable.From<BuildingComponent>(OnBuildingStuck));
+			DisconnectGameEvent(GameEvents.SignalName.BuildingUnStuck, Callable.From<BuildingComponent>(OnBuildingUnStuck));
+			DisconnectGameEvent(GameEvents.SignalName.AllRobotStopped, Callable.From(OnAllRobotsStopped));
+			DisconnectGameEvent(GameEvents.SignalName.CarriedResourceCountChanged, Callable.From<int>(OnResourceCarriedCountChanged));
+			DisconnectGameEvent(GameEvents.SignalName.GroundRobotBelowUav, Callable.From<BuildingComponent>(OnGroundRobotBelowUav));
+			DisconnectGameEvent(GameEvents.SignalName.NoGroundRobotBelowUav, Callable.From(OnNoGroundRobotBelowUav));
 		}
 		
 		// Disconnect minimap building moved event
@@ -625,6 +647,17 @@ public partial class SelectedRobotUI : CanvasLayer
 		{
 			GameEvents.Instance.Disconnect(GameEvents.SignalName.BuildingMoved, Callable.From<BuildingComponent>(OnBuildingMovedForMinimap));
 		}
+	}
+
+	private static void DisconnectGameEvent(StringName signal, Callable callable)
+	{
+		if (GameEvents.Instance.IsConnected(signal, callable))
+			GameEvents.Instance.Disconnect(signal, callable);
+	}
+
+	public override void _ExitTree()
+	{
+		DisconnectSignals();
 	}
 
 	private void OnAnalyseSampleButtonPressed()
@@ -674,34 +707,55 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void OnDropRobotButtonPressed()
 	{
+		if (!GodotObject.IsInstanceValid(selectedBuildingComponent) ||
+			!selectedBuildingComponent.BuildingResource.IsAerial)
+		{
+			return;
+		}
+
+		BuildingComponent groundRobot = selectedBuildingComponent.AttachedRobot;
+		if (!GodotObject.IsInstanceValid(groundRobot))
+		{
+			groundRobot = groundRobotBelowUav;
+		}
+
+		if (!GodotObject.IsInstanceValid(groundRobot))
+		{
+			selectedBuildingComponent.DetachRobot();
+			groundRobotBelowUav = null;
+			ChangeStateMultiPurposeButton(MultiPurposeButtonState.LiftRobot);
+			return;
+		}
+
 		selectedBuildingComponent.DetachRobot();
-		groundRobotBelowUav.DetachRobot();
+		groundRobot.DetachRobot();
 		ChangeStateMultiPurposeButton(MultiPurposeButtonState.LiftRobot);
+		GameEvents.EmitDropRobotButtonPressed(selectedBuildingComponent, groundRobot);
+		groundRobotBelowUav = null;
 	}
 
 	private void ChangeStateMultiPurposeButton(MultiPurposeButtonState state)
 	{
 		currentButtonState = state;
+		if (liftRobotButton.IsConnected("pressed", Callable.From(OnLiftRobotButtonPressed)))
+			liftRobotButton.Pressed -= OnLiftRobotButtonPressed;
+		if (liftRobotButton.IsConnected("pressed", Callable.From(OnDropRobotButtonPressed)))
+			liftRobotButton.Pressed -= OnDropRobotButtonPressed;
+
 		switch (state)
 		{
 			case MultiPurposeButtonState.Placebridge:
 				liftRobotButton.Text = "Place Bridge";
+				liftRobotButton.Disabled = false;
 				break;
 			case MultiPurposeButtonState.LiftRobot:
 				liftRobotButton.Text = "Lift Robot";
 				liftRobotButton.Disabled = false;
-				if (liftRobotButton.IsConnected("pressed", Callable.From(OnDropRobotButtonPressed)))
-				{
-					liftRobotButton.Pressed -= OnDropRobotButtonPressed;
-				}
 				liftRobotButton.Pressed += OnLiftRobotButtonPressed;
 				break;
 			case MultiPurposeButtonState.DropRobot:
 				liftRobotButton.Text = "Drop Robot";
-				if (liftRobotButton.IsConnected("pressed", Callable.From(OnLiftRobotButtonPressed)))
-				{
-					liftRobotButton.Pressed -= OnLiftRobotButtonPressed;
-				}
+				liftRobotButton.Disabled = false;
 				liftRobotButton.Pressed += OnDropRobotButtonPressed;
 				break;
 		}

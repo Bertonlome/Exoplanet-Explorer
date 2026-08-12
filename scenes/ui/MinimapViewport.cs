@@ -20,7 +20,7 @@ public partial class MinimapViewport : Control
 	[Export] private Color cameraRectColor = new(0.20f, 0.95f, 1f, 1f);
 	[Export(PropertyHint.Range, "1.05,2.0,0.05")]
 	private float coarseZoomFactor = 1.35f;
-	[Export(PropertyHint.Range, "0,24,1")]
+	[Export(PropertyHint.Range, "0,12,1")]
 	private float mapPadding = 6f;
 
 	private readonly List<TerrainCell> terrainCache = new();
@@ -35,6 +35,7 @@ public partial class MinimapViewport : Control
 	private bool terrainCacheDirty = true;
 	private bool isDirty;
 	private bool isDragging;
+	private Vector2 dragOffsetFromCameraCenter;
 	private Vector2 lastCameraPosition;
 	private Vector2 lastCameraZoom;
 	private Vector2 lastControlSize;
@@ -205,45 +206,77 @@ public partial class MinimapViewport : Control
 		DrawRect(mapRect, new Color(0.65f, 0.78f, 0.84f, 1f), false, 1.5f);
 	}
 
-	public override void _GuiInput(InputEvent inputEvent)
+	public override void _Input(InputEvent inputEvent)
 	{
 		if (gameCamera == null || !IsInstanceValid(gameCamera)) return;
 
 		if (inputEvent is InputEventMouseButton mouseButton)
 		{
+			bool pointerIsOverMinimap = IsViewportPositionOverMinimap(mouseButton.Position);
+
 			if (mouseButton.ButtonIndex == MouseButton.Left)
 			{
+				if (!pointerIsOverMinimap && !isDragging) return;
+
+				Vector2 localPosition = ViewportToLocal(mouseButton.Position);
 				isDragging = mouseButton.Pressed;
 				if (mouseButton.Pressed)
 				{
-					RecenterCamera(mouseButton.Position);
+					gameCamera.CancelMouseDrag();
+
+					Rect2 cameraRect = GetViewportRectOnMinimap();
+					if (cameraRect.HasPoint(localPosition))
+					{
+						dragOffsetFromCameraCenter = localPosition - cameraRect.GetCenter();
+					}
+					else
+					{
+						dragOffsetFromCameraCenter = Vector2.Zero;
+						MoveCameraRectangle(localPosition);
+					}
 				}
-				AcceptEvent();
+				else
+				{
+					dragOffsetFromCameraCenter = Vector2.Zero;
+				}
+				GetViewport().SetInputAsHandled();
 				return;
 			}
 
-			if (mouseButton.Pressed && mouseButton.ButtonIndex == MouseButton.WheelUp)
+			if (pointerIsOverMinimap && mouseButton.Pressed && mouseButton.ButtonIndex == MouseButton.WheelUp)
 			{
+				gameCamera.CancelMouseDrag();
 				gameCamera.SetCameraZoomStep(coarseZoomFactor);
 				MarkDirty();
-				AcceptEvent();
+				GetViewport().SetInputAsHandled();
 				return;
 			}
 
-			if (mouseButton.Pressed && mouseButton.ButtonIndex == MouseButton.WheelDown)
+			if (pointerIsOverMinimap && mouseButton.Pressed && mouseButton.ButtonIndex == MouseButton.WheelDown)
 			{
+				gameCamera.CancelMouseDrag();
 				gameCamera.SetCameraZoomStep(1f / coarseZoomFactor);
 				MarkDirty();
-				AcceptEvent();
+				GetViewport().SetInputAsHandled();
 				return;
 			}
 		}
 
 		if (inputEvent is InputEventMouseMotion mouseMotion && isDragging)
 		{
-			RecenterCamera(mouseMotion.Position);
-			AcceptEvent();
+			MoveCameraRectangle(ViewportToLocal(mouseMotion.Position));
+			GetViewport().SetInputAsHandled();
 		}
+	}
+
+	private bool IsViewportPositionOverMinimap(Vector2 viewportPosition)
+	{
+		return new Rect2(Vector2.Zero, Size).HasPoint(ViewportToLocal(viewportPosition));
+	}
+
+	private Vector2 ViewportToLocal(Vector2 viewportPosition)
+	{
+		return GetGlobalTransformWithCanvas().AffineInverse() * viewportPosition;
 	}
 
 	public Vector2 WorldToMinimap(Vector2 worldPosition)
@@ -359,9 +392,10 @@ public partial class MinimapViewport : Control
 		}
 	}
 
-	private void RecenterCamera(Vector2 localPosition)
+	private void MoveCameraRectangle(Vector2 localPosition)
 	{
-		gameCamera.CenterOnPositionClamped(MinimapToWorld(localPosition));
+		Vector2 desiredCenter = localPosition - dragOffsetFromCameraCenter;
+		gameCamera.CenterOnPositionClamped(MinimapToWorld(desiredCenter));
 		CaptureCameraState();
 		MarkDirty();
 	}

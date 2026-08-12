@@ -193,6 +193,11 @@ public partial class GameCamera : Camera2D
 		GlobalPosition = position;
 	}
 
+	public void CancelMouseDrag()
+	{
+		isDragging = false;
+	}
+
 	public void CenterOnPositionClamped(Vector2 position)
 	{
 		OnStopTrackingRobot();

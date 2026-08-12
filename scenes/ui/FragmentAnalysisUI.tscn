@@ -1,0 +1,139 @@
+[gd_scene load_steps=8 format=3 uid="uid://cb8e7vaji1v7h"]
+
+[ext_resource type="Script" path="res://scenes/ui/FragmentAnalysisUI.cs" id="1_0ks4x"]
+[ext_resource type="Script" path="res://scenes/ui/FragmentCanvas.cs" id="2_wqr11"]
+[ext_resource type="Script" path="res://scenes/ui/FragmentGenerationSettings.cs" id="4_ip4le"]
+[ext_resource type="Script" path="res://scenes/ui/FragmentRockSettings.cs" id="5_mcumt"]
+[ext_resource type="Theme" uid="uid://lrxwuh3o4l5k" path="res://resources/sci-fi-theme.tres" id="6_37kou"]
+
+[sub_resource type="Resource" id="Resource_62ami"]
+script = ExtResource("4_ip4le")
+LineCount = 40
+LineWidth = 4.0
+LineColor = Color(0.3, 0.9, 1, 1)
+StartMinimumX = 0.1
+StartMaximumX = 0.9
+StartMinimumY = 0.1
+StartMaximumY = 0.9
+MinimumOffset = Vector2(-140, -140)
+MaximumOffset = Vector2(140, 140)
+RandomizeSeedOnReload = true
+Seed = 12345
+
+[sub_resource type="Resource" id="Resource_88r4w"]
+script = ExtResource("5_mcumt")
+Resolution = 256
+DarkColor = Color(0.0239844, 0.0314884, 0.155703, 1)
+LightColor = Color(0.171245, 0.363209, 0.72889, 1)
+BaseBrightness = 0.25
+LargeNoiseFrequency = 0.015
+LargeNoiseOctaves = 4
+LargeNoiseStrength = 0.9
+FineNoiseFrequency = 0.08
+FineNoiseOctaves = 3
+FineNoiseStrength = 0.25
+CellularFrequency = 0.5
+CellularStrength = 1.0
+VeinCount = 24
+PointsPerVein = 4
+MinimumStepLength = 8.0
+MaximumStepLength = 20.0
+MaximumTurn = 0.35
+FractureColor = Color(0.01, 0.02, 0.02, 0.65)
+FractureWidth = 8.0
+DepositColor = Color(0.55, 0.68, 0.64, 0.5)
+DepositWidth = 1.5
+
+[node name="FragmentAnalysisUI" type="CanvasLayer"]
+script = ExtResource("1_0ks4x")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="PanelContainer" type="PanelContainer" parent="MarginContainer"]
+layout_mode = 2
+theme = ExtResource("6_37kou")
+
+[node name="Panel" type="Panel" parent="MarginContainer/PanelContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HBoxContainer3" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
+layout_mode = 2
+size_flags_horizontal = 6
+theme_override_font_sizes/font_size = 34
+text = "SAMPLE ANALYSER SOFTWARE"
+
+[node name="QuitButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
+unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("6_37kou")
+text = "QUIT "
+
+[node name="ReloadButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reload"
+
+[node name="AnalysisFrame" type="PanelContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FragmentCanvas" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/AnalysisFrame"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("2_wqr11")
+generationSettings = SubResource("Resource_62ami")
+rockSettings = SubResource("Resource_88r4w")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="PolarizationButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "POLARIZATION"
+
+[node name="SpectralButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "SPECTRAL SIGNATURE"
+
+[node name="SurfaceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "SURFACE TOPOGRAPHY"
+
+[node name="ElectromagneticButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "ELECTROMAGNETIC RESPONSE"
+
+[node name="ResonanceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "RESONANCE MAP"

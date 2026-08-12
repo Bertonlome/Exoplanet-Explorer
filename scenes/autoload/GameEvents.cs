@@ -11,6 +11,8 @@ public partial class GameEvents : Node
 	[Signal]
 	public delegate void BuildingPlacedEventHandler(BuildingComponent buildingComponent);
 	[Signal]
+	public delegate void FragmentAnalysisRequestedEventHandler();
+	[Signal]
 	public delegate void BuildingDestroyedEventHandler(BuildingComponent buildingComponent);
 	[Signal]
 	public delegate void BuildingDisabledEventHandler(BuildingComponent buildingComponent);
@@ -54,6 +56,11 @@ public partial class GameEvents : Node
 	public static void EmitBuildingPlaced(BuildingComponent buildingComponent)
 	{
 		Instance.EmitSignal(SignalName.BuildingPlaced, buildingComponent);
+	}
+
+	public static void EmitFragmentAnalysisRequested()
+	{
+		Instance.EmitSignal(SignalName.FragmentAnalysisRequested);
 	}
 
 	public static void EmitBuildingMoved(BuildingComponent buildingComponent)

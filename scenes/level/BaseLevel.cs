@@ -23,6 +23,8 @@ public partial class BaseLevel : Node
 	private LevelDefinitionResource levelDefinitionResource;
 	[Export]
 	private PackedScene escapeMenuScene;
+	[Export]
+	private PackedScene fragmentAnalysisScene;
 
 	private GridManager gridManager;
 	private Monolith monolith;
@@ -30,6 +32,7 @@ public partial class BaseLevel : Node
 	private Node2D baseBuilding;
 	private TileMapLayer baseTerrainTilemapLayer;
 	private GameUI gameUI;
+	private FragmentAnalysisUI fragmentAnalysisUI;
 	private BuildingManager buildingManager;
 	private bool isComplete;
 	private bool isFailed;
@@ -62,12 +65,12 @@ public partial class BaseLevel : Node
 			//gameCamera.CenterOnPosition(baseBuilding.GlobalPosition);
 		//}
 		gameCamera.Zoom = new Vector2((float)0.5, (float)0.5);
-		gameCamera.CameraZoom += OnCameraZoom;
 		gridManager.AerialRobotHasVisionOfMonolith += OnAerialRobotHasVisionOfMonolith;
 		gridManager.GroundRobotTouchingMonolith += OnGroundRobotTouchingMonolith;
 		gridManager.BaseTouchingMonolith += OnBaseTouchingMonolith;
 
 		GameEvents.Instance.Connect(GameEvents.SignalName.RobotSelected, Callable.From<BuildingComponent>(OnRobotSelected));
+		GameEvents.Instance.Connect(GameEvents.SignalName.FragmentAnalysisRequested, Callable.From(OnFragmentAnalysisRequested));
 	}
 
 	public void OnBasePlaced()
@@ -103,6 +106,7 @@ public partial class BaseLevel : Node
 			monolith.SetActive();
 			gameUI.HideUI();
 			selectedRobotUI.HideUI();
+			fragmentAnalysisUI.HideUI();
 		}
 	}
 
@@ -113,20 +117,13 @@ public partial class BaseLevel : Node
 			isFailed = true;
 			var levelFailedScreen = levelFailedScreenScene.Instantiate<LevelFailedScreen>();
 			AddChild(levelFailedScreen);
+			fragmentAnalysisUI.HideUI();
 
 			gameUI.HideUI();
 			if (selectedRobotUI != null)
 			{
 				selectedRobotUI.HideUI();
 			}
-		}
-	}
-
-	private void OnCameraZoom()
-	{
-		if (baseBuilding != null)
-		{
-			gameCamera.CenterOnPosition(baseBuilding.GlobalPosition);
 		}
 	}
 
@@ -152,6 +149,13 @@ public partial class BaseLevel : Node
 		AddChild(selectedRobotUI);
 		//selectedRobotUI.selectedBuildingComponent = buildingComponent;
 		selectedRobotUI.SetupUI(buildingComponent, gravitationalAnomalyMap); // Call setup after adding to tree
+	}
+
+	private void OnFragmentAnalysisRequested()
+	{
+		fragmentAnalysisUI = fragmentAnalysisScene.Instantiate<FragmentAnalysisUI>();
+		AddChild(fragmentAnalysisUI);
+		fragmentAnalysisUI.SetupUI();
 	}
 
 	private void OnClockisTicking()

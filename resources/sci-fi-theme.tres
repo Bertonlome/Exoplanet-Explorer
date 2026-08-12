@@ -1,7 +1,16 @@
-[gd_resource type="Theme" load_steps=96 format=3 uid="uid://lrxwuh3o4l5k"]
+[gd_resource type="Theme" load_steps=99 format=3 uid="uid://lrxwuh3o4l5k"]
 
 [ext_resource type="FontFile" uid="uid://bdm45b6uw5sic" path="res://resources/Pixel Square 10.ttf" id="1"]
 [ext_resource type="Texture2D" uid="uid://c5pgo7sonlcw5" path="res://resources/sci-fi.png" id="2"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bb782"]
+bg_color = Color(0.74902, 0.0705882, 0.0235294, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rsexu"]
+bg_color = Color(0.74902, 0.0705882, 0.0235294, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cy75x"]
+bg_color = Color(0.749383, 0.0699526, 0.0219142, 1)
 
 [sub_resource type="StyleBoxTexture" id="1"]
 texture = ExtResource("2")
@@ -616,6 +625,10 @@ region_rect = Rect2(102, 65, 3, 3)
 [resource]
 default_font = ExtResource("1")
 default_font_size = 20
+AlternativeButton/base_type = &"Button"
+AlternativeButton/styles/focus = SubResource("StyleBoxFlat_bb782")
+AlternativeButton/styles/hover = SubResource("StyleBoxFlat_rsexu")
+AlternativeButton/styles/normal = SubResource("StyleBoxFlat_cy75x")
 Button/colors/font_color = Color(1, 1, 1, 1)
 Button/colors/font_disabled_color = Color(0.9, 0.9, 0.9, 0.2)
 Button/colors/font_hover_color = Color(0.94, 0.94, 0.94, 1)

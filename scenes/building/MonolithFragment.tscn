@@ -1,10 +1,12 @@
-[gd_scene load_steps=2 format=3 uid="uid://btvyw41qnsuet"]
+[gd_scene load_steps=3 format=3 uid="uid://btvyw41qnsuet"]
 
+[ext_resource type="Script" path="res://scenes/building/MonolithFragment.cs" id="1_jpvvb"]
 [ext_resource type="Texture2D" uid="uid://s1612hc0t534" path="res://assets/monolith_fragment.png" id="3_iws2j"]
 
 [node name="MonolithFragment" type="Node2D"]
 y_sort_enabled = true
 position = Vector2(32, 32)
+script = ExtResource("1_jpvvb")
 
 [node name="UpDownRoot" type="Node2D" parent="."]
 unique_name_in_owner = true

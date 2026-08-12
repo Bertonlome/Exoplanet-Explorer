@@ -25,8 +25,10 @@ custom_minimum_size = Vector2(1900, 0)
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -293.0
-offset_right = 1900.0
+offset_left = 8.0
+offset_top = -300.0
+offset_right = 1908.0
+offset_bottom = 12.0
 grow_vertical = 0
 size_flags_horizontal = 2
 theme_override_constants/margin_left = -500
@@ -202,66 +204,6 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 
-[node name="ResourcesCarriedContainer" type="HBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="PanelContainer3" type="PanelContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer"]
-layout_mode = 2
-theme_type_variation = &"PanelContainerAlternate"
-
-[node name="Panel" type="Panel" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3"]
-layout_mode = 2
-
-[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3"]
-layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
-
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Resources carried"
-
-[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/margin_top = 16
-
-[node name="ResourceLabel" type="HBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="WoodCountLabel" type="Label" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer/ResourceLabel"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "0"
-
-[node name="WoodIcon" type="TextureRect" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer/ResourceLabel"]
-unique_name_in_owner = true
-layout_mode = 2
-stretch_mode = 5
-
-[node name="MineralCountLabel" type="Label" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer/ResourceLabel"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "0"
-
-[node name="MineralIcon" type="TextureRect" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer/ResourceLabel"]
-unique_name_in_owner = true
-layout_mode = 2
-stretch_mode = 5
-
-[node name="DropResourcesButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Drop ressources"
-
 [node name="MarginContainer2" type="MarginContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/margin_left = 16
@@ -278,6 +220,7 @@ theme_override_constants/separation = 20
 
 [node name="TrackRobotButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 text = "Track"
 
@@ -363,7 +306,6 @@ stretch_mode = 5
 [node name="AnalyseSampleButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2"]
 unique_name_in_owner = true
 layout_mode = 2
-disabled = true
 text = "Analyse
 Sample
 "
@@ -375,6 +317,67 @@ disabled = true
 text = "Lift 
 Robot
 "
+
+[node name="ResourcesCarriedContainer" type="HBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="PanelContainer3" type="PanelContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer"]
+layout_mode = 2
+theme_type_variation = &"PanelContainerAlternate"
+
+[node name="Panel" type="Panel" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Resources carried"
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/margin_top = -3
+theme_override_constants/margin_bottom = 1
+
+[node name="ResourceLabel" type="HBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WoodCountLabel" type="Label" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer/ResourceLabel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0"
+
+[node name="WoodIcon" type="TextureRect" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer/ResourceLabel"]
+unique_name_in_owner = true
+layout_mode = 2
+stretch_mode = 5
+
+[node name="MineralCountLabel" type="Label" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer/ResourceLabel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0"
+
+[node name="MineralIcon" type="TextureRect" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer/MarginContainer/ResourceLabel"]
+unique_name_in_owner = true
+layout_mode = 2
+stretch_mode = 5
+
+[node name="DropResourcesButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Drop ressources"
 
 [node name="MiniMapController" parent="MarginContainer/HBoxContainer" instance=ExtResource("6_n5k2f")]
 unique_name_in_owner = true

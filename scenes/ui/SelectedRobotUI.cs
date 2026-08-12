@@ -166,6 +166,7 @@ public partial class SelectedRobotUI : CanvasLayer
 		stopExplorbutton.Pressed += OnStopExplorButtonPressed;
 		trackRobotButton.Pressed += OnTrackRobotButtonPressed;
 		dropResourcesButton.Pressed += OnDropResourcesButtonPressed;
+		analyseSampleButton.Pressed += OnAnalyseSampleButtonPressed;
 		toggleSoundGeigerButton.Pressed += () =>
 		{
 			if (AudioHelpers.geigerActive)
@@ -606,6 +607,14 @@ public partial class SelectedRobotUI : CanvasLayer
 		{
 			placeAntennaButton.Pressed -= OnPlaceAntennaButtonPressed;
 		}
+		if(dropResourcesButton.IsConnected("pressed", Callable.From(OnDropResourcesButtonPressed)))
+		{
+			dropResourcesButton.Pressed -= OnDropResourcesButtonPressed;
+		}
+		if(analyseSampleButton.IsConnected("pressed", Callable.From(OnAnalyseSampleButtonPressed)))
+		{
+			analyseSampleButton.Pressed -= OnAnalyseSampleButtonPressed;
+		}
 		if (selectedBuildingComponent != null)
 		{
 			selectedBuildingComponent.NewAnomalyReading -= OnNewAnomalyReading;
@@ -618,6 +627,21 @@ public partial class SelectedRobotUI : CanvasLayer
 		}
 	}
 
+	private void OnAnalyseSampleButtonPressed()
+	{
+		if (selectedBuildingComponent == null || selectedBuildingComponent.BuildingResource.IsAerial)
+		{
+			return;
+		}
+		var roverPos = selectedBuildingComponent.GetGridCellPosition();
+		if(!selectedBuildingComponent.gridManager.IsSampleAroundPosition(roverPos))
+		{
+			GameUI.PushMessage("No sample around to analyse", "red", true);
+			return;
+		}
+		GameEvents.EmitFragmentAnalysisRequested();
+		//selectedBuildingComponent.AnalyseSample();
+	}
 	private void OnPlaceBridgeButtonPressed()
 	{
 		GameEvents.EmitPlaceBridgeButtonPressed(selectedBuildingComponent, bridgeBuildingResource);

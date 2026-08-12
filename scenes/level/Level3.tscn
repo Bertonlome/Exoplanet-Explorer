@@ -75,6 +75,6 @@ position = Vector2(1600, 3392)
 position = Vector2(128, -624)
 
 [node name="MonolithFragment" parent="YSortRoot" index="5" instance=ExtResource("6_8sniy")]
-position = Vector2(992, -88)
+position = Vector2(512, -480)
 
 [editable path="YSortRoot/BaseTerrainTileMapLayer/ElevationLayer"]

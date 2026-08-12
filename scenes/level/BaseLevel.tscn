@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3 uid="uid://bipxsk1snp5nq"]
+[gd_scene load_steps=26 format=3 uid="uid://bipxsk1snp5nq"]
 
 [ext_resource type="Script" path="res://scenes/level/BaseLevel.cs" id="1_oetcv"]
 [ext_resource type="TileSet" uid="uid://be2deub8k3gjr" path="res://resources/highlight_tileset.tres" id="2_8gl76"]
@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" uid="uid://cx2k42pew5v1f" path="res://scenes/ui/EscapeMenu.tscn" id="3_qe475"]
 [ext_resource type="PackedScene" uid="uid://du6yrfdf7n3so" path="res://scenes/manager/GameCamera.tscn" id="5_gni5d"]
 [ext_resource type="PackedScene" uid="uid://bocvnu5ijh44c" path="res://scenes/manager/ResourceIndicatorManager.tscn" id="6_2ofsf"]
+[ext_resource type="PackedScene" uid="uid://cb8e7vaji1v7h" path="res://scenes/ui/FragmentAnalysisUI.tscn" id="6_je7g1"]
 [ext_resource type="PackedScene" uid="uid://csdd0kuql8hph" path="res://scenes/building/TileGhost.tscn" id="8_1ds3q"]
 [ext_resource type="PackedScene" uid="uid://bh0jxs1odudla" path="res://scenes/building/BuildingGhost.tscn" id="8_c56o1"]
 [ext_resource type="Script" path="res://scenes/level/GravitationalAnomalyMap.cs" id="8_ufxub"]
@@ -35,6 +36,7 @@ levelCompleteScreenScene = ExtResource("2_nafao")
 levelFailedScreenScene = ExtResource("3_dwriv")
 selectedRobotUIScene = ExtResource("3_0tugq")
 escapeMenuScene = ExtResource("3_qe475")
+fragmentAnalysisScene = ExtResource("6_je7g1")
 
 [node name="BuildingManager" parent="." node_paths=PackedStringArray("gridManager", "gameUI", "ySortRoot") instance=ExtResource("2_smhdp")]
 gridManager = NodePath("../GridManager")

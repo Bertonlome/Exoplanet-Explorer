@@ -65,12 +65,15 @@ public partial class GridManager : Node
 	public HashSet<Vector2I> baseAntennaCoveredTiles = new();
 	private HashSet<Vector2I> baseProximityTiles = new();
 	private HashSet<Vector2I> monolithTiles = new();
+	private HashSet<Vector2I> monolithFragmentTiles = new();
 	private bool buildableTileCacheDirty = true;
 	private HashSet<Vector2I> connectedNetworkCoverageTiles = new();
 	private HashSet<BuildingComponent> connectedNetworkBuildings = new();
 	private bool movementCoverageCacheInitialized = false;
 
 	public Rect2I baseArea = new();
+
+	private List<MonolithFragment> fragments = new();
 
 	private Monolith monolith;
 	public Vector2I monolithPosition = new();
@@ -111,6 +114,9 @@ public partial class GridManager : Node
 		monolith = GetNode<Monolith>("%Monolith");
 		SetMonolithPosition(ConvertWorldPositionToTilePosition(monolith.GlobalPosition));
 
+		fragments = GetParent().GetNodesOfType<MonolithFragment>();
+		SetMonolithFragmentsPosition(fragments.Select(fragment => ConvertWorldPositionToTilePosition(fragment.GlobalPosition)).ToList());
+
 		allTilemapLayers = GetAllTilemapLayers(baseTerrainTilemapLayer);
 		allTilesBuildableOnTheMap = GetAllBuildableBaseTerrainTiles(baseTerrainTilemapLayer).ToHashSet();
 		allTilesBaseLayer = baseTerrainTilemapLayer.GetUsedCells().ToList();
@@ -130,6 +136,10 @@ public partial class GridManager : Node
 		}
 	}
 
+	public void SetMonolithFragmentsPosition(List<Vector2I> positions)
+	{
+		monolithFragmentTiles = positions.ToHashSet();
+	}
 	public void SetMonolithPosition(Vector2I position)
 	{
 		monolithPosition = position;
@@ -997,6 +1007,26 @@ public partial class GridManager : Node
 			}
 		}
 		return null;
+	}
+
+	public bool IsSampleAroundPosition(Vector2I gridPosition)
+	{
+		Vector2I[] samplePos = new Vector2I[]
+		{
+			gridPosition + Vector2I.Up,
+			gridPosition + Vector2I.Down,
+			gridPosition + Vector2I.Left,
+			gridPosition + Vector2I.Right,
+			gridPosition
+		};
+		foreach (var adjacentTile in samplePos)
+		{
+			if (monolithFragmentTiles.Contains(adjacentTile))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void CheckGroundRobotTouchingMonolith(BuildingComponent buildingComponent)

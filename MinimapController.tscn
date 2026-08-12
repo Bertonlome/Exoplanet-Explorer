@@ -12,10 +12,10 @@ Container = NodePath("MarginContainer/PanelContainer/MarginContainer/SubViewport
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 0
-offset_left = -136.0
-offset_top = -24.0
-offset_right = 137.0
-offset_bottom = 273.0
+offset_left = -142.68
+offset_top = 2.0
+offset_right = 130.32
+offset_bottom = 299.0
 
 [node name="PanelContainer" type="PanelContainer" parent="MarginContainer"]
 layout_mode = 2

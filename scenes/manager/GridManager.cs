@@ -1009,8 +1009,9 @@ public partial class GridManager : Node
 		return null;
 	}
 
-	public bool IsSampleAroundPosition(Vector2I gridPosition)
+	public Vector2I GetSampleLocationAroundPosition(Vector2I gridPosition)
 	{
+		var noSampleLocation = new Vector2I(-1, -1);
 		Vector2I[] samplePos = new Vector2I[]
 		{
 			gridPosition + Vector2I.Up,
@@ -1023,10 +1024,10 @@ public partial class GridManager : Node
 		{
 			if (monolithFragmentTiles.Contains(adjacentTile))
 			{
-				return true;
+				return adjacentTile;
 			}
 		}
-		return false;
+		return noSampleLocation;
 	}
 
 	private void CheckGroundRobotTouchingMonolith(BuildingComponent buildingComponent)

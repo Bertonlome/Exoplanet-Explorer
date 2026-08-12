@@ -3,9 +3,26 @@ using System;
 
 public partial class MonolithFragment : Node2D
 {
+	[Export]
+	public Texture2D[] Variants;
+	private Sprite2D fragmentSprite;
+    public Variant currentVariant;
+    public enum Variant
+    {
+        Hominid,
+        Chip,
+        Television
+    }
+
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+		if (Variants.Length == 0)
+			return;
+
+        currentVariant = (Variant)GD.RandRange(0, Variants.Length - 1);
+		fragmentSprite = GetNode<Sprite2D>("%MonolithFragmentSprite2D");
+		fragmentSprite.Texture = Variants[(int)currentVariant];
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.

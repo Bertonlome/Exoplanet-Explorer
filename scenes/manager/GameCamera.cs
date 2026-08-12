@@ -53,6 +53,7 @@ public partial class GameCamera : Camera2D
 	
 	// Mouse drag variables
 	private bool isDragging = false;
+	private bool navigationInputEnabled = true;
 	private Vector2 lastMousePosition;
 
     public override void _Ready()
@@ -77,7 +78,7 @@ public partial class GameCamera : Camera2D
     public override void _Process(double delta)
 	{
 		// Handle mouse drag panning
-		if (isDragging && currentState == State.CameraFree)
+		if (navigationInputEnabled && isDragging && currentState == State.CameraFree)
 		{
 			var currentMousePosition = GetViewport().GetMousePosition();
 			var mouseDelta = lastMousePosition - currentMousePosition;
@@ -95,7 +96,7 @@ public partial class GameCamera : Camera2D
 		}
 		
 		// Smooth dezoom while U is held
-		if (Input.IsActionPressed(ACTION_UNZOOM) && Zoom.X > minZoom)
+		if (navigationInputEnabled && Input.IsActionPressed(ACTION_UNZOOM) && Zoom.X > minZoom)
 		{
 			var newZoom = Mathf.Max(Zoom.X - zoomStep, minZoom);
 			Zoom = new Vector2(newZoom, newZoom);
@@ -104,7 +105,9 @@ public partial class GameCamera : Camera2D
 		switch (currentState)
 		{
 			case State.CameraFree:
-				var movementVector = Input.GetVector(ACTION_PAN_LEFT, ACTION_PAN_RIGHT, ACTION_PAN_UP, ACTION_PAN_DOWN);
+				var movementVector = navigationInputEnabled
+					? Input.GetVector(ACTION_PAN_LEFT, ACTION_PAN_RIGHT, ACTION_PAN_UP, ACTION_PAN_DOWN)
+					: Vector2.Zero;
 				GlobalPosition += movementVector * PAN_SPEED * (float)delta;
 
 				var viewPortrect = GetViewportRect();
@@ -130,6 +133,8 @@ public partial class GameCamera : Camera2D
 
 	public override void _UnhandledInput(InputEvent evt)
 	{
+		if (!navigationInputEnabled) return;
+
 		// Handle mouse button press/release for drag panning
 		if (evt is InputEventMouseButton mouseButton)
 		{
@@ -196,6 +201,12 @@ public partial class GameCamera : Camera2D
 	public void CancelMouseDrag()
 	{
 		isDragging = false;
+	}
+
+	public void SetNavigationInputEnabled(bool enabled)
+	{
+		navigationInputEnabled = enabled;
+		if (!enabled) CancelMouseDrag();
 	}
 
 	public void CenterOnPositionClamped(Vector2 position)

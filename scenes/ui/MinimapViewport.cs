@@ -35,6 +35,7 @@ public partial class MinimapViewport : Control
 	private bool terrainCacheDirty = true;
 	private bool isDirty;
 	private bool isDragging;
+	private bool inputEnabled = true;
 	private Vector2 dragOffsetFromCameraCenter;
 	private Vector2 lastCameraPosition;
 	private Vector2 lastCameraZoom;
@@ -208,6 +209,7 @@ public partial class MinimapViewport : Control
 
 	public override void _Input(InputEvent inputEvent)
 	{
+		if (!inputEnabled) return;
 		if (gameCamera == null || !IsInstanceValid(gameCamera)) return;
 
 		if (inputEvent is InputEventMouseButton mouseButton)
@@ -267,6 +269,17 @@ public partial class MinimapViewport : Control
 			MoveCameraRectangle(ViewportToLocal(mouseMotion.Position));
 			GetViewport().SetInputAsHandled();
 		}
+	}
+
+	public void SetInputEnabled(bool enabled)
+	{
+		inputEnabled = enabled;
+		SetProcessInput(enabled);
+		if (enabled) return;
+
+		isDragging = false;
+		dragOffsetFromCameraCenter = Vector2.Zero;
+		gameCamera?.CancelMouseDrag();
 	}
 
 	private bool IsViewportPositionOverMinimap(Vector2 viewportPosition)

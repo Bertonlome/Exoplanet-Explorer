@@ -59,6 +59,12 @@ public partial class FragmentRockSettings : Resource
     [Export(PropertyHint.Range, "0,3.14,0.01")]
     public float MaximumTurn { get; set; } = 0.35f;
 
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float MinimumVeinOpacity { get; set; } = 0.35f;
+
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float MaximumVeinOpacity { get; set; } = 1f;
+
     [Export]
     public Color FractureColor { get; set; } = new(0.01f, 0.02f, 0.02f, 0.65f);
 

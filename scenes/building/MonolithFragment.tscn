@@ -1,19 +1,23 @@
-[gd_scene load_steps=3 format=3 uid="uid://btvyw41qnsuet"]
+[gd_scene load_steps=6 format=3 uid="uid://btvyw41qnsuet"]
 
 [ext_resource type="Script" path="res://scenes/building/MonolithFragment.cs" id="1_jpvvb"]
+[ext_resource type="Texture2D" uid="uid://cd7c4rir6q1b0" path="res://assets/monolith_fragment_v1.png" id="2_kdnbv"]
+[ext_resource type="Texture2D" uid="uid://w7qpa3spj1f1" path="res://assets/monolith_fragment_v2.png" id="3_ewf4i"]
 [ext_resource type="Texture2D" uid="uid://s1612hc0t534" path="res://assets/monolith_fragment.png" id="3_iws2j"]
+[ext_resource type="Texture2D" uid="uid://d2dmq0xethe2k" path="res://assets/monolith_fragment_v3.png" id="4_jtcxa"]
 
 [node name="MonolithFragment" type="Node2D"]
 y_sort_enabled = true
 position = Vector2(32, 32)
 script = ExtResource("1_jpvvb")
+Variants = Array[Texture2D]([ExtResource("2_kdnbv"), ExtResource("3_ewf4i"), ExtResource("4_jtcxa")])
 
 [node name="UpDownRoot" type="Node2D" parent="."]
 unique_name_in_owner = true
 y_sort_enabled = true
 position = Vector2(0, 32)
 
-[node name="MonolithSprite2D" type="Sprite2D" parent="UpDownRoot"]
+[node name="MonolithFragmentSprite2D" type="Sprite2D" parent="UpDownRoot"]
 unique_name_in_owner = true
 texture = ExtResource("3_iws2j")
 centered = false

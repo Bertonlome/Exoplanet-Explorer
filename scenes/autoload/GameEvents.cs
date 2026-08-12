@@ -1,6 +1,7 @@
 using Game.Component;
 using Game.Resources.Building;
 using Godot;
+using Godot.Collections;
 
 namespace Game.Autoload;
 
@@ -11,7 +12,7 @@ public partial class GameEvents : Node
 	[Signal]
 	public delegate void BuildingPlacedEventHandler(BuildingComponent buildingComponent);
 	[Signal]
-	public delegate void FragmentAnalysisRequestedEventHandler();
+	public delegate void FragmentAnalysisRequestedEventHandler(Vector2I fragmentPosition);
 	[Signal]
 	public delegate void BuildingDestroyedEventHandler(BuildingComponent buildingComponent);
 	[Signal]
@@ -58,9 +59,9 @@ public partial class GameEvents : Node
 		Instance.EmitSignal(SignalName.BuildingPlaced, buildingComponent);
 	}
 
-	public static void EmitFragmentAnalysisRequested()
+	public static void EmitFragmentAnalysisRequested(Vector2I fragmentPosition)
 	{
-		Instance.EmitSignal(SignalName.FragmentAnalysisRequested);
+		Instance.EmitSignal(SignalName.FragmentAnalysisRequested, fragmentPosition);
 	}
 
 	public static void EmitBuildingMoved(BuildingComponent buildingComponent)

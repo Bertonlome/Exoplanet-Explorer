@@ -201,6 +201,16 @@ public partial class GameUI : CanvasLayer
 			buildingManager);
 	}
 
+	public void SetMinimapInputEnabled(bool enabled)
+	{
+		minimapViewport?.SetInputEnabled(enabled);
+	}
+
+	public void SetWorldCameraInputEnabled(bool enabled)
+	{
+		GetParent()?.GetNodeOrNull<GameCamera>("GameCamera")?.SetNavigationInputEnabled(enabled);
+	}
+
 	public void RefreshMinimap()
 	{
 		minimapViewport?.RefreshMinimapData();

@@ -634,12 +634,13 @@ public partial class SelectedRobotUI : CanvasLayer
 			return;
 		}
 		var roverPos = selectedBuildingComponent.GetGridCellPosition();
-		if(!selectedBuildingComponent.gridManager.IsSampleAroundPosition(roverPos))
+		var sampleLocation = selectedBuildingComponent.gridManager.GetSampleLocationAroundPosition(roverPos);
+		if (sampleLocation == new Vector2I(-1, -1))
 		{
 			GameUI.PushMessage("No sample around to analyse", "red", true);
 			return;
 		}
-		GameEvents.EmitFragmentAnalysisRequested();
+		GameEvents.EmitFragmentAnalysisRequested(sampleLocation);
 		//selectedBuildingComponent.AnalyseSample();
 	}
 	private void OnPlaceBridgeButtonPressed()

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Game.Autoload;
 using Game.Component;
@@ -33,6 +34,7 @@ public partial class BaseLevel : Node
 	private TileMapLayer baseTerrainTilemapLayer;
 	private GameUI gameUI;
 	private FragmentAnalysisUI fragmentAnalysisUI;
+	private readonly Dictionary<Vector2I, FragmentAnalysisState> fragmentAnalysisStates = new();
 	private BuildingManager buildingManager;
 	private bool isComplete;
 	private bool isFailed;
@@ -70,7 +72,7 @@ public partial class BaseLevel : Node
 		gridManager.BaseTouchingMonolith += OnBaseTouchingMonolith;
 
 		GameEvents.Instance.Connect(GameEvents.SignalName.RobotSelected, Callable.From<BuildingComponent>(OnRobotSelected));
-		GameEvents.Instance.Connect(GameEvents.SignalName.FragmentAnalysisRequested, Callable.From(OnFragmentAnalysisRequested));
+		GameEvents.Instance.Connect(GameEvents.SignalName.FragmentAnalysisRequested, Callable.From<Vector2I>(OnFragmentAnalysisRequested));
 	}
 
 	public void OnBasePlaced()
@@ -106,7 +108,10 @@ public partial class BaseLevel : Node
 			monolith.SetActive();
 			gameUI.HideUI();
 			selectedRobotUI.HideUI();
-			fragmentAnalysisUI.HideUI();
+			if (GodotObject.IsInstanceValid(fragmentAnalysisUI))
+			{
+				fragmentAnalysisUI.HideUI();
+			}
 		}
 	}
 
@@ -117,7 +122,10 @@ public partial class BaseLevel : Node
 			isFailed = true;
 			var levelFailedScreen = levelFailedScreenScene.Instantiate<LevelFailedScreen>();
 			AddChild(levelFailedScreen);
-			fragmentAnalysisUI.HideUI();
+			if (GodotObject.IsInstanceValid(fragmentAnalysisUI))
+			{
+				fragmentAnalysisUI.HideUI();
+			}
 
 			gameUI.HideUI();
 			if (selectedRobotUI != null)
@@ -151,11 +159,23 @@ public partial class BaseLevel : Node
 		selectedRobotUI.SetupUI(buildingComponent, gravitationalAnomalyMap); // Call setup after adding to tree
 	}
 
-	private void OnFragmentAnalysisRequested()
+	private void OnFragmentAnalysisRequested(Vector2I fragmentPosition)
 	{
+		if (GodotObject.IsInstanceValid(fragmentAnalysisUI))
+		{
+			fragmentAnalysisUI.HideUI();
+		}
+
+		fragmentAnalysisStates.TryGetValue(fragmentPosition, out FragmentAnalysisState savedState);
 		fragmentAnalysisUI = fragmentAnalysisScene.Instantiate<FragmentAnalysisUI>();
 		AddChild(fragmentAnalysisUI);
-		fragmentAnalysisUI.SetupUI();
+		fragmentAnalysisUI.StateSaved += OnFragmentAnalysisStateSaved;
+		fragmentAnalysisUI.SetupUI(fragmentPosition, gridManager.monolithPosition, savedState);
+	}
+
+	private void OnFragmentAnalysisStateSaved(Vector2I fragmentPosition, FragmentAnalysisState state)
+	{
+		fragmentAnalysisStates[fragmentPosition] = state;
 	}
 
 	private void OnClockisTicking()

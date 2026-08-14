@@ -187,6 +187,7 @@ texture = ExtResource("8_783ri")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
+tooltip_text = "Transform 1 mineral of each type into material to build robots"
 text = "+"
 
 [node name="HBoxContainer6" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
@@ -245,6 +246,7 @@ stretch_mode = 5
 [node name="DisplayTraceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Add an overlay to the world map showing robots sensed gravitational anomaly"
 focus_mode = 0
 text = "Toggle Anomaly-Trace"
 
@@ -256,6 +258,7 @@ size_flags_vertical = 4
 [node name="StopRobotButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer2"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Stop movement of all robots"
 focus_mode = 0
 text = "Stop all robots"
 
@@ -427,6 +430,7 @@ size_flags_vertical = 4
 [node name="SendPathToRobotButton" type="Button" parent="SpecialFunctionsContainer/HBoxContainer/SendPathButtonPanelContainer/MarginContainer/VBoxContainer/HBoxContainer4"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Send path and annotation to the LLM"
 focus_mode = 0
 theme_override_font_sizes/font_size = 30
 text = "SEND PATH TO AI"

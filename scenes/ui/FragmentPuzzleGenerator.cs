@@ -12,12 +12,18 @@ public static class FragmentPuzzleGenerator
         public readonly Vector2 Start;
         public readonly Vector2 End;
         public readonly bool IsImportant;
+        public readonly float WidthMultiplier;
 
-        public SignalSegment(Vector2 start, Vector2 end, bool isImportant = false)
+        public SignalSegment(
+            Vector2 start,
+            Vector2 end,
+            bool isImportant = false,
+            float widthMultiplier = 1f)
         {
             Start = start;
             End = end;
             IsImportant = isImportant;
+            WidthMultiplier = widthMultiplier;
         }
     }
 
@@ -27,17 +33,20 @@ public static class FragmentPuzzleGenerator
         public readonly Vector2 End;
         public readonly Vector2 Center;
         public readonly FragmentDistractorGlyphType GlyphType;
+        public readonly float WidthMultiplier;
 
         public DistractorSegment(
             Vector2 start,
             Vector2 end,
             Vector2 center,
-            FragmentDistractorGlyphType glyphType)
+            FragmentDistractorGlyphType glyphType,
+            float widthMultiplier = 1f)
         {
             Start = start;
             End = end;
             Center = center;
             GlyphType = glyphType;
+            WidthMultiplier = widthMultiplier;
         }
     }
 
@@ -140,6 +149,7 @@ public static class FragmentPuzzleGenerator
         {
             bool important = segment.IsImportant || rng.Randf() < settings.ImportantSignalFraction;
             FragmentLine line = CreateLine(segment.Start, segment.End, FragmentLineRole.Signal, settings, rng);
+            line.Width *= segment.WidthMultiplier;
             line.IsImportant = important;
             line.RequiresCorrectCombination = important || rng.Randf() < settings.SolutionLockedSignalFraction;
             float minimumThreshold = important
@@ -172,6 +182,7 @@ public static class FragmentPuzzleGenerator
                 FragmentLineRole.Distractor,
                 settings,
                 rng);
+            line.Width *= segment.WidthMultiplier;
             line.DistractorGlyphType = segment.GlyphType;
             line.HasCustomRotationCenter = true;
             line.RotationCenter = segment.Center;
@@ -507,7 +518,8 @@ public static class FragmentPuzzleGenerator
                 start,
                 end,
                 center,
-                distractorGlyphType));
+                distractorGlyphType,
+                segment.WidthMultiplier));
         }
     }
 
@@ -736,8 +748,16 @@ public static class FragmentPuzzleGenerator
 
             SignalSegment longest = segments[longestIndex];
             Vector2 midpoint = (longest.Start + longest.End) * 0.5f;
-            segments[longestIndex] = new SignalSegment(longest.Start, midpoint, longest.IsImportant);
-            segments.Insert(longestIndex + 1, new SignalSegment(midpoint, longest.End, longest.IsImportant));
+            segments[longestIndex] = new SignalSegment(
+                longest.Start,
+                midpoint,
+                longest.IsImportant,
+                longest.WidthMultiplier);
+            segments.Insert(longestIndex + 1, new SignalSegment(
+                midpoint,
+                longest.End,
+                longest.IsImportant,
+                longest.WidthMultiplier));
         }
 
         return segments;
@@ -828,8 +848,8 @@ public static class FragmentPuzzleGenerator
         float radius)
     {
         float bodyHalfWidth = radius * 0.55f;
-        float bodyHalfHeight = radius * 0.3f;
-        Vector2 bodyCenter = center - Vector2.Down * radius * 0.12f;
+        float bodyHalfHeight = radius * 0.24f;
+        Vector2 bodyCenter = center;
         AddRectangle(
             segments,
             bodyCenter,
@@ -844,22 +864,54 @@ public static class FragmentPuzzleGenerator
             bodyCenter + Vector2.Down * bodyHalfHeight,
             true));
 
-        float legLength = radius * 0.28f;
+        // Four stands make the silhouette almost vertically symmetrical. The
+        // slightly longer and heavier bottom-right stand is the orientation cue.
+        float standLength = radius * 0.2f;
         float legOffset = bodyHalfWidth * 0.58f;
-        Vector2 leftLegStart = bodyCenter + new Vector2(-legOffset, bodyHalfHeight);
-        Vector2 rightLegStart = bodyCenter + new Vector2(legOffset, bodyHalfHeight);
-        Vector2 leftLegEnd = leftLegStart + Vector2.Down * legLength;
-        Vector2 rightLegEnd = rightLegStart + Vector2.Down * legLength;
-        segments.Add(new SignalSegment(leftLegStart, leftLegEnd, true));
-        segments.Add(new SignalSegment(rightLegStart, rightLegEnd, true));
+        float footHalfWidth = radius * 0.09f;
+
+        AddTelevisionStand(
+            segments,
+            bodyCenter + new Vector2(-legOffset, -bodyHalfHeight),
+            Vector2.Up,
+            standLength,
+            footHalfWidth);
+        AddTelevisionStand(
+            segments,
+            bodyCenter + new Vector2(legOffset, -bodyHalfHeight),
+            Vector2.Up,
+            standLength,
+            footHalfWidth);
+        AddTelevisionStand(
+            segments,
+            bodyCenter + new Vector2(-legOffset, bodyHalfHeight),
+            Vector2.Down,
+            standLength,
+            footHalfWidth);
+        AddTelevisionStand(
+            segments,
+            bodyCenter + new Vector2(legOffset, bodyHalfHeight),
+            Vector2.Down,
+            standLength * 1.28f,
+            footHalfWidth * 1.2f,
+            1.8f);
+    }
+
+    private static void AddTelevisionStand(
+        List<SignalSegment> segments,
+        Vector2 start,
+        Vector2 direction,
+        float length,
+        float footHalfWidth,
+        float widthMultiplier = 1f)
+    {
+        Vector2 end = start + direction * length;
+        segments.Add(new SignalSegment(start, end, true, widthMultiplier));
         segments.Add(new SignalSegment(
-            leftLegEnd - Vector2.Right * radius * 0.1f,
-            leftLegEnd + Vector2.Right * radius * 0.1f,
-            true));
-        segments.Add(new SignalSegment(
-            rightLegEnd - Vector2.Right * radius * 0.1f,
-            rightLegEnd + Vector2.Right * radius * 0.1f,
-            true));
+            end - Vector2.Right * footHalfWidth,
+            end + Vector2.Right * footHalfWidth,
+            true,
+            widthMultiplier));
     }
 
     private static void AddPin(

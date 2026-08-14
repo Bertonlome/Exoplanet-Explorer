@@ -222,6 +222,7 @@ theme_override_constants/separation = 20
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
+tooltip_text = "Lock the camera on the selected robot"
 text = "Track"
 
 [node name="PlaceBridgeButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2"]
@@ -236,6 +237,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+tooltip_text = "Place a bridge (cost = 1 wood)"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/PlaceBridgeButton/CenterContainer"]
 layout_mode = 2
@@ -277,6 +279,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+tooltip_text = "Place one antenna (cost = 1 material)"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/PlaceAntennaButton/CenterContainer"]
 layout_mode = 2
@@ -306,6 +309,7 @@ stretch_mode = 5
 [node name="AnalyseSampleButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Open the monolith fragment analysis software"
 text = "Analyse
 Sample
 "
@@ -313,6 +317,7 @@ Sample
 [node name="LiftRobotButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Lift ground robot underneath"
 disabled = true
 text = "Lift 
 Robot
@@ -377,6 +382,7 @@ stretch_mode = 5
 [node name="DropResourcesButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer2/VBoxContainer5/HBoxContainer2/ResourcesCarriedContainer/PanelContainer3/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Drop ressources carried by the robot at the base"
 text = "Drop ressources"
 
 [node name="MiniMapController" parent="MarginContainer/HBoxContainer" instance=ExtResource("6_n5k2f")]
@@ -403,5 +409,6 @@ text = "Mute"
 [node name="ToggleSoundGeigerButton" type="Button" parent="MarginContainer/HBoxContainer/MiniMapController/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Mute/Unmute the geiger sound effect"
 theme_override_constants/icon_max_width = 40
 icon = ExtResource("4_h6q3c")

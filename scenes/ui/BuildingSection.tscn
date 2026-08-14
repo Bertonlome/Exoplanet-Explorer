@@ -66,5 +66,6 @@ horizontal_alignment = 1
 [node name="Button" type="Button" parent="MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Deploy selected robot"
 focus_mode = 0
 text = "Select"

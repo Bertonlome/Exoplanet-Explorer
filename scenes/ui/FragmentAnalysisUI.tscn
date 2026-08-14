@@ -32,7 +32,7 @@ BranchDropLengthMultiplier = 0.22
 DirectionArrowLengthMultiplier = 0.65
 DirectionArrowHeadMultiplier = 0.2
 InactiveOpacity = 0.4
-InactiveErasedFraction = 0.3
+InactiveErasedFraction = 0.5
 InactiveErasureSections = 6
 SignalEnhancementWidthMultiplier = 2.5
 SignalEnhancementColorStrength = 0.55
@@ -55,7 +55,7 @@ ImportantSignalRevealThresholdMaximum = 0.88
 RevealTransitionWidth = 0.18
 NoiseOpacityAtFullReconstruction = 0.25
 DistractorOpacityAtFullReconstruction = 0.25
-DistractorGlyphScale = 0.65
+DistractorGlyphScale = 1.0
 DistractorInactiveOpacityMultiplier = 1.5
 RealDecoyGlyphScale = 0.9
 CanvasSizeMultiplier = 2.0
@@ -183,6 +183,7 @@ text = "CCW -10°"
 
 [node name="RotationValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
 unique_name_in_owner = true
+visible = false
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 text = "ROTATION: 0°"
@@ -214,73 +215,76 @@ custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_ppqcn")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer"]
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer"]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer"]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 15
 
-[node name="PolarizationButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer"]
+[node name="PolarizationButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Reconstruct missing sections without identifying their source."
 text = "POLARIZATION"
 
-[node name="Control" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer"]
+[node name="Control" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 
-[node name="SpectralButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer"]
+[node name="SpectralButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Enhance important signal geometry."
 text = "SPECTRAL SIGNATURE"
 
-[node name="Control2" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer"]
+[node name="Control2" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 
-[node name="SurfaceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer"]
+[node name="SurfaceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Increase signal contrast and suppress mineral noise."
 text = "SURFACE TOPOGRAPHY"
 
-[node name="ElectromagneticButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer"]
+[node name="ElectromagneticButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Reveal the electromagnetic scan channel."
 text = "ELECTROMAGNETIC RESPONSE"
 
-[node name="ResonanceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer"]
+[node name="ResonanceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Reveal the resonance scan channel."
 text = "RESONANCE MAP"
 
-[node name="XRayButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer"]
+[node name="XRayButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Reveal the X-Ray scan channel."
 text = "X-RAY"
 
-[node name="ProcessingSliders" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer"]
+[node name="ProcessingSliders" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 49
 
-[node name="PolarizationControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders"]
+[node name="PolarizationControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders"]
 custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 
-[node name="PolarizationValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders/PolarizationControl"]
+[node name="PolarizationValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/PolarizationControl"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "POLARIZATION LEVEL: 3"
 horizontal_alignment = 1
 
-[node name="PolarizationSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders/PolarizationControl"]
+[node name="PolarizationSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/PolarizationControl"]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 1.0
@@ -289,17 +293,17 @@ value = 3.0
 tick_count = 5
 ticks_on_borders = true
 
-[node name="SpectralControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders"]
+[node name="SpectralControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders"]
 custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 
-[node name="SpectralValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders/SpectralControl"]
+[node name="SpectralValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SpectralControl"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "SPECTRAL LEVEL: 3"
 horizontal_alignment = 1
 
-[node name="SpectralSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders/SpectralControl"]
+[node name="SpectralSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SpectralControl"]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 1.0
@@ -308,17 +312,17 @@ value = 3.0
 tick_count = 5
 ticks_on_borders = true
 
-[node name="SurfaceControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders"]
+[node name="SurfaceControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders"]
 custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 
-[node name="SurfaceValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders/SurfaceControl"]
+[node name="SurfaceValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SurfaceControl"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "SURFACE LEVEL: 3"
 horizontal_alignment = 1
 
-[node name="SurfaceSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/VBoxContainer/ProcessingSliders/SurfaceControl"]
+[node name="SurfaceSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SurfaceControl"]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 1.0

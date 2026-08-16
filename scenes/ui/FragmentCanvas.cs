@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 
-public partial class FragmentCanvas : Control
+public partial class FragmentCanvas : Control, IFragmentObservationSource
 {
     [Export]
     private FragmentGenerationSettings generationSettings = new();
@@ -39,10 +40,25 @@ public partial class FragmentCanvas : Control
     private float _viewZoom = 1f;
     private Vector2 _viewPan;
     private bool _isViewDragging;
+    private ulong _observationRevision;
+    private List<FragmentObservablePrimitive> _observablePrimitiveCollector;
+    private int _nextObservablePrimitiveId;
+	private bool _isViewNavigationActive;
+	private float _viewNavigationElapsed;
+	private float _viewNavigationDuration;
+	private Vector2 _navigationStartPan;
+	private Vector2 _navigationTargetPan;
+	private float _navigationStartZoom;
+	private float _navigationTargetZoom;
+	private Rect2 _navigationTargetBounds;
 
     public FragmentPuzzle Puzzle { get; private set; }
     public float ViewZoom => _viewZoom;
     public Vector2 ViewPan => _viewPan;
+	public Vector2 ObservableSampleSize => GetVirtualCanvasSize();
+
+    public event Action<float, Vector2, FragmentAnalysisActionOrigin> ViewChanged;
+	public event Action ViewNavigationCompleted;
 
     [Export(PropertyHint.Range, "-180,180,1")]
     public float DisplayRotationDegrees
@@ -51,6 +67,7 @@ public partial class FragmentCanvas : Control
         set
         {
             _displayRotationDegrees = Mathf.Wrap(value, -180f, 180f);
+            _observationRevision++;
             QueueRedraw();
             EmitPuzzleStateChanged();
         }
@@ -60,7 +77,36 @@ public partial class FragmentCanvas : Control
     {
         generationSettings ??= new FragmentGenerationSettings();
         rockSettings ??= new FragmentRockSettings();
+		ProcessMode = ProcessModeEnum.Always;
     }
+
+	public override void _Process(double delta)
+	{
+		if (!_isViewNavigationActive) return;
+		_viewNavigationElapsed += (float)delta;
+		float linearProgress = Mathf.Clamp(
+			_viewNavigationElapsed / MathF.Max(_viewNavigationDuration, 0.001f),
+			0f,
+			1f);
+		float easedProgress = linearProgress < 0.5f
+			? 4f * linearProgress * linearProgress * linearProgress
+			: 1f - MathF.Pow(-2f * linearProgress + 2f, 3f) * 0.5f;
+		ApplyNavigationProgress(easedProgress);
+		if (linearProgress >= 1f) CompleteViewNavigation();
+	}
+
+	public override void _Notification(int what)
+	{
+		if (what == NotificationResized)
+		{
+			_observationRevision++;
+			if (_isViewNavigationActive)
+				CalculateFocusedView(
+					_navigationTargetBounds,
+					out _navigationTargetZoom,
+					out _navigationTargetPan);
+		}
+	}
 
     public override void _GuiInput(InputEvent inputEvent)
     {
@@ -101,9 +147,11 @@ public partial class FragmentCanvas : Control
 
         if (_isViewDragging && inputEvent is InputEventMouseMotion mouseMotion)
         {
+			CancelViewNavigation();
             // Camera-style grab: the sampled fragment follows the mouse movement.
             _viewPan += mouseMotion.Relative;
             ClampViewPan();
+            NotifyViewChanged(FragmentAnalysisActionOrigin.Player);
             QueueRedraw();
             GetViewport().SetInputAsHandled();
             return;
@@ -132,8 +180,10 @@ public partial class FragmentCanvas : Control
         };
 
         if (panDelta == Vector2.Zero) return;
+		CancelViewNavigation();
         _viewPan += panDelta;
         ClampViewPan();
+        NotifyViewChanged(FragmentAnalysisActionOrigin.Player);
         QueueRedraw();
         GetViewport().SetInputAsHandled();
     }
@@ -188,6 +238,7 @@ public partial class FragmentCanvas : Control
             case FilterType.XRay: _xRayEnabled = enabled; break;
         }
 
+        _observationRevision++;
         QueueRedraw();
         EmitPuzzleStateChanged();
     }
@@ -203,6 +254,7 @@ public partial class FragmentCanvas : Control
             default: return;
         }
 
+        _observationRevision++;
         QueueRedraw();
         EmitPuzzleStateChanged();
     }
@@ -275,19 +327,64 @@ public partial class FragmentCanvas : Control
         _displayRotationDegrees = Puzzle.InitialRotationDegrees;
         _viewZoom = 1f;
         _viewPan = Vector2.Zero;
+        _observationRevision++;
         GenerateRockTexture(unchecked((int)sampleSeed));
         QueueRedraw();
         EmitPuzzleStateChanged();
     }
 
-    public void RestoreView(float zoom, Vector2 pan)
+    public void RestoreView(
+        float zoom,
+        Vector2 pan,
+        FragmentAnalysisActionOrigin origin = FragmentAnalysisActionOrigin.Restore)
     {
         float minimumZoom = GetMinimumViewZoom();
         float maximumZoom = MathF.Max(generationSettings.MaximumViewZoom, minimumZoom);
         _viewZoom = Mathf.Clamp(zoom, minimumZoom, maximumZoom);
         _viewPan = pan;
         ClampViewPan();
+        NotifyViewChanged(origin);
         QueueRedraw();
+    }
+
+    public FragmentObservableScan CaptureObservableScan()
+    {
+        if (Puzzle == null)
+        {
+            return new FragmentObservableScan
+            {
+                Revision = _observationRevision,
+                SampleSize = GetVirtualCanvasSize()
+            };
+        }
+
+		List<FragmentObservablePrimitive> primitives = new();
+		_observablePrimitiveCollector = primitives;
+		_nextObservablePrimitiveId = 1;
+		try
+		{
+			float surfaceQuality = GetProcessingQuality(
+				_surfaceEnabled,
+				_surfaceLevel,
+				Puzzle.CorrectSurfaceEnabled,
+				Puzzle.CorrectSurfaceLevel);
+			float reconstructionQuality =
+				GetProcessingReconstructionScore() * GetScanReconstructionScore();
+			DrawMineralVeins(reconstructionQuality);
+			foreach (FragmentLine line in Puzzle.Lines)
+				DrawPuzzleLine(line, reconstructionQuality, surfaceQuality);
+		}
+		finally
+		{
+			_observablePrimitiveCollector = null;
+		}
+
+		return new FragmentObservableScan
+		{
+			Revision = _observationRevision,
+			SampleSize = GetVirtualCanvasSize(),
+			Primitives = primitives
+		};
     }
 
     private void DrawPuzzleLine(FragmentLine line, float reconstructionQuality, float surfaceQuality)
@@ -541,8 +638,8 @@ public partial class FragmentCanvas : Control
 
             for (int i = 0; i < vein.NormalizedPoints.Length - 1; i++)
             {
-                Vector2 start = ApplyViewTransform(vein.NormalizedPoints[i] * virtualCanvasSize);
-                Vector2 end = ApplyViewTransform(vein.NormalizedPoints[i + 1] * virtualCanvasSize);
+				Vector2 start = ApplyRenderTransform(vein.NormalizedPoints[i] * virtualCanvasSize);
+				Vector2 end = ApplyRenderTransform(vein.NormalizedPoints[i + 1] * virtualCanvasSize);
                 DrawClippedLine(start, end, fractureColor, rockSettings.FractureWidth);
                 DrawClippedLine(start, end, depositColor, rockSettings.DepositWidth);
             }
@@ -716,8 +813,13 @@ public partial class FragmentCanvas : Control
         Vector2 scaled = new(
             rotated.X * virtualCanvasSize.X / MathF.Max(referenceSize.X, 1f),
             rotated.Y * virtualCanvasSize.Y / MathF.Max(referenceSize.Y, 1f));
-        return ApplyViewTransform(scaled);
+		return ApplyRenderTransform(scaled);
     }
+
+	private Vector2 ApplyRenderTransform(Vector2 point)
+	{
+		return _observablePrimitiveCollector != null ? point : ApplyViewTransform(point);
+	}
 
     private Vector2 ApplyViewTransform(Vector2 point)
     {
@@ -754,8 +856,12 @@ public partial class FragmentCanvas : Control
             new Rect2(sourcePosition, sourceSize));
     }
 
-    private void ZoomViewAt(Vector2 localPosition, float factor)
+	public void ZoomViewAt(
+		Vector2 localPosition,
+		float factor,
+		FragmentAnalysisActionOrigin origin = FragmentAnalysisActionOrigin.Player)
     {
+		if (origin == FragmentAnalysisActionOrigin.Player) CancelViewNavigation();
         float minimumZoom = GetMinimumViewZoom();
         float maximumZoom = MathF.Max(generationSettings.MaximumViewZoom, minimumZoom);
         float newZoom = Mathf.Clamp(_viewZoom * factor, minimumZoom, maximumZoom);
@@ -766,7 +872,134 @@ public partial class FragmentCanvas : Control
         _viewPan = localPosition - center - (localPosition - center - _viewPan) * ratio;
         _viewZoom = newZoom;
         ClampViewPan();
+		NotifyViewChanged(origin);
         QueueRedraw();
+    }
+
+	public void PanViewBy(
+		Vector2 delta,
+		FragmentAnalysisActionOrigin origin = FragmentAnalysisActionOrigin.Player)
+	{
+		if (origin == FragmentAnalysisActionOrigin.Player) CancelViewNavigation();
+		_viewPan += delta;
+		ClampViewPan();
+		NotifyViewChanged(origin);
+		QueueRedraw();
+	}
+
+	public void FocusNormalizedPoint(
+		Vector2 normalizedPoint,
+		FragmentAnalysisActionOrigin origin = FragmentAnalysisActionOrigin.Rover)
+	{
+		CancelViewNavigation();
+		Vector2 virtualPoint = normalizedPoint * GetVirtualCanvasSize();
+		Vector2 virtualCenter = GetVirtualCanvasSize() * 0.5f;
+		_viewPan = -(virtualPoint - virtualCenter) * _viewZoom;
+		ClampViewPan();
+		NotifyViewChanged(origin);
+		QueueRedraw();
+	}
+
+	public void FocusNormalizedRect(
+		Rect2 normalizedBounds,
+		FragmentAnalysisActionOrigin origin = FragmentAnalysisActionOrigin.Rover)
+	{
+		CancelViewNavigation();
+		Vector2 virtualSize = GetVirtualCanvasSize();
+		Vector2 targetSize = normalizedBounds.Size * virtualSize;
+		if (targetSize.X > 0.001f && targetSize.Y > 0.001f)
+		{
+			float minimumZoom = GetMinimumViewZoom();
+			float maximumZoom = MathF.Max(generationSettings.MaximumViewZoom, minimumZoom);
+			float fitZoom = MathF.Min(
+				Size.X / (targetSize.X * 1.2f),
+				Size.Y / (targetSize.Y * 1.2f));
+			_viewZoom = Mathf.Clamp(fitZoom, minimumZoom, maximumZoom);
+		}
+		Vector2 virtualPoint = normalizedBounds.GetCenter() * virtualSize;
+		_viewPan = -(virtualPoint - virtualSize * 0.5f) * _viewZoom;
+		ClampViewPan();
+		NotifyViewChanged(origin);
+		QueueRedraw();
+	}
+
+	public void NavigateToNormalizedRect(Rect2 normalizedBounds, float durationSeconds)
+	{
+		CancelViewNavigation();
+		// A comparison/overlay can consume the mouse release after the canvas saw the press.
+		// Never let that stale drag state silently cancel a newly requested Rover tween.
+		_isViewDragging = false;
+		CalculateFocusedView(normalizedBounds, out _navigationTargetZoom, out _navigationTargetPan);
+		_navigationTargetBounds = normalizedBounds;
+		_navigationStartZoom = _viewZoom;
+		_navigationStartPan = _viewPan;
+		if (Mathf.IsEqualApprox(_navigationStartZoom, _navigationTargetZoom) &&
+			_navigationStartPan.IsEqualApprox(_navigationTargetPan))
+		{
+			CompleteViewNavigation();
+			return;
+		}
+		float duration = MathF.Max(durationSeconds, 0.01f);
+		_viewNavigationElapsed = 0f;
+		_viewNavigationDuration = duration;
+		_isViewNavigationActive = true;
+	}
+
+	public void CancelViewNavigation()
+	{
+		_isViewNavigationActive = false;
+		_viewNavigationElapsed = 0f;
+	}
+
+	private void ApplyNavigationProgress(float progress)
+	{
+		_viewZoom = Mathf.Lerp(_navigationStartZoom, _navigationTargetZoom, progress);
+		_viewPan = _navigationStartPan.Lerp(_navigationTargetPan, progress);
+		ClampViewPan();
+		NotifyViewChanged(FragmentAnalysisActionOrigin.Rover);
+		QueueRedraw();
+	}
+
+	private void CompleteViewNavigation()
+	{
+		_isViewNavigationActive = false;
+		_viewNavigationElapsed = 0f;
+		_viewZoom = _navigationTargetZoom;
+		_viewPan = _navigationTargetPan;
+		ClampViewPan();
+		NotifyViewChanged(FragmentAnalysisActionOrigin.Rover);
+		QueueRedraw();
+		ViewNavigationCompleted?.Invoke();
+	}
+
+	private void CalculateFocusedView(
+		Rect2 normalizedBounds,
+		out float targetZoom,
+		out Vector2 targetPan)
+	{
+		Vector2 virtualSize = GetVirtualCanvasSize();
+		Vector2 targetSize = normalizedBounds.Size * virtualSize;
+		float minimumZoom = GetMinimumViewZoom();
+		float maximumZoom = MathF.Max(generationSettings.MaximumViewZoom, minimumZoom);
+		float fitZoom = targetSize.X > 0.001f && targetSize.Y > 0.001f
+			? MathF.Min(Size.X / (targetSize.X * 1.2f), Size.Y / (targetSize.Y * 1.2f))
+			: _viewZoom;
+		targetZoom = Mathf.Clamp(fitZoom, minimumZoom, maximumZoom);
+		Vector2 virtualPoint = normalizedBounds.GetCenter() * virtualSize;
+		targetPan = -(virtualPoint - virtualSize * 0.5f) * targetZoom;
+		Vector2 scaledCanvasSize = virtualSize * targetZoom;
+		Vector2 maximumPan = new(
+			MathF.Max((scaledCanvasSize.X - Size.X) * 0.5f, 0f),
+			MathF.Max((scaledCanvasSize.Y - Size.Y) * 0.5f, 0f));
+		targetPan = new Vector2(
+			Mathf.Clamp(targetPan.X, -maximumPan.X, maximumPan.X),
+			Mathf.Clamp(targetPan.Y, -maximumPan.Y, maximumPan.Y));
+	}
+
+
+    private void NotifyViewChanged(FragmentAnalysisActionOrigin origin)
+    {
+        ViewChanged?.Invoke(_viewZoom, _viewPan, origin);
     }
 
     private void ClampViewPan()
@@ -844,22 +1077,54 @@ public partial class FragmentCanvas : Control
 
     private void DrawClippedLine(Vector2 start, Vector2 end, Color color, float width)
     {
-        if (TryClipLineToCanvas(start, end, width, out Vector2 clippedStart, out Vector2 clippedEnd))
-            DrawLine(clippedStart, clippedEnd, color, width);
+		Vector2 boundsSize = _observablePrimitiveCollector != null
+			? GetVirtualCanvasSize()
+			: Size;
+		if (!TryClipLineToBounds(
+			start,
+			end,
+			width,
+			boundsSize,
+			out Vector2 clippedStart,
+			out Vector2 clippedEnd))
+		{
+			return;
+		}
+
+		if (_observablePrimitiveCollector == null)
+		{
+			DrawLine(clippedStart, clippedEnd, color, width);
+			return;
+		}
+
+		if (color.A <= 0.001f || clippedStart.DistanceSquaredTo(clippedEnd) <= 0.01f) return;
+		Vector2 safeBounds = new(
+			MathF.Max(boundsSize.X, 1f),
+			MathF.Max(boundsSize.Y, 1f));
+		_observablePrimitiveCollector.Add(new FragmentObservablePrimitive
+		{
+			Id = _nextObservablePrimitiveId++,
+			Start = clippedStart / safeBounds,
+			End = clippedEnd / safeBounds,
+			Color = color,
+			Width = width,
+			Intensity = Mathf.Clamp(color.A, 0f, 1f)
+		});
     }
 
-    private bool TryClipLineToCanvas(
+	private static bool TryClipLineToBounds(
         Vector2 start,
         Vector2 end,
         float width,
+        Vector2 boundsSize,
         out Vector2 clippedStart,
         out Vector2 clippedEnd)
     {
         float inset = Mathf.Max(width * 0.5f, 0f);
         float left = inset;
         float top = inset;
-        float right = Size.X - inset;
-        float bottom = Size.Y - inset;
+		float right = boundsSize.X - inset;
+		float bottom = boundsSize.Y - inset;
 
         clippedStart = start;
         clippedEnd = end;

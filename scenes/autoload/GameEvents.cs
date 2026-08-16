@@ -12,7 +12,10 @@ public partial class GameEvents : Node
 	[Signal]
 	public delegate void BuildingPlacedEventHandler(BuildingComponent buildingComponent);
 	[Signal]
-	public delegate void FragmentAnalysisRequestedEventHandler(Vector2I fragmentPosition);
+	public delegate void FragmentAnalysisRequestedEventHandler(
+		Vector2I fragmentPosition,
+		BuildingComponent requestingRover,
+		int actionOrigin);
 	[Signal]
 	public delegate void BuildingDestroyedEventHandler(BuildingComponent buildingComponent);
 	[Signal]
@@ -61,9 +64,16 @@ public partial class GameEvents : Node
 		Instance.EmitSignal(SignalName.BuildingPlaced, buildingComponent);
 	}
 
-	public static void EmitFragmentAnalysisRequested(Vector2I fragmentPosition)
+	public static void EmitFragmentAnalysisRequested(
+		Vector2I fragmentPosition,
+		BuildingComponent requestingRover,
+		FragmentAnalysisActionOrigin actionOrigin)
 	{
-		Instance.EmitSignal(SignalName.FragmentAnalysisRequested, fragmentPosition);
+		Instance.EmitSignal(
+			SignalName.FragmentAnalysisRequested,
+			fragmentPosition,
+			requestingRover,
+			(int)actionOrigin);
 	}
 
 	public static void EmitBuildingMoved(BuildingComponent buildingComponent)

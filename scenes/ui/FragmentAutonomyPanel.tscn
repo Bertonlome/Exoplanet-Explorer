@@ -1,0 +1,407 @@
+[gd_scene format=3 uid="uid://cu8oj6h1ununv"]
+
+[node name="RoverPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(380, 0)
+size_flags_vertical = 3
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="PanelScroll" type="ScrollContainer" parent="Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Content" type="VBoxContainer" parent="Margin/PanelScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 7
+
+[node name="Title" type="Label" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "ROVER AUTONOMY"
+horizontal_alignment = 1
+
+[node name="GlobalAllocationTitle" type="Label" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+text = "GLOBAL ALLOCATION"
+
+[node name="ModeButtons" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+alignment = 1
+
+[node name="AutonomyOffButton" type="CheckButton" parent="Margin/PanelScroll/Content/ModeButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Manual analysis only."
+button_pressed = true
+text = "OFF"
+
+[node name="AutonomySupporterButton" type="CheckButton" parent="Margin/PanelScroll/Content/ModeButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "The player acts and the Rover provides support."
+text = "SUPPORT"
+
+[node name="AutonomyPerformerButton" type="CheckButton" parent="Margin/PanelScroll/Content/ModeButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "The Rover acts where allowed and the player supervises."
+text = "PERFORM"
+
+[node name="StatusSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="RoverActivityLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "STATUS: OFF"
+autowrap_mode = 2
+
+[node name="RoverCurrentActionLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "CURRENT: Manual analysis"
+autowrap_mode = 2
+
+[node name="RoverNextActionLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "NEXT: Select Supporter or Performer"
+autowrap_mode = 2
+
+[node name="RoverTargetLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "TARGET: None"
+autowrap_mode = 2
+
+[node name="RoverResultLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "RESULT: No measurement"
+autowrap_mode = 2
+
+[node name="RoverLocksLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "LOCKED: None"
+autowrap_mode = 2
+
+[node name="HistoryControls" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+alignment = 1
+
+[node name="HistoryBackButton" type="Button" parent="Margin/PanelScroll/Content/HistoryControls"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Undo the previous analysis action."
+disabled = true
+text = "←"
+
+[node name="HistoryForwardButton" type="Button" parent="Margin/PanelScroll/Content/HistoryControls"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Redo the next analysis action."
+disabled = true
+text = "→"
+
+[node name="ProcessingHistoryTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ TESTED CONFIGURATIONS"
+flat = true
+alignment = 0
+
+[node name="ProcessingHistorySelector" type="OptionButton" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Select a measured processing configuration from this fragment."
+
+[node name="ProcessingHistoryActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="RestoreProcessingConfigurationButton" type="Button" parent="Margin/PanelScroll/Content/ProcessingHistoryActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "RESTORE CONFIG"
+
+[node name="BookmarkProcessingConfigurationButton" type="CheckButton" parent="Margin/PanelScroll/Content/ProcessingHistoryActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Bookmarked configurations are retained when old history entries are pruned."
+disabled = true
+text = "BOOKMARK"
+
+[node name="RegionSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="RegionTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▼ CANDIDATE REGIONS"
+flat = true
+alignment = 0
+
+[node name="RegionActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="GroupRegionsButton" type="Button" parent="Margin/PanelScroll/Content/RegionActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Group current observable features into candidate regions."
+text = "GROUP REGIONS"
+
+[node name="ShowRegionOverlayButton" type="CheckButton" parent="Margin/PanelScroll/Content/RegionActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show or hide candidate-region annotations."
+button_pressed = true
+text = "OVERLAY"
+
+[node name="SelectedRegionLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "REGION: None selected"
+autowrap_mode = 2
+
+[node name="RegionSelector" type="OptionButton" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Select any stored region, including dismissed regions."
+
+[node name="RegionEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+alignment = 1
+
+[node name="AcceptRegionButton" type="Button" parent="Margin/PanelScroll/Content/RegionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "ACCEPT"
+
+[node name="DismissRegionButton" type="Button" parent="Margin/PanelScroll/Content/RegionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "DISMISS"
+
+[node name="RestoreRegionButton" type="Button" parent="Margin/PanelScroll/Content/RegionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "RESTORE"
+
+[node name="AddRegionButton" type="Button" parent="Margin/PanelScroll/Content/RegionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Arm one drag on the scan to add a player-defined region."
+text = "DRAW REGION"
+
+[node name="NavigationIntentLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "NAVIGATION: Select a region"
+autowrap_mode = 2
+
+[node name="NavigationActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+alignment = 1
+
+[node name="NavigateToRegionButton" type="Button" parent="Margin/PanelScroll/Content/NavigationActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Approve navigation to the previewed region."
+disabled = true
+text = "GO"
+
+[node name="CancelNavigationButton" type="Button" parent="Margin/PanelScroll/Content/NavigationActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Cancel navigation and pause autonomy."
+disabled = true
+text = "CANCEL"
+
+[node name="SequenceSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="SequenceTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ REGION SEQUENCE"
+flat = true
+alignment = 0
+
+[node name="RegionSequenceLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "REGION SEQUENCE: Draw or retain at least two regions"
+autowrap_mode = 2
+
+[node name="SequenceControls" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="PreviousRegionPairButton" type="Button" parent="Margin/PanelScroll/Content/SequenceControls"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "←"
+
+[node name="RegionSequenceButton" type="CheckButton" parent="Margin/PanelScroll/Content/SequenceControls"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show two region extracts side by side for continued analysis."
+disabled = true
+text = "SIDE-BY-SIDE"
+
+[node name="NextRegionPairButton" type="Button" parent="Margin/PanelScroll/Content/SequenceControls"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "→"
+
+[node name="FeatureSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="FeatureTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ FEATURE SENSING"
+flat = true
+alignment = 0
+
+[node name="FeatureActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="ScanFeaturesButton" type="Button" parent="Margin/PanelScroll/Content/FeatureActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Run deterministic detection on the current observable scan."
+text = "SCAN FEATURES"
+
+[node name="ShowFeatureOverlayButton" type="CheckButton" parent="Margin/PanelScroll/Content/FeatureActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show or hide feature annotations without changing the scan."
+button_pressed = true
+text = "OVERLAY"
+
+[node name="SelectedFeatureLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "FEATURE: None selected"
+autowrap_mode = 2
+
+[node name="FeatureSelector" type="OptionButton" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Select any stored feature, including dismissed features."
+
+[node name="FeatureEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="AcceptFeatureButton" type="Button" parent="Margin/PanelScroll/Content/FeatureEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "ACCEPT"
+
+[node name="DismissFeatureButton" type="Button" parent="Margin/PanelScroll/Content/FeatureEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "DISMISS"
+
+[node name="RestoreFeatureButton" type="Button" parent="Margin/PanelScroll/Content/FeatureEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "RESTORE"
+
+[node name="AutonomyAdvancedButton" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Set per-task allocation overrides and Yellow reliability."
+text = "TASK ALLOCATION"
+
+[node name="CapabilityOverridesScroll" type="ScrollContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 230)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CapabilityOverridesContainer" type="VBoxContainer" parent="Margin/PanelScroll/Content/CapabilityOverridesScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="ActionSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="PrimaryActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+alignment = 1
+
+[node name="BackButton" type="Button" parent="Margin/PanelScroll/Content/PrimaryActions"]
+layout_mode = 2
+disabled = true
+text = "BACK"
+
+[node name="RoverPauseButton" type="Button" parent="Margin/PanelScroll/Content/PrimaryActions"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "PAUSE"
+
+[node name="SkipButton" type="Button" parent="Margin/PanelScroll/Content/PrimaryActions"]
+layout_mode = 2
+disabled = true
+text = "SKIP"
+
+[node name="UndoButton" type="Button" parent="Margin/PanelScroll/Content/PrimaryActions"]
+layout_mode = 2
+disabled = true
+text = "UNDO"
+
+[node name="DecisionActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+alignment = 1
+
+[node name="DecisionAcceptButton" type="Button" parent="Margin/PanelScroll/Content/DecisionActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "ACCEPT"
+
+[node name="DecisionRejectButton" type="Button" parent="Margin/PanelScroll/Content/DecisionActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "REJECT"

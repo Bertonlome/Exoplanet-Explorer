@@ -148,21 +148,22 @@ layout_mode = 2
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 22
+theme_override_constants/margin_bottom = 8
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 12
 
 [node name="HBoxContainer3" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
+theme_override_constants/separation = 4
 alignment = 2
 
 [node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
 layout_mode = 2
 size_flags_horizontal = 6
-theme_override_font_sizes/font_size = 34
-text = "SAMPLE ANALYSER SOFTWARE"
+theme_override_font_sizes/font_size = 28
+text = "SAMPLE ANALYSER"
 
 [node name="QuitButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
 unique_name_in_owner = true
@@ -203,7 +204,7 @@ size_flags_vertical = 3
 [node name="FragmentCanvas" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/AnalysisFrame"]
 unique_name_in_owner = true
 clip_contents = true
-custom_minimum_size = Vector2(960, 540)
+custom_minimum_size = Vector2(640, 360)
 layout_mode = 2
 mouse_force_pass_scroll_events = false
 script = ExtResource("2_wqr11")
@@ -220,7 +221,7 @@ layout_mode = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 6
 alignment = 1
 
 [node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
@@ -272,11 +273,12 @@ text = "X-RAY"
 
 [node name="ProcessingSliders" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 49
+theme_override_constants/separation = 16
 
 [node name="PolarizationControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders"]
-custom_minimum_size = Vector2(240, 0)
+custom_minimum_size = Vector2(180, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="PolarizationValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/PolarizationControl"]
 unique_name_in_owner = true
@@ -294,8 +296,9 @@ tick_count = 5
 ticks_on_borders = true
 
 [node name="SpectralControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders"]
-custom_minimum_size = Vector2(240, 0)
+custom_minimum_size = Vector2(180, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="SpectralValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SpectralControl"]
 unique_name_in_owner = true
@@ -313,8 +316,9 @@ tick_count = 5
 ticks_on_borders = true
 
 [node name="SurfaceControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders"]
-custom_minimum_size = Vector2(240, 0)
+custom_minimum_size = Vector2(180, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="SurfaceValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SurfaceControl"]
 unique_name_in_owner = true
@@ -330,3 +334,26 @@ max_value = 5.0
 value = 3.0
 tick_count = 5
 ticks_on_borders = true
+
+[node name="SignalNoiseControl" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders"]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TargetMetricsLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SignalNoiseControl"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Observable ratio from 0.00 to 1.00. 1.00 means every retained detected feature is fully visible and all visible regional geometry is accounted for; it does not verify the true glyph."
+theme_override_font_sizes/font_size = 12
+text = "SELECTED REGION SIGNAL / NOISE: Select a region"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="ProcessingEffectLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SignalNoiseControl"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Compares the latest measured signal/noise ratio with the preceding tested configuration. It is not a claim about the hidden solution."
+theme_override_font_sizes/font_size = 12
+text = "MEASURED CHANGE: BASELINE"
+horizontal_alignment = 1
+autowrap_mode = 2

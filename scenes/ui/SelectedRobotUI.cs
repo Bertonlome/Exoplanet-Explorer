@@ -48,6 +48,18 @@ public partial class SelectedRobotUI : CanvasLayer
 	private Button liftRobotButton;
 	private Button analyseSampleButton;
 	private Button dropResourcesButton;
+	private VBoxContainer fragmentSampleContainer;
+	private Label fragmentSampleStatusLabel;
+	private OptionButton fragmentSampleSelector;
+	private PanelContainer fragmentProposalPanel;
+	private Label fragmentProposalLabel;
+	private Button approveFragmentProposalButton;
+	private Button dismissFragmentProposalButton;
+	private readonly List<FragmentSampleAvailability> nearbyFragmentSamples = new();
+	private Vector2I? selectedFragmentSample;
+	private FragmentAnalysisProposal activeFragmentProposal;
+	private BaseLevel baseLevel;
+	private bool isRefreshingSampleSelector;
 
 	private MultiPurposeButtonState currentButtonState;
 	private bool signalsDisconnected;
@@ -96,6 +108,11 @@ public partial class SelectedRobotUI : CanvasLayer
 	public void SetupUI(BuildingComponent component, GravitationalAnomalyMap anomalyMap)
 	{
 		selectedBuildingComponent = component;
+		baseLevel = GetParent() as BaseLevel;
+		if (baseLevel != null)
+		{
+			baseLevel.FragmentAnalysisStatusChanged += OnFragmentAnalysisStatusChanged;
+		}
 		selectedBuildingComponent.ModeChanged += OnModeChanged;
 		InitializeUI();
 		
@@ -115,13 +132,19 @@ public partial class SelectedRobotUI : CanvasLayer
 			miniMapController.SetRobotCell(selectedBuildingComponent.GetGridCellPosition());
 			// Removed redundant Refresh() call - SetRobotCell already refreshes
 			
-			// Connect to building moved event to update minimap when robot moves
-			GameEvents.Instance.Connect(GameEvents.SignalName.BuildingMoved, Callable.From<BuildingComponent>(OnBuildingMovedForMinimap));
 		}
 		else
 		{
 			GD.PrintErr("MiniMapController node not found in SelectedRobotUI scene.");
 		}
+
+		Callable buildingMovedCallable = Callable.From<BuildingComponent>(OnBuildingMovedForMinimap);
+		if (!GameEvents.Instance.IsConnected(GameEvents.SignalName.BuildingMoved, buildingMovedCallable))
+		{
+			GameEvents.Instance.Connect(GameEvents.SignalName.BuildingMoved, buildingMovedCallable);
+		}
+		RefreshNearbySampleAvailability();
+		TryProposeAnalysis();
 		
 		Visible = true;
 	}
@@ -144,6 +167,7 @@ public partial class SelectedRobotUI : CanvasLayer
 		placeBridgeButton = GetNode<Button>("%PlaceBridgeButton");
 		liftRobotButton = GetNode<Button>("%LiftRobotButton");
 		analyseSampleButton = GetNode<Button>("%AnalyseSampleButton");
+		InitializeFragmentSampleSelector();
 		placeAntennaButton = GetNode<Button>("%PlaceAntennaButton");
 		dropResourcesButton = GetNode<Button>("%DropResourcesButton");
 		placeBridgeButton.Hide();
@@ -198,6 +222,7 @@ public partial class SelectedRobotUI : CanvasLayer
 			titleLabel.Text = "Selected Drone";
 			placeBridgeButton.Hide();
 			analyseSampleButton.Hide();
+			fragmentSampleContainer.Hide();
 			liftRobotButton.Show();
 			if (IsInstanceValid(resourcesCarriedContainer))
 			{
@@ -219,6 +244,7 @@ public partial class SelectedRobotUI : CanvasLayer
 			titleLabel.Text = "Selected Rover";
 			placeBridgeButton.Show();
 			analyseSampleButton.Show();
+			fragmentSampleContainer.Show();
 			liftRobotButton.Hide();
 			if (IsInstanceValid(resourcesCarriedContainer))
 			{
@@ -229,6 +255,219 @@ public partial class SelectedRobotUI : CanvasLayer
 		}
 
 		UpdateResourceLabel();
+	}
+
+	private void InitializeFragmentSampleSelector()
+	{
+		fragmentSampleContainer = new VBoxContainer
+		{
+			Name = "FragmentSampleAvailability",
+			CustomMinimumSize = new Vector2(220f, 0f)
+		};
+		fragmentSampleStatusLabel = new Label
+		{
+			Name = "FragmentSampleStatus",
+			Text = "NO SAMPLE IN RANGE",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart
+		};
+		fragmentSampleSelector = new OptionButton
+		{
+			Name = "FragmentSampleSelector",
+			TooltipText = "Choose a nearby monolith fragment to analyse"
+		};
+		fragmentProposalPanel = new PanelContainer
+		{
+			Name = "FragmentAnalysisProposal",
+			Visible = false
+		};
+		VBoxContainer proposalContent = new();
+		fragmentProposalPanel.AddChild(proposalContent);
+		fragmentProposalLabel = new Label
+		{
+			AutowrapMode = TextServer.AutowrapMode.WordSmart
+		};
+		proposalContent.AddChild(fragmentProposalLabel);
+		HBoxContainer proposalActions = new();
+		proposalContent.AddChild(proposalActions);
+		approveFragmentProposalButton = new Button
+		{
+			Text = "APPROVE ANALYSIS",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		dismissFragmentProposalButton = new Button
+		{
+			Text = "DISMISS",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		proposalActions.AddChild(approveFragmentProposalButton);
+		proposalActions.AddChild(dismissFragmentProposalButton);
+
+		Container buttonParent = analyseSampleButton.GetParent<Container>();
+		buttonParent.AddChild(fragmentSampleContainer);
+		buttonParent.MoveChild(fragmentSampleContainer, analyseSampleButton.GetIndex() + 1);
+		fragmentSampleContainer.AddChild(fragmentSampleStatusLabel);
+		fragmentSampleContainer.AddChild(fragmentSampleSelector);
+		fragmentSampleContainer.AddChild(fragmentProposalPanel);
+		fragmentSampleSelector.ItemSelected += OnFragmentSampleSelected;
+		approveFragmentProposalButton.Pressed += OnApproveFragmentProposal;
+		dismissFragmentProposalButton.Pressed += OnDismissFragmentProposal;
+	}
+
+	private void RefreshNearbySampleAvailability()
+	{
+		if (!IsInstanceValid(fragmentSampleSelector) ||
+			!GodotObject.IsInstanceValid(selectedBuildingComponent) ||
+			selectedBuildingComponent.BuildingResource.IsAerial)
+		{
+			nearbyFragmentSamples.Clear();
+			selectedFragmentSample = null;
+			if (IsInstanceValid(analyseSampleButton)) analyseSampleButton.Disabled = true;
+			return;
+		}
+
+		Vector2I? previousSelection = selectedFragmentSample;
+		IReadOnlyList<Vector2I> positions = selectedBuildingComponent.gridManager
+			.GetSampleLocationsAroundPosition(selectedBuildingComponent.GetGridCellPosition());
+
+		nearbyFragmentSamples.Clear();
+		foreach (Vector2I position in positions)
+		{
+			nearbyFragmentSamples.Add(baseLevel?.GetFragmentAnalysisStatus(position) ??
+				new FragmentSampleAvailability
+				{
+					Position = position,
+					Status = FragmentSampleAnalysisStatus.Available
+				});
+		}
+
+		isRefreshingSampleSelector = true;
+		fragmentSampleSelector.Clear();
+		foreach (FragmentSampleAvailability sample in nearbyFragmentSamples)
+		{
+			string status = GetFragmentStatusText(sample);
+			fragmentSampleSelector.AddItem(
+				$"LOCATION: ({sample.Position.X}, {sample.Position.Y}) · {status}");
+		}
+
+		int selectedIndex = previousSelection.HasValue
+			? nearbyFragmentSamples.FindIndex(sample => sample.Position == previousSelection.Value)
+			: -1;
+		if (selectedIndex < 0 && nearbyFragmentSamples.Count > 0) selectedIndex = 0;
+
+		if (selectedIndex >= 0)
+		{
+			fragmentSampleSelector.Select(selectedIndex);
+			selectedFragmentSample = nearbyFragmentSamples[selectedIndex].Position;
+		}
+		else
+		{
+			selectedFragmentSample = null;
+		}
+		isRefreshingSampleSelector = false;
+
+		bool hasSamples = nearbyFragmentSamples.Count > 0;
+		fragmentSampleStatusLabel.Text = hasSamples
+			? $"{nearbyFragmentSamples.Count} SAMPLE{(nearbyFragmentSamples.Count == 1 ? "" : "S")} IN RANGE"
+			: "NO SAMPLE IN RANGE";
+		fragmentSampleSelector.Visible = hasSamples;
+		fragmentSampleSelector.Disabled = !hasSamples;
+		analyseSampleButton.Disabled = !CanAnalyseSelectedSample();
+		ValidateActiveFragmentProposal();
+	}
+
+	private void OnFragmentSampleSelected(long index)
+	{
+		if (isRefreshingSampleSelector || index < 0 || index >= nearbyFragmentSamples.Count) return;
+		selectedFragmentSample = nearbyFragmentSamples[(int)index].Position;
+		analyseSampleButton.Disabled = !CanAnalyseSelectedSample();
+		TryProposeAnalysis();
+	}
+
+	private void OnFragmentAnalysisStatusChanged(Vector2I fragmentPosition)
+	{
+		RefreshNearbySampleAvailability();
+	}
+
+	private static string GetFragmentStatusText(FragmentSampleAvailability sample)
+	{
+		string status = sample.Status switch
+		{
+			FragmentSampleAnalysisStatus.Analysing => "ANALYSING",
+			FragmentSampleAnalysisStatus.PreviouslyAnalysed => "PREVIOUSLY ANALYSED",
+			FragmentSampleAnalysisStatus.Solved => "SOLVED",
+			_ => "NOT YET ANALYSED"
+		};
+		return sample.IsRestored ? $"{status} · RESTORED" : status;
+	}
+
+	private bool CanAnalyseSelectedSample()
+	{
+		if (!selectedFragmentSample.HasValue) return false;
+		int index = nearbyFragmentSamples.FindIndex(
+			sample => sample.Position == selectedFragmentSample.Value);
+		return index >= 0 && nearbyFragmentSamples[index].Status != FragmentSampleAnalysisStatus.Analysing;
+	}
+
+	private void TryProposeAnalysis()
+	{
+		DismissFragmentProposal();
+		if (!selectedFragmentSample.HasValue || baseLevel == null) return;
+
+		FragmentSampleAvailability sample = nearbyFragmentSamples.Find(
+			candidate => candidate.Position == selectedFragmentSample.Value);
+		if (sample == null || sample.Status == FragmentSampleAnalysisStatus.Analysing) return;
+
+		activeFragmentProposal = FragmentSampleRover.ProposeAnalysis(sample);
+		if (activeFragmentProposal == null) return;
+		fragmentProposalLabel.Text =
+			"ROVER PROPOSAL · WAITING FOR PLAYER\n" +
+			$"TARGET: ({sample.Position.X}, {sample.Position.Y})\n" +
+			$"STATUS: {GetFragmentStatusText(sample)}\n" +
+			$"REASON: {activeFragmentProposal.Reason}";
+		approveFragmentProposalButton.Text = "APPROVE ANALYSIS";
+		fragmentProposalPanel.Show();
+	}
+
+	private void ValidateActiveFragmentProposal()
+	{
+		if (activeFragmentProposal == null) return;
+		bool stillValid = nearbyFragmentSamples.Exists(sample =>
+			sample.Position == activeFragmentProposal.Position &&
+			sample.Status != FragmentSampleAnalysisStatus.Analysing);
+		if (!stillValid) DismissFragmentProposal();
+	}
+
+	private void OnApproveFragmentProposal()
+	{
+		if (activeFragmentProposal == null) return;
+		Vector2I target = activeFragmentProposal.Position;
+		RefreshNearbySampleAvailability();
+		bool stillValid = nearbyFragmentSamples.Exists(sample =>
+			sample.Position == target && sample.Status != FragmentSampleAnalysisStatus.Analysing);
+		if (!stillValid)
+		{
+			DismissFragmentProposal();
+			GameUI.PushMessage("Proposed sample is no longer in range", "red", true);
+			return;
+		}
+
+		DismissFragmentProposal();
+		GameEvents.EmitFragmentAnalysisRequested(
+			target,
+			selectedBuildingComponent,
+			FragmentAnalysisActionOrigin.Rover);
+	}
+
+	private void OnDismissFragmentProposal()
+	{
+		DismissFragmentProposal();
+	}
+
+	private void DismissFragmentProposal()
+	{
+		activeFragmentProposal = null;
+		if (IsInstanceValid(fragmentProposalPanel)) fragmentProposalPanel.Hide();
 	}
 
 	private void OnGroundRobotBelowUav(BuildingComponent groundRobot)
@@ -556,10 +795,13 @@ public partial class SelectedRobotUI : CanvasLayer
 	private void OnBuildingMovedForMinimap(BuildingComponent movedBuilding)
 	{
 		// Only update if it's the selected robot that moved
-		if (movedBuilding == selectedBuildingComponent && IsInstanceValid(miniMapController))
+		if (movedBuilding != selectedBuildingComponent) return;
+
+		if (IsInstanceValid(miniMapController))
 		{
 			miniMapController.SetRobotCell(selectedBuildingComponent.GetGridCellPosition());
 		}
+		RefreshNearbySampleAvailability();
 	}
 
 	public void OnResourceCarriedCountChanged(int carriedResourceCount)
@@ -624,6 +866,25 @@ public partial class SelectedRobotUI : CanvasLayer
 		{
 			analyseSampleButton.Pressed -= OnAnalyseSampleButtonPressed;
 		}
+		if (IsInstanceValid(fragmentSampleSelector) &&
+			fragmentSampleSelector.IsConnected("item_selected", Callable.From<long>(OnFragmentSampleSelected)))
+		{
+			fragmentSampleSelector.ItemSelected -= OnFragmentSampleSelected;
+		}
+		if (IsInstanceValid(approveFragmentProposalButton) &&
+			approveFragmentProposalButton.IsConnected("pressed", Callable.From(OnApproveFragmentProposal)))
+		{
+			approveFragmentProposalButton.Pressed -= OnApproveFragmentProposal;
+		}
+		if (IsInstanceValid(dismissFragmentProposalButton) &&
+			dismissFragmentProposalButton.IsConnected("pressed", Callable.From(OnDismissFragmentProposal)))
+		{
+			dismissFragmentProposalButton.Pressed -= OnDismissFragmentProposal;
+		}
+		if (baseLevel != null)
+		{
+			baseLevel.FragmentAnalysisStatusChanged -= OnFragmentAnalysisStatusChanged;
+		}
 		if (selectedBuildingComponent != null)
 		{
 			selectedBuildingComponent.ModeChanged -= OnModeChanged;
@@ -666,14 +927,17 @@ public partial class SelectedRobotUI : CanvasLayer
 		{
 			return;
 		}
-		var roverPos = selectedBuildingComponent.GetGridCellPosition();
-		var sampleLocation = selectedBuildingComponent.gridManager.GetSampleLocationAroundPosition(roverPos);
-		if (sampleLocation == new Vector2I(-1, -1))
+		RefreshNearbySampleAvailability();
+		if (!selectedFragmentSample.HasValue)
 		{
 			GameUI.PushMessage("No sample around to analyse", "red", true);
 			return;
 		}
-		GameEvents.EmitFragmentAnalysisRequested(sampleLocation);
+		DismissFragmentProposal();
+		GameEvents.EmitFragmentAnalysisRequested(
+			selectedFragmentSample.Value,
+			selectedBuildingComponent,
+			FragmentAnalysisActionOrigin.Player);
 		//selectedBuildingComponent.AnalyseSample();
 	}
 	private void OnPlaceBridgeButtonPressed()

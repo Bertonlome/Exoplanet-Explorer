@@ -20,4 +20,7 @@ public sealed class FragmentAnalysisState
     public float ViewZoom { get; init; } = 1f;
     public Vector2 ViewPan { get; init; }
     public bool WasSolved { get; init; }
+    public bool WasEverSolved { get; init; }
+    public FragmentAnalysisActionOrigin InitiationOrigin { get; init; }
+    public FragmentAutonomyState RoverState { get; init; }
 }

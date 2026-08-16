@@ -3,7 +3,7 @@ using System;
 using Game;
 using Game.UI;
 
-public partial class FragmentAnalysisUI : CanvasLayer
+public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandSink
 {
 	private const float RotationStepDegrees = 10f;
 
@@ -29,6 +29,9 @@ public partial class FragmentAnalysisUI : CanvasLayer
 	private bool isClosing;
 	private MonolithFragment monolithFragment;
 	private MonolithFragment.Variant fragmentVariant;
+	private bool wasEverSolved;
+	private bool isRestoredSession;
+	private FragmentAnalysisActionOrigin initiationOrigin;
 
 	public event Action<Vector2I, FragmentAnalysisState> StateSaved;
 
@@ -53,17 +56,27 @@ public partial class FragmentAnalysisUI : CanvasLayer
 		polarizationValueLabel = GetNode<Label>("%PolarizationValueLabel");
 		spectralValueLabel = GetNode<Label>("%SpectralValueLabel");
 		surfaceValueLabel = GetNode<Label>("%SurfaceValueLabel");
+		InitializeAutonomyNodes();
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(double delta)
 	{
+		UpdateResponsiveHeader();
+		UpdateFeatureOverlayView();
 	}
 
 	public void SetupUI(
-		Vector2I fragmentPosition, Vector2I monolithPosition, FragmentAnalysisState savedState = null)
+		Vector2I fragmentPosition,
+		Vector2I monolithPosition,
+		FragmentAnalysisState savedState = null,
+		FragmentAutonomyMode initialAutonomyMode = FragmentAutonomyMode.Off,
+		bool wasRestored = false,
+		FragmentAnalysisActionOrigin initiationOrigin = FragmentAnalysisActionOrigin.Player)
 	{
 		this.fragmentPosition = fragmentPosition;
+		isRestoredSession = wasRestored;
+		this.initiationOrigin = initiationOrigin;
 		Visible = true;
 		GameUI.Instance?.SetMinimapInputEnabled(false);
 		GameUI.Instance?.SetWorldCameraInputEnabled(false);
@@ -81,6 +94,15 @@ public partial class FragmentAnalysisUI : CanvasLayer
 			RestoreState(savedState);
 		}
 
+		SyncFilterState();
+		wasEverSolved = savedState?.WasEverSolved == true || savedState?.WasSolved == true;
+		if (fragmentCanvas.IsPuzzleSolved()) wasEverSolved = true;
+		FragmentAutonomyState restoredRoverState = savedState?.RoverState?.Clone() ??
+			FragmentAutonomyState.CreateDefault(autonomySettings);
+		restoredRoverState.GlobalMode = initialAutonomyMode;
+		InitializeAutonomy(restoredRoverState);
+		UpdateFragmentLifecycleLabel(isRestoredSession, wasEverSolved);
+
 		quitButton.Pressed += HideUI;
 		reloadButton.Pressed += OnReloadPressed;
 		rotateCounterClockwiseButton.Pressed += OnRotateCounterClockwisePressed;
@@ -95,7 +117,6 @@ public partial class FragmentAnalysisUI : CanvasLayer
 		polarizationSlider.ValueChanged += OnPolarizationLevelChanged;
 		spectralSlider.ValueChanged += OnSpectralLevelChanged;
 		surfaceSlider.ValueChanged += OnSurfaceLevelChanged;
-		SyncFilterState();
 	}
 
 	public void HideUI()
@@ -112,12 +133,14 @@ public partial class FragmentAnalysisUI : CanvasLayer
 
 	public override void _ExitTree()
 	{
+		DisconnectAutonomySignals();
 		GameUI.Instance?.SetMinimapInputEnabled(true);
 		GameUI.Instance?.SetWorldCameraInputEnabled(true);
 	}
 
 	private void DisconnectSignals()
 	{
+		DisconnectAutonomySignals();
 		quitButton.Pressed -= HideUI;
 		reloadButton.Pressed -= OnReloadPressed;
 		rotateCounterClockwiseButton.Pressed -= OnRotateCounterClockwisePressed;
@@ -136,24 +159,30 @@ public partial class FragmentAnalysisUI : CanvasLayer
 
 	private void OnReloadPressed()
 	{
-		fragmentCanvas.GenerateFragment();
-		UpdateRotationLabel();
+		ShowReloadConfirmation();
 	}
 
 	private void OnRotateCounterClockwisePressed()
 	{
-		fragmentCanvas.SetPuzzleRotationDegrees(
-			fragmentCanvas.DisplayRotationDegrees - RotationStepDegrees);
+		DispatchAnalysisCommand(FragmentAnalysisCommand.Rotation(
+			fragmentCanvas.DisplayRotationDegrees - RotationStepDegrees,
+			FragmentAnalysisActionOrigin.Player));
 	}
 
 	private void OnRotateClockwisePressed()
 	{
-		fragmentCanvas.SetPuzzleRotationDegrees(
-			fragmentCanvas.DisplayRotationDegrees + RotationStepDegrees);
+		DispatchAnalysisCommand(FragmentAnalysisCommand.Rotation(
+			fragmentCanvas.DisplayRotationDegrees + RotationStepDegrees,
+			FragmentAnalysisActionOrigin.Player));
 	}
 
 	private void OnPuzzleStateChanged(bool filterCombinationCorrect, bool rotationCorrect)
 	{
+		if (filterCombinationCorrect && rotationCorrect)
+		{
+			wasEverSolved = true;
+			UpdateFragmentLifecycleLabel(isRestoredSession, true);
+		}
 		UpdateRotationLabel();
 	}
 
@@ -164,15 +193,22 @@ public partial class FragmentAnalysisUI : CanvasLayer
 
 	private void SyncFilterState()
 	{
-		OnPolarizationToggled(polarizationButton.ButtonPressed);
-		OnSpectralToggled(spectralButton.ButtonPressed);
-		OnSurfaceToggled(surfaceButton.ButtonPressed);
-		OnElectromagneticToggled(electromagneticButton.ButtonPressed);
-		OnResonanceToggled(resonanceButton.ButtonPressed);
-		OnXRayToggled(xRayButton.ButtonPressed);
-		OnPolarizationLevelChanged(polarizationSlider.Value);
-		OnSpectralLevelChanged(spectralSlider.Value);
-		OnSurfaceLevelChanged(surfaceSlider.Value);
+		fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Polarization, polarizationButton.ButtonPressed);
+		fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Spectral, spectralButton.ButtonPressed);
+		fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Surface, surfaceButton.ButtonPressed);
+		fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Electromagnetic, electromagneticButton.ButtonPressed);
+		fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Resonance, resonanceButton.ButtonPressed);
+		fragmentCanvas.SetFilter(FragmentCanvas.FilterType.XRay, xRayButton.ButtonPressed);
+		fragmentCanvas.SetProcessingLevel(
+			FragmentCanvas.FilterType.Polarization,
+			Mathf.RoundToInt(polarizationSlider.Value));
+		fragmentCanvas.SetProcessingLevel(
+			FragmentCanvas.FilterType.Spectral,
+			Mathf.RoundToInt(spectralSlider.Value));
+		fragmentCanvas.SetProcessingLevel(
+			FragmentCanvas.FilterType.Surface,
+			Mathf.RoundToInt(surfaceSlider.Value));
+		UpdateProcessingLabels();
 		UpdateRotationLabel();
 	}
 
@@ -213,7 +249,10 @@ public partial class FragmentAnalysisUI : CanvasLayer
 			RotationDegrees = fragmentCanvas.DisplayRotationDegrees,
 			ViewZoom = fragmentCanvas.ViewZoom,
 			ViewPan = fragmentCanvas.ViewPan,
-			WasSolved = fragmentCanvas.IsPuzzleSolved()
+			WasSolved = fragmentCanvas.IsPuzzleSolved(),
+			WasEverSolved = wasEverSolved || fragmentCanvas.IsPuzzleSolved(),
+			InitiationOrigin = initiationOrigin,
+			RoverState = fragmentAnalysisRover?.CaptureState()
 		};
 	}
 
@@ -227,31 +266,31 @@ public partial class FragmentAnalysisUI : CanvasLayer
 		};
 	}
 
-	private void OnPolarizationToggled(bool enabled) => fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Polarization, enabled);
-	private void OnSpectralToggled(bool enabled) => fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Spectral, enabled);
-	private void OnSurfaceToggled(bool enabled) => fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Surface, enabled);
-	private void OnElectromagneticToggled(bool enabled) => fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Electromagnetic, enabled);
-	private void OnResonanceToggled(bool enabled) => fragmentCanvas.SetFilter(FragmentCanvas.FilterType.Resonance, enabled);
-	private void OnXRayToggled(bool enabled) => fragmentCanvas.SetFilter(FragmentCanvas.FilterType.XRay, enabled);
+	private void OnPolarizationToggled(bool enabled) => DispatchToggle(
+		FragmentAnalysisParameter.PolarizationEnabled, enabled);
+	private void OnSpectralToggled(bool enabled) => DispatchToggle(
+		FragmentAnalysisParameter.SpectralEnabled, enabled);
+	private void OnSurfaceToggled(bool enabled) => DispatchToggle(
+		FragmentAnalysisParameter.SurfaceEnabled, enabled);
+	private void OnElectromagneticToggled(bool enabled) => DispatchToggle(
+		FragmentAnalysisParameter.ElectromagneticEnabled, enabled);
+	private void OnResonanceToggled(bool enabled) => DispatchToggle(
+		FragmentAnalysisParameter.ResonanceEnabled, enabled);
+	private void OnXRayToggled(bool enabled) => DispatchToggle(
+		FragmentAnalysisParameter.XRayEnabled, enabled);
 
 	private void OnPolarizationLevelChanged(double value)
 	{
-		int level = Mathf.RoundToInt(value);
-		polarizationValueLabel.Text = $"POLARIZATION LEVEL: {level}";
-		fragmentCanvas.SetProcessingLevel(FragmentCanvas.FilterType.Polarization, level);
+		DispatchLevel(FragmentAnalysisParameter.PolarizationLevel, Mathf.RoundToInt(value));
 	}
 
 	private void OnSpectralLevelChanged(double value)
 	{
-		int level = Mathf.RoundToInt(value);
-		spectralValueLabel.Text = $"SPECTRAL LEVEL: {level}";
-		fragmentCanvas.SetProcessingLevel(FragmentCanvas.FilterType.Spectral, level);
+		DispatchLevel(FragmentAnalysisParameter.SpectralLevel, Mathf.RoundToInt(value));
 	}
 
 	private void OnSurfaceLevelChanged(double value)
 	{
-		int level = Mathf.RoundToInt(value);
-		surfaceValueLabel.Text = $"SURFACE LEVEL: {level}";
-		fragmentCanvas.SetProcessingLevel(FragmentCanvas.FilterType.Surface, level);
+		DispatchLevel(FragmentAnalysisParameter.SurfaceLevel, Mathf.RoundToInt(value));
 	}
 }

@@ -13,6 +13,8 @@ namespace Game;
 
 public partial class BaseLevel : Node
 {
+	public event Action<Vector2I> FragmentAnalysisStatusChanged;
+
 	private readonly StringName ESCAPE_ACTION = "escape";
 	[Export]
 	private PackedScene levelCompleteScreenScene;
@@ -35,6 +37,9 @@ public partial class BaseLevel : Node
 	private GameUI gameUI;
 	private FragmentAnalysisUI fragmentAnalysisUI;
 	private readonly Dictionary<Vector2I, FragmentAnalysisState> fragmentAnalysisStates = new();
+	private Vector2I? fragmentBeingAnalysed;
+	private bool activeFragmentWasRestored;
+	private FragmentAutonomyMode fragmentAutonomyMode = FragmentAutonomyMode.Off;
 	private BuildingManager buildingManager;
 	private bool isComplete;
 	private bool isFailed;
@@ -72,7 +77,9 @@ public partial class BaseLevel : Node
 		gridManager.BaseTouchingMonolith += OnBaseTouchingMonolith;
 
 		GameEvents.Instance.Connect(GameEvents.SignalName.RobotSelected, Callable.From<BuildingComponent>(OnRobotSelected));
-		GameEvents.Instance.Connect(GameEvents.SignalName.FragmentAnalysisRequested, Callable.From<Vector2I>(OnFragmentAnalysisRequested));
+		GameEvents.Instance.Connect(
+			GameEvents.SignalName.FragmentAnalysisRequested,
+			Callable.From<Vector2I, BuildingComponent, int>(OnFragmentAnalysisRequested));
 	}
 
 	public void OnBasePlaced()
@@ -164,23 +171,128 @@ public partial class BaseLevel : Node
 		selectedRobotUI.SetupUI(buildingComponent, gravitationalAnomalyMap); // Call setup after adding to tree
 	}
 
-	private void OnFragmentAnalysisRequested(Vector2I fragmentPosition)
+	private void OnFragmentAnalysisRequested(
+		Vector2I fragmentPosition,
+		BuildingComponent requestingRover,
+		int actionOriginValue)
 	{
+		FragmentAnalysisActionOrigin actionOrigin = Enum.IsDefined(
+			typeof(FragmentAnalysisActionOrigin),
+			actionOriginValue)
+			? (FragmentAnalysisActionOrigin)actionOriginValue
+			: FragmentAnalysisActionOrigin.System;
+		OpenFragmentAnalysis(fragmentPosition, requestingRover, actionOrigin);
+	}
+
+	private bool OpenFragmentAnalysis(
+		Vector2I fragmentPosition,
+		BuildingComponent requestingRover,
+		FragmentAnalysisActionOrigin actionOrigin)
+	{
+		if (!GodotObject.IsInstanceValid(requestingRover) ||
+			requestingRover.BuildingResource == null ||
+			requestingRover.BuildingResource.IsAerial ||
+			requestingRover.IsLifted)
+		{
+			GameUI.PushMessage("Only a ground rover can analyse a fragment", "red", true);
+			return false;
+		}
+
+		if (!GodotObject.IsInstanceValid(selectedRobotUI) ||
+			selectedRobotUI.selectedBuildingComponent != requestingRover)
+		{
+			GameUI.PushMessage("Fragment analysis request came from a stale rover selection", "red", true);
+			return false;
+		}
+
+		IReadOnlyList<Vector2I> validSamples = gridManager.GetSampleLocationsAroundPosition(
+			requestingRover.GetGridCellPosition());
+		if (!validSamples.Contains(fragmentPosition))
+		{
+			GameUI.PushMessage("Selected fragment is no longer in analysis range", "red", true);
+			return false;
+		}
+
+		if (fragmentBeingAnalysed.HasValue && GodotObject.IsInstanceValid(fragmentAnalysisUI))
+		{
+			GameUI.PushMessage("Fragment analysis is already open", "red", true);
+			return false;
+		}
+
 		if (GodotObject.IsInstanceValid(fragmentAnalysisUI))
 		{
 			fragmentAnalysisUI.HideUI();
 		}
 
-		fragmentAnalysisStates.TryGetValue(fragmentPosition, out FragmentAnalysisState savedState);
+		bool wasRestored = fragmentAnalysisStates.TryGetValue(
+			fragmentPosition,
+			out FragmentAnalysisState savedState);
+		fragmentBeingAnalysed = fragmentPosition;
+		activeFragmentWasRestored = wasRestored;
 		fragmentAnalysisUI = fragmentAnalysisScene.Instantiate<FragmentAnalysisUI>();
 		AddChild(fragmentAnalysisUI);
 		fragmentAnalysisUI.StateSaved += OnFragmentAnalysisStateSaved;
-		fragmentAnalysisUI.SetupUI(fragmentPosition, gridManager.monolithPosition, savedState);
+		fragmentAnalysisUI.SetupUI(
+			fragmentPosition,
+			gridManager.monolithPosition,
+			savedState,
+			fragmentAutonomyMode,
+			wasRestored,
+			actionOrigin);
+		FragmentAnalysisStatusChanged?.Invoke(fragmentPosition);
+		return true;
 	}
 
 	private void OnFragmentAnalysisStateSaved(Vector2I fragmentPosition, FragmentAnalysisState state)
 	{
 		fragmentAnalysisStates[fragmentPosition] = state;
+		fragmentBeingAnalysed = null;
+		activeFragmentWasRestored = false;
+		if (state?.RoverState != null)
+		{
+			SetFragmentAutonomyMode(state.RoverState.GlobalMode);
+		}
+		FragmentAnalysisStatusChanged?.Invoke(fragmentPosition);
+	}
+
+	public bool HasFragmentAnalysisState(Vector2I fragmentPosition)
+	{
+		return fragmentAnalysisStates.ContainsKey(fragmentPosition);
+	}
+
+	public FragmentSampleAvailability GetFragmentAnalysisStatus(Vector2I fragmentPosition)
+	{
+		if (fragmentBeingAnalysed == fragmentPosition)
+		{
+			return new FragmentSampleAvailability
+			{
+				Position = fragmentPosition,
+				Status = FragmentSampleAnalysisStatus.Analysing,
+				IsRestored = activeFragmentWasRestored
+			};
+		}
+
+		if (!fragmentAnalysisStates.TryGetValue(fragmentPosition, out FragmentAnalysisState state))
+		{
+			return new FragmentSampleAvailability
+			{
+				Position = fragmentPosition,
+				Status = FragmentSampleAnalysisStatus.Available
+			};
+		}
+
+		return new FragmentSampleAvailability
+		{
+			Position = fragmentPosition,
+			Status = state.WasEverSolved || state.WasSolved
+				? FragmentSampleAnalysisStatus.Solved
+				: FragmentSampleAnalysisStatus.PreviouslyAnalysed
+		};
+	}
+
+	private void SetFragmentAutonomyMode(FragmentAutonomyMode mode)
+	{
+		fragmentAutonomyMode = mode;
 	}
 
 	private void OnClockisTicking()

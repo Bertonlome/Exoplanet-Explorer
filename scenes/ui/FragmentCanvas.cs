@@ -900,6 +900,20 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
 		QueueRedraw();
 	}
 
+	public bool IsNormalizedPointVisible(Vector2 normalizedPoint, float margin = 8f)
+	{
+		Vector2 virtualSize = GetVirtualCanvasSize();
+		Vector2 virtualPoint = normalizedPoint * virtualSize;
+		Vector2 viewportPoint = Size * 0.5f +
+			(virtualPoint - virtualSize * 0.5f) * _viewZoom + _viewPan;
+		float safeMargin = Mathf.Clamp(margin, 0f, MathF.Min(Size.X, Size.Y) * 0.45f);
+		return new Rect2(
+			new Vector2(safeMargin, safeMargin),
+			new Vector2(
+				MathF.Max(Size.X - safeMargin * 2f, 0f),
+				MathF.Max(Size.Y - safeMargin * 2f, 0f))).HasPoint(viewportPoint);
+	}
+
 	public void FocusNormalizedRect(
 		Rect2 normalizedBounds,
 		FragmentAnalysisActionOrigin origin = FragmentAnalysisActionOrigin.Rover)

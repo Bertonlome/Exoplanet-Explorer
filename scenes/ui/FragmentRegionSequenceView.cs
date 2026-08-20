@@ -8,6 +8,7 @@ public partial class FragmentRegionSequenceView : Control
 	private FragmentObservableScan scan;
 	private readonly List<FragmentCandidateRegion> regions = new();
 	private readonly List<FragmentDetectedFeature> features = new();
+	private readonly List<FragmentDetectedStructure> structures = new();
 	private readonly List<FragmentLockedRegionView> lockedViews = new();
 	private int pageStart;
 	private int? selectedFeatureId;
@@ -16,6 +17,15 @@ public partial class FragmentRegionSequenceView : Control
 	private Color acceptedRoverFeatureColor = new(1f, 0.72f, 0.1f, 0.98f);
 	private Color playerFeatureColor = new(0.25f, 1f, 0.45f, 0.95f);
 	private Color pendingFeatureColor = new(0.15f, 0.95f, 1f, 1f);
+	private bool orientationIsolation;
+	private const float OrientationAnimationDuration = 1.2f;
+	private float orientationAnimationElapsed = OrientationAnimationDuration;
+	private int? orientationSourceRegionId;
+	private FragmentDetectedStructure orientationStructure;
+	private FragmentOrientationHypothesis orientationHypothesis;
+	private FragmentRotationCorrection rotationCorrection;
+	private readonly List<FragmentDetectedFeature> orientationFeatures = new();
+	private Color orientationStructureColor = new(1f, 0.2f, 0.85f, 1f);
 	private Label toolbarPageLabel;
 	private Button toolbarPreviousButton;
 	private Button toolbarNextButton;
@@ -25,12 +35,23 @@ public partial class FragmentRegionSequenceView : Control
 	public bool CanGoNext => pageStart + 2 < regions.Count;
 	public string PageText => regions.Count < 2
 		? "REGION SEQUENCE: Draw or retain at least two regions"
-		: $"REGIONS {pageStart + 1}–{Math.Min(pageStart + 2, regions.Count)} / {regions.Count}";
+			: $"REGIONS {pageStart + 1}–{Math.Min(pageStart + 2, regions.Count)} / {regions.Count}";
+	public IReadOnlyList<int> DisplayedRegionIds
+	{
+		get
+		{
+			List<int> ids = new();
+			for (int index = pageStart; index < Math.Min(pageStart + 2, regions.Count); index++)
+				ids.Add(regions[index].Id);
+			return ids;
+		}
+	}
 
 	public event Action<int> RegionSelected;
 	public event Action<int, FragmentRegionEditAction> RegionActionRequested;
 	public event Action<int> RegionLockRequested;
 	public event Action ExitRequested;
+	public event Action PageChanged;
 
 	public override void _Ready()
 	{
@@ -83,6 +104,7 @@ public partial class FragmentRegionSequenceView : Control
 		FragmentObservableScan observableScan,
 		IReadOnlyList<FragmentCandidateRegion> sourceRegions,
 		IReadOnlyList<FragmentDetectedFeature> sourceFeatures,
+		IReadOnlyList<FragmentDetectedStructure> sourceStructures,
 		IReadOnlyList<FragmentLockedRegionView> sourceLockedViews,
 		int? selectedFeature,
 		int? selectedRegion)
@@ -92,6 +114,7 @@ public partial class FragmentRegionSequenceView : Control
 		selectedRegionId = selectedRegion;
 		regions.Clear();
 		features.Clear();
+		structures.Clear();
 		lockedViews.Clear();
 		if (sourceRegions != null)
 		{
@@ -105,6 +128,10 @@ public partial class FragmentRegionSequenceView : Control
 				if (feature.Disposition != FragmentAnnotationDisposition.Dismissed)
 					features.Add(feature);
 		}
+		if (sourceStructures != null)
+			foreach (FragmentDetectedStructure structure in sourceStructures)
+				if (structure.Disposition != FragmentAnnotationDisposition.Dismissed)
+					structures.Add(structure);
 		if (sourceLockedViews != null) lockedViews.AddRange(sourceLockedViews);
 		regions.Sort((first, second) => first.Id.CompareTo(second.Id));
 		pageStart = Mathf.Clamp(pageStart, 0, Math.Max(regions.Count - 1, 0));
@@ -147,11 +174,53 @@ public partial class FragmentRegionSequenceView : Control
 		QueueRedraw();
 	}
 
+	public void SetOrientationIsolation(
+		bool isolated,
+		int? sourceRegionId,
+		FragmentDetectedStructure structure,
+		FragmentOrientationHypothesis hypothesis,
+		FragmentRotationCorrection correction,
+		IReadOnlyList<FragmentDetectedFeature> sourceFeatures,
+		Color color)
+	{
+		bool changedProposal = orientationHypothesis?.Id != hypothesis?.Id ||
+			orientationHypothesis?.AxisDegrees != hypothesis?.AxisDegrees ||
+			orientationSourceRegionId != sourceRegionId ||
+			orientationIsolation != isolated;
+		orientationIsolation = isolated;
+		orientationSourceRegionId = sourceRegionId;
+		orientationStructure = structure;
+		orientationHypothesis = hypothesis;
+		rotationCorrection = correction;
+		orientationFeatures.Clear();
+		if (sourceFeatures != null) orientationFeatures.AddRange(sourceFeatures);
+		orientationStructureColor = color;
+		if (changedProposal) orientationAnimationElapsed = 0f;
+		QueueRedraw();
+	}
+
+	public void RestartOrientationPreviewAnimation()
+	{
+		orientationAnimationElapsed = 0f;
+		QueueRedraw();
+	}
+
+	public override void _Process(double delta)
+	{
+		if (!orientationIsolation || orientationHypothesis == null ||
+			orientationAnimationElapsed >= OrientationAnimationDuration) return;
+		orientationAnimationElapsed = MathF.Min(
+			orientationAnimationElapsed + (float)delta,
+			OrientationAnimationDuration);
+		QueueRedraw();
+	}
+
 	public void PreviousPage()
 	{
 		pageStart = Math.Max(pageStart - 2, 0);
 		RefreshToolbar();
 		QueueRedraw();
+		PageChanged?.Invoke();
 	}
 
 	public void NextPage()
@@ -159,6 +228,17 @@ public partial class FragmentRegionSequenceView : Control
 		if (CanGoNext) pageStart += 2;
 		RefreshToolbar();
 		QueueRedraw();
+		PageChanged?.Invoke();
+	}
+
+	public void EnsureRegionVisible(int regionId)
+	{
+		int index = regions.FindIndex(region => region.Id == regionId);
+		if (index < 0 || (index >= pageStart && index < pageStart + 2)) return;
+		pageStart = index - index % 2;
+		RefreshToolbar();
+		QueueRedraw();
+		PageChanged?.Invoke();
 	}
 
 	private void RefreshToolbar()
@@ -195,22 +275,31 @@ public partial class FragmentRegionSequenceView : Control
 			pane.Size.Y / MathF.Max(sourceSize.Y, 1f));
 		Vector2 fittedSize = sourceSize * fitScale;
 		Rect2 contentPane = new(pane.GetCenter() - fittedSize * 0.5f, fittedSize);
-		foreach (FragmentObservablePrimitive primitive in renderedScan.Primitives)
+		if (orientationIsolation && orientationStructure != null &&
+			orientationSourceRegionId == region.Id)
 		{
-			Vector2 start = primitive.Start;
-			Vector2 end = primitive.End;
-			if (!ClipSegment(renderedBounds, ref start, ref end)) continue;
-			Vector2 paneStart = RegionToPane(start, renderedBounds, contentPane);
-			Vector2 paneEnd = RegionToPane(end, renderedBounds, contentPane);
-			Color color = new(
-				primitive.Color.R,
-				primitive.Color.G,
-				primitive.Color.B,
-				Mathf.Clamp(primitive.Color.A * MathF.Max(primitive.Intensity, 0.15f), 0.08f, 1f));
-			float width = Mathf.Clamp(primitive.Width * fitScale, 1f, 8f);
-			DrawLine(paneStart, paneEnd, color, width, true);
+			DrawOrientationStructure(renderedBounds, contentPane, orientationFeatures);
 		}
-		DrawFeatureAnnotations(renderedBounds, contentPane, renderedFeatures);
+		else
+		{
+			foreach (FragmentObservablePrimitive primitive in renderedScan.Primitives)
+			{
+				Vector2 start = primitive.Start;
+				Vector2 end = primitive.End;
+				if (!ClipSegment(renderedBounds, ref start, ref end)) continue;
+				Vector2 paneStart = RegionToPane(start, renderedBounds, contentPane);
+				Vector2 paneEnd = RegionToPane(end, renderedBounds, contentPane);
+				Color color = new(
+					primitive.Color.R,
+					primitive.Color.G,
+					primitive.Color.B,
+					Mathf.Clamp(primitive.Color.A * MathF.Max(primitive.Intensity, 0.15f), 0.08f, 1f));
+				float width = Mathf.Clamp(primitive.Width * fitScale, 1f, 8f);
+				DrawLine(paneStart, paneEnd, color, width, true);
+			}
+			DrawFeatureAnnotations(renderedBounds, contentPane, renderedFeatures);
+			DrawStructures(renderedBounds, contentPane, renderedFeatures);
+		}
 		Color regionColor = region.Disposition == FragmentAnnotationDisposition.Accepted
 			? new Color(0.25f, 1f, 0.45f, 1f)
 			: new Color(1f, 0.72f, 0.15f, 1f);
@@ -220,6 +309,123 @@ public partial class FragmentRegionSequenceView : Control
 			$"R{region.Id}", HorizontalAlignment.Left, -1, 18,
 			regionColor);
 		DrawRegionActions(pane, region);
+	}
+
+	private void DrawOrientationStructure(
+		Rect2 region,
+		Rect2 pane,
+		IReadOnlyList<FragmentDetectedFeature> renderedFeatures)
+	{
+		foreach (int featureId in orientationStructure.FeatureIds)
+		{
+			FragmentDetectedFeature feature = null;
+			foreach (FragmentDetectedFeature candidate in renderedFeatures)
+				if (candidate.Id == featureId &&
+					candidate.Disposition != FragmentAnnotationDisposition.Dismissed)
+				{
+					feature = candidate;
+					break;
+				}
+			if (feature == null) continue;
+			if (feature.Segments == null || feature.Segments.Count == 0)
+				DrawSegment(feature.Start, feature.End);
+			else
+				foreach (FragmentFeatureSegment segment in feature.Segments)
+					DrawSegment(segment.Start, segment.End);
+		}
+
+		if (orientationHypothesis == null) return;
+		if (!TryGetOrientationCenter(region, pane, renderedFeatures, out Vector2 center)) return;
+		float progress = Mathf.SmoothStep(
+			0f,
+			1f,
+			Mathf.Clamp(orientationAnimationElapsed / OrientationAnimationDuration, 0f, 1f));
+		float previewDegrees = rotationCorrection != null &&
+			rotationCorrection.SourceOrientationId == orientationHypothesis.Id &&
+			rotationCorrection.Disposition != FragmentAnnotationDisposition.Dismissed
+			? rotationCorrection.ProposedDegrees
+			: -orientationHypothesis.AxisDegrees;
+		float radians = Mathf.DegToRad(previewDegrees * progress);
+		Color ghostColor = new(0.15f, 0.95f, 1f, 0.72f);
+		foreach (int featureId in orientationStructure.FeatureIds)
+		{
+			FragmentDetectedFeature feature = FindOrientationFeature(renderedFeatures, featureId);
+			if (feature == null) continue;
+			if (feature.Segments == null || feature.Segments.Count == 0)
+				DrawGhostSegment(feature.Start, feature.End);
+			else
+				foreach (FragmentFeatureSegment segment in feature.Segments)
+					DrawGhostSegment(segment.Start, segment.End);
+		}
+		float axisLength = Mathf.Clamp(MathF.Min(pane.Size.X, pane.Size.Y) * 0.28f, 40f, 170f);
+		DrawDashedLine(center - Vector2.Up * axisLength, center + Vector2.Up * axisLength,
+			new Color(0.65f, 0.8f, 1f, 0.72f), 2f);
+		DrawString(ThemeDB.FallbackFont, pane.Position + new Vector2(12f, 46f),
+			$"H{orientationHypothesis.Id} · PROPOSED UPRIGHT",
+			HorizontalAlignment.Left, -1, 14, ghostColor);
+
+		void DrawGhostSegment(Vector2 normalizedStart, Vector2 normalizedEnd)
+		{
+			Vector2 start = normalizedStart;
+			Vector2 end = normalizedEnd;
+			if (!ClipSegment(region, ref start, ref end)) return;
+			Vector2 paneStart = center + (RegionToPane(start, region, pane) - center).Rotated(radians);
+			Vector2 paneEnd = center + (RegionToPane(end, region, pane) - center).Rotated(radians);
+			DrawDashedLine(paneStart, paneEnd, ghostColor, 3.5f);
+		}
+
+		void DrawSegment(Vector2 normalizedStart, Vector2 normalizedEnd)
+		{
+			Vector2 start = normalizedStart;
+			Vector2 end = normalizedEnd;
+			if (!ClipSegment(region, ref start, ref end)) return;
+			Vector2 paneStart = RegionToPane(start, region, pane);
+			Vector2 paneEnd = RegionToPane(end, region, pane);
+			DrawLine(paneStart, paneEnd, Colors.Black, 9f, true);
+			DrawLine(paneStart, paneEnd, orientationStructureColor, 5f, true);
+		}
+	}
+
+	private bool TryGetOrientationCenter(
+		Rect2 region,
+		Rect2 pane,
+		IReadOnlyList<FragmentDetectedFeature> renderedFeatures,
+		out Vector2 center)
+	{
+		Vector2 sum = Vector2.Zero;
+		int count = 0;
+		foreach (int featureId in orientationStructure.FeatureIds)
+		{
+			FragmentDetectedFeature feature = FindOrientationFeature(renderedFeatures, featureId);
+			if (feature == null) continue;
+			if (feature.Segments == null || feature.Segments.Count == 0)
+				AddSegment(feature.Start, feature.End);
+			else
+				foreach (FragmentFeatureSegment segment in feature.Segments)
+					AddSegment(segment.Start, segment.End);
+		}
+		center = count == 0 ? pane.GetCenter() : sum / count;
+		return count > 0;
+
+		void AddSegment(Vector2 normalizedStart, Vector2 normalizedEnd)
+		{
+			Vector2 start = normalizedStart;
+			Vector2 end = normalizedEnd;
+			if (!ClipSegment(region, ref start, ref end)) return;
+			sum += RegionToPane(start, region, pane) + RegionToPane(end, region, pane);
+			count += 2;
+		}
+	}
+
+	private static FragmentDetectedFeature FindOrientationFeature(
+		IReadOnlyList<FragmentDetectedFeature> renderedFeatures,
+		int featureId)
+	{
+		foreach (FragmentDetectedFeature feature in renderedFeatures)
+			if (feature.Id == featureId &&
+				feature.Disposition != FragmentAnnotationDisposition.Dismissed)
+				return feature;
+		return null;
 	}
 
 	private void DrawRegionActions(Rect2 pane, FragmentCandidateRegion region)
@@ -277,6 +483,7 @@ public partial class FragmentRegionSequenceView : Control
 	{
 		foreach (FragmentDetectedFeature feature in renderedFeatures)
 		{
+			if (IsAcceptedStructureMember(feature.Id)) continue;
 			bool isPending = selectedFeatureId == feature.Id &&
 				feature.Disposition == FragmentAnnotationDisposition.Proposed;
 			Color color = feature.Provenance == FragmentAnnotationProvenance.Player
@@ -302,6 +509,50 @@ public partial class FragmentRegionSequenceView : Control
 				}
 			}
 			if (drewFeature) DrawFeatureLabel(feature.Id, labelPosition, color, isPending);
+		}
+	}
+
+	private bool IsAcceptedStructureMember(int featureId) => structures.Exists(structure =>
+		structure.Disposition == FragmentAnnotationDisposition.Accepted &&
+		structure.FeatureIds.Contains(featureId));
+
+	private void DrawStructures(
+		Rect2 region,
+		Rect2 pane,
+		IReadOnlyList<FragmentDetectedFeature> renderedFeatures)
+	{
+		foreach (FragmentDetectedStructure structure in structures)
+		{
+			bool accepted = structure.Disposition == FragmentAnnotationDisposition.Accepted;
+			foreach (int featureId in structure.FeatureIds)
+			{
+				FragmentDetectedFeature feature = null;
+				foreach (FragmentDetectedFeature candidate in renderedFeatures)
+					if (candidate.Id == featureId &&
+						candidate.Disposition != FragmentAnnotationDisposition.Dismissed)
+					{
+						feature = candidate;
+						break;
+					}
+				if (feature == null) continue;
+				if (feature.Segments == null || feature.Segments.Count == 0)
+					DrawSegment(feature.Start, feature.End);
+				else
+					foreach (FragmentFeatureSegment segment in feature.Segments)
+						DrawSegment(segment.Start, segment.End);
+			}
+
+			void DrawSegment(Vector2 normalizedStart, Vector2 normalizedEnd)
+			{
+				Vector2 start = normalizedStart;
+				Vector2 end = normalizedEnd;
+				if (!ClipSegment(region, ref start, ref end)) return;
+				Vector2 paneStart = RegionToPane(start, region, pane);
+				Vector2 paneEnd = RegionToPane(end, region, pane);
+				DrawLine(paneStart, paneEnd, Colors.Black, accepted ? 10f : 8f, true);
+				if (accepted) DrawLine(paneStart, paneEnd, orientationStructureColor, 6f, true);
+				else DrawDashedLine(paneStart, paneEnd, orientationStructureColor, 4f);
+			}
 		}
 	}
 

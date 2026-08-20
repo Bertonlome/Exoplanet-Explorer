@@ -11,7 +11,11 @@ public static class FragmentFeatureDetector
 	private const float MinimumDirectionContinuity = 0.82f;
 	private const float MaximumIntensityDifference = 0.24f;
 	private const float MaximumWidthRatio = 2.2f;
-	private const int MaximumFeatureCount = 10;
+	// A complete visible glyph can legitimately contain many disconnected or perpendicular stroke
+	// groups. Ten groups proved too small and discarded most of otherwise observable figures before
+	// structure reconstruction. The primitive comparison cap below remains the expensive-work guard.
+	private const int MaximumFeatureCount = 48;
+	private const int MaximumComparedPrimitiveCount = 384;
 
     private sealed class FeatureGroup
     {
@@ -65,10 +69,10 @@ public static class FragmentFeatureDetector
         foreach (FeatureGroup group in groups)
         {
             FindFarthestEndpoints(group.Primitives, out Vector2 start, out Vector2 end);
-			IReadOnlyList<FragmentObservablePrimitive> highlightedPrimitives =
-				SelectHighlightedPrimitives(group.Primitives);
-			List<FragmentFeatureSegment> segments = new(highlightedPrimitives.Count);
-			foreach (FragmentObservablePrimitive primitive in highlightedPrimitives)
+			// Segments are the Rover's observable geometry contract, not merely a decorative highlight.
+			// Retaining only a visual subset here also starved structure and orientation estimation.
+			List<FragmentFeatureSegment> segments = new(group.Primitives.Count);
+			foreach (FragmentObservablePrimitive primitive in group.Primitives)
             {
                 segments.Add(new FragmentFeatureSegment
                 {
@@ -95,16 +99,29 @@ public static class FragmentFeatureDetector
     private static List<FragmentObservablePrimitive> GetStrongestUniquePrimitives(
         IReadOnlyList<FragmentObservablePrimitive> source)
     {
-        List<FragmentObservablePrimitive> unique = new();
-        foreach (FragmentObservablePrimitive primitive in source)
-        {
-            if (primitive == null ||
-                primitive.Intensity < MinimumIntensity ||
-                primitive.Start.DistanceTo(primitive.End) < MinimumSegmentLength)
-            {
-                continue;
-            }
+		List<FragmentObservablePrimitive> bounded = new();
+		foreach (FragmentObservablePrimitive primitive in source)
+		{
+			if (primitive == null ||
+				primitive.Intensity < MinimumIntensity ||
+				primitive.Start.DistanceTo(primitive.End) < MinimumSegmentLength)
+				continue;
+			bounded.Add(primitive);
+		}
+		bounded.Sort((first, second) =>
+		{
+			float firstSalience = first.Intensity * first.Start.DistanceTo(first.End);
+			float secondSalience = second.Intensity * second.Start.DistanceTo(second.End);
+			int scoreOrder = secondSalience.CompareTo(firstSalience);
+			return scoreOrder != 0 ? scoreOrder : first.Id.CompareTo(second.Id);
+		});
+		if (bounded.Count > MaximumComparedPrimitiveCount)
+			bounded.RemoveRange(MaximumComparedPrimitiveCount,
+				bounded.Count - MaximumComparedPrimitiveCount);
 
+        List<FragmentObservablePrimitive> unique = new();
+		foreach (FragmentObservablePrimitive primitive in bounded)
+        {
             int duplicateIndex = unique.FindIndex(existing => SameSegment(
                 existing.Start,
                 existing.End,
@@ -151,64 +168,6 @@ public static class FragmentFeatureDetector
         return 0.12f + averageIntensity * 0.48f +
             Mathf.Clamp(totalLength * 0.8f, 0f, 0.3f) + coherence + structure;
     }
-
-	private static IReadOnlyList<FragmentObservablePrimitive> SelectHighlightedPrimitives(
-		List<FragmentObservablePrimitive> primitives)
-	{
-		if (primitives.Count <= 3 || IsSimpleOpenChain(primitives)) return primitives;
-
-		List<FragmentObservablePrimitive> ranked = new(primitives);
-		ranked.Sort((first, second) =>
-		{
-			float firstSalience = first.Intensity * first.Start.DistanceTo(first.End);
-			float secondSalience = second.Intensity * second.Start.DistanceTo(second.End);
-			int salienceOrder = secondSalience.CompareTo(firstSalience);
-			return salienceOrder != 0 ? salienceOrder : first.Id.CompareTo(second.Id);
-		});
-		int highlightCount = Math.Max(2, Mathf.CeilToInt(primitives.Count * 0.4f));
-		if (ranked.Count > highlightCount)
-			ranked.RemoveRange(highlightCount, ranked.Count - highlightCount);
-		return ranked;
-	}
-
-	private static bool IsSimpleOpenChain(List<FragmentObservablePrimitive> primitives)
-	{
-		int looseEndpointCount = 0;
-		foreach (FragmentObservablePrimitive primitive in primitives)
-		{
-			int startConnections = CountEndpointConnections(
-				primitive.Start,
-				primitive,
-				primitives);
-			int endConnections = CountEndpointConnections(
-				primitive.End,
-				primitive,
-				primitives);
-			if (startConnections == 0) looseEndpointCount++;
-			if (endConnections == 0) looseEndpointCount++;
-			if (startConnections > 1 || endConnections > 1) return false;
-		}
-		return looseEndpointCount == 2;
-	}
-
-	private static int CountEndpointConnections(
-		Vector2 endpoint,
-		FragmentObservablePrimitive owner,
-		List<FragmentObservablePrimitive> primitives)
-	{
-		float toleranceSquared = EndpointConnectionTolerance * EndpointConnectionTolerance;
-		int count = 0;
-		foreach (FragmentObservablePrimitive candidate in primitives)
-		{
-			if (ReferenceEquals(candidate, owner)) continue;
-			if (endpoint.DistanceSquaredTo(candidate.Start) <= toleranceSquared ||
-				endpoint.DistanceSquaredTo(candidate.End) <= toleranceSquared)
-			{
-				count++;
-			}
-		}
-		return count;
-	}
 
     private static bool EndpointsConnect(
         FragmentObservablePrimitive first,

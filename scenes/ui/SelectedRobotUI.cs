@@ -347,7 +347,7 @@ public partial class SelectedRobotUI : CanvasLayer
 		{
 			string status = GetFragmentStatusText(sample);
 			fragmentSampleSelector.AddItem(
-				$"LOCATION: ({sample.Position.X}, {sample.Position.Y}) · {status}");
+				$"SAMPLE: {status}");
 		}
 
 		int selectedIndex = previousSelection.HasValue

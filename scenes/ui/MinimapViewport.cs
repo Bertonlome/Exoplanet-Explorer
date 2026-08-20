@@ -25,6 +25,7 @@ public partial class MinimapViewport : Control
 
 	private readonly List<TerrainCell> terrainCache = new();
 	private readonly List<EntityMarker> entityMarkers = new();
+	private readonly Dictionary<Vector2I, FragmentBearingMarker> fragmentBearings = new();
 
 	private Rect2I levelTileBounds;
 	private Rect2 worldBounds;
@@ -68,6 +69,18 @@ public partial class MinimapViewport : Control
 			Badge = badge;
 			IsBase = isBase;
 			IsSelected = isSelected;
+		}
+	}
+
+	private readonly struct FragmentBearingMarker
+	{
+		public readonly Vector2 Direction;
+		public readonly string CompassLabel;
+
+		public FragmentBearingMarker(Vector2 direction, string compassLabel)
+		{
+			Direction = direction;
+			CompassLabel = compassLabel ?? string.Empty;
 		}
 	}
 
@@ -196,6 +209,7 @@ public partial class MinimapViewport : Control
 		{
 			DrawEntityMarker(marker);
 		}
+		DrawFragmentBearings(mapRect);
 
 		Rect2 cameraRect = GetViewportRectOnMinimap();
 		if (cameraRect.Size.X > 0 && cameraRect.Size.Y > 0)
@@ -344,6 +358,19 @@ public partial class MinimapViewport : Control
 		MarkDirty();
 	}
 
+	public void SetFragmentBearing(
+		Vector2I fragmentPosition,
+		Vector2? direction,
+		string compassLabel = null)
+	{
+		if (!direction.HasValue || direction.Value.LengthSquared() <= 0.0001f)
+			fragmentBearings.Remove(fragmentPosition);
+		else
+			fragmentBearings[fragmentPosition] = new FragmentBearingMarker(
+				direction.Value.Normalized(), compassLabel);
+		MarkDirty();
+	}
+
 	public void MarkTerrainDirty()
 	{
 		terrainCacheDirty = true;
@@ -403,6 +430,61 @@ public partial class MinimapViewport : Control
 				10,
 				Colors.White);
 		}
+	}
+
+	private void DrawFragmentBearings(Rect2 mapRect)
+	{
+		Color rayColor = new(0.1f, 0.95f, 1f, 0.96f);
+		foreach ((Vector2I tile, FragmentBearingMarker bearing) in fragmentBearings)
+		{
+			Vector2 originWorld = (new Vector2(tile.X, tile.Y) + Vector2.One * 0.5f) * TileSize;
+			Vector2 start = WorldToMinimap(originWorld);
+			Vector2 oneTile = WorldToMinimap(originWorld + bearing.Direction * TileSize) - start;
+			if (oneTile.LengthSquared() <= 0.0001f || !mapRect.HasPoint(start)) continue;
+			Vector2 ray = oneTile.Normalized();
+			float length = DistanceToRectEdge(start, ray, mapRect);
+			Vector2 end = start + ray * MathF.Max(length - 3f, 0f);
+			DrawLine(start, end, Colors.Black, 6f, true);
+			DrawLine(start, end, rayColor, 3f, true);
+			DrawArrowHead(end, ray, rayColor);
+			DrawCircle(start, 5f, Colors.Black, true);
+			DrawCircle(start, 3.5f, rayColor, true);
+			string label = string.IsNullOrEmpty(bearing.CompassLabel)
+				? "FRAGMENT BEARING"
+				: $"FRAGMENT · {bearing.CompassLabel}";
+			Vector2 textSize = ThemeDB.FallbackFont.GetStringSize(
+				label, HorizontalAlignment.Left, -1, 10);
+			Vector2 labelPosition = new(
+				Mathf.Clamp(start.X + 6f, mapRect.Position.X + 2f,
+					mapRect.End.X - textSize.X - 2f),
+				Mathf.Clamp(start.Y - 7f, mapRect.Position.Y + textSize.Y,
+					mapRect.End.Y - 2f));
+			DrawString(ThemeDB.FallbackFont, labelPosition, label,
+				HorizontalAlignment.Left, -1, 10, rayColor);
+		}
+	}
+
+	private static float DistanceToRectEdge(Vector2 start, Vector2 direction, Rect2 rectangle)
+	{
+		float distance = float.PositiveInfinity;
+		if (direction.X > 0.0001f)
+			distance = MathF.Min(distance, (rectangle.End.X - start.X) / direction.X);
+		else if (direction.X < -0.0001f)
+			distance = MathF.Min(distance, (rectangle.Position.X - start.X) / direction.X);
+		if (direction.Y > 0.0001f)
+			distance = MathF.Min(distance, (rectangle.End.Y - start.Y) / direction.Y);
+		else if (direction.Y < -0.0001f)
+			distance = MathF.Min(distance, (rectangle.Position.Y - start.Y) / direction.Y);
+		return float.IsInfinity(distance) ? 0f : MathF.Max(distance, 0f);
+	}
+
+	private void DrawArrowHead(Vector2 tip, Vector2 direction, Color color)
+	{
+		Vector2 back = -direction.Normalized();
+		DrawLine(tip, tip + back.Rotated(0.58f) * 9f, Colors.Black, 5f);
+		DrawLine(tip, tip + back.Rotated(-0.58f) * 9f, Colors.Black, 5f);
+		DrawLine(tip, tip + back.Rotated(0.58f) * 9f, color, 2.5f);
+		DrawLine(tip, tip + back.Rotated(-0.58f) * 9f, color, 2.5f);
 	}
 
 	private void MoveCameraRectangle(Vector2 localPosition)

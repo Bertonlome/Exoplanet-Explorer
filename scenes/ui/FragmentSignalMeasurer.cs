@@ -7,6 +7,7 @@ public static class FragmentSignalMeasurer
 	private const float SegmentMatchTolerance = 0.014f;
 	private const float MinimumDirectionAgreement = 0.7f;
 	private const float CoverageSampleSpacing = 0.006f;
+	private const int MaximumVisibleSegmentCount = 384;
 
 	private sealed class VisibleSegment
 	{
@@ -26,7 +27,8 @@ public static class FragmentSignalMeasurer
 		FragmentObservableScan scan,
 		Rect2 normalizedRegion,
 		IReadOnlyList<FragmentDetectedFeature> detectedFeatures,
-		IReadOnlyList<int> expectedFeatureIds)
+		IReadOnlyList<int> expectedFeatureIds,
+		int maximumComparisons = 500000)
 	{
 		if (scan?.Primitives == null || detectedFeatures == null)
 			return new FragmentSignalMetrics();
@@ -58,6 +60,9 @@ public static class FragmentSignalMeasurer
 			return new FragmentSignalMetrics();
 
 		float completenessTotal = 0f;
+		int comparisonsRemaining = Math.Max(maximumComparisons, 1000);
+		int comparisonBudget = comparisonsRemaining;
+		bool budgetExhausted = false;
 		int measuredFeatureCount = 0;
 		float totalSignalLength = 0f;
 		foreach (int featureId in expectedIds)
@@ -74,8 +79,14 @@ public static class FragmentSignalMeasurer
 			foreach (FeatureSegment expected in expectedSegments)
 			{
 				featureLength += expected.Length;
-				coveredLength += expected.Length * MeasureSegmentCoverage(expected, visibleSegments);
+				coveredLength += expected.Length * MeasureSegmentCoverage(
+					expected,
+					visibleSegments,
+					ref comparisonsRemaining,
+					ref budgetExhausted);
+				if (budgetExhausted) break;
 			}
+			if (budgetExhausted) break;
 			totalSignalLength += featureLength;
 			completenessTotal += coveredLength / MathF.Max(featureLength, 0.00001f);
 			measuredFeatureCount++;
@@ -84,13 +95,29 @@ public static class FragmentSignalMeasurer
 		float completeness = completenessTotal / Math.Max(measuredFeatureCount, 1);
 		float visibleDismissedLength = 0f;
 		foreach (FeatureSegment dismissed in dismissedSegments)
+		{
 			visibleDismissedLength += dismissed.Length *
-				MeasureSegmentCoverage(dismissed, visibleSegments);
+				MeasureSegmentCoverage(
+					dismissed,
+					visibleSegments,
+					ref comparisonsRemaining,
+					ref budgetExhausted);
+			if (budgetExhausted) break;
+		}
+		if (budgetExhausted)
+		{
+			return new FragmentSignalMetrics
+			{
+				IsComplete = false,
+				ComparisonCount = comparisonBudget
+			};
+		}
 		float selectivity = totalSignalLength /
 			MathF.Max(totalSignalLength + visibleDismissedLength, 0.00001f);
 		return new FragmentSignalMetrics
 		{
-			SignalToNoise = Mathf.Clamp(completeness * selectivity, 0f, 1f)
+			SignalToNoise = Mathf.Clamp(completeness * selectivity, 0f, 1f),
+			ComparisonCount = comparisonBudget - comparisonsRemaining
 		};
 	}
 
@@ -112,6 +139,12 @@ public static class FragmentSignalMeasurer
 				End = end
 			});
 		}
+		result.Sort((first, second) =>
+			second.Start.DistanceSquaredTo(second.End).CompareTo(
+				first.Start.DistanceSquaredTo(first.End)));
+		if (result.Count > MaximumVisibleSegmentCount)
+			result.RemoveRange(MaximumVisibleSegmentCount,
+				result.Count - MaximumVisibleSegmentCount);
 		return result;
 	}
 
@@ -150,7 +183,9 @@ public static class FragmentSignalMeasurer
 
 	private static float MeasureSegmentCoverage(
 		FeatureSegment feature,
-		IReadOnlyList<VisibleSegment> visibleSegments)
+		IReadOnlyList<VisibleSegment> visibleSegments,
+		ref int comparisonsRemaining,
+		ref bool budgetExhausted)
 	{
 		Vector2 featureDelta = feature.End - feature.Start;
 		Vector2 featureDirection = featureDelta.Normalized();
@@ -165,6 +200,12 @@ public static class FragmentSignalMeasurer
 			bool hasMatch = false;
 			foreach (VisibleSegment visible in visibleSegments)
 			{
+				comparisonsRemaining--;
+				if (comparisonsRemaining < 0)
+				{
+					budgetExhausted = true;
+					return 0f;
+				}
 				Vector2 visibleDelta = visible.End - visible.Start;
 				if (visibleDelta.LengthSquared() <= 0.0000001f ||
 					MathF.Abs(featureDirection.Dot(visibleDelta.Normalized())) < MinimumDirectionAgreement)

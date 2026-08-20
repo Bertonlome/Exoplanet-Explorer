@@ -1,4 +1,6 @@
-[gd_scene format=3 uid="uid://cu8oj6h1ununv"]
+[gd_scene load_steps=2 format=3 uid="uid://cu8oj6h1ununv"]
+
+[ext_resource type="Script" path="res://scenes/ui/FragmentDirectionInset.cs" id="1_direction"]
 
 [node name="RoverPanel" type="PanelContainer"]
 custom_minimum_size = Vector2(380, 0)
@@ -15,6 +17,7 @@ theme_override_constants/margin_bottom = 10
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="Content" type="VBoxContainer" parent="Margin/PanelScroll"]
 layout_mode = 2
@@ -123,6 +126,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 tooltip_text = "Select a measured processing configuration from this fragment."
+fit_to_longest_item = false
 
 [node name="ProcessingHistoryActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
@@ -180,6 +184,7 @@ autowrap_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Select any stored region, including dismissed regions."
+fit_to_longest_item = false
 
 [node name="RegionEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
 layout_mode = 2
@@ -208,6 +213,14 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Arm one drag on the scan to add a player-defined region."
 text = "DRAW REGION"
+
+[node name="RegionViewLockButton" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Lock or unlock the selected accepted region's captured view. Locked regions cannot be resized."
+disabled = true
+text = "LOCK"
 
 [node name="NavigationIntentLabel" type="Label" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
@@ -318,6 +331,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 tooltip_text = "Select any stored feature, including dismissed features."
+fit_to_longest_item = false
 
 [node name="FeatureEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
@@ -342,6 +356,470 @@ unique_name_in_owner = true
 layout_mode = 2
 disabled = true
 text = "RESTORE"
+
+[node name="StructureSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="StructureTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ RECONSTRUCTED STRUCTURES"
+flat = true
+alignment = 0
+
+[node name="StructureActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="ScanStructuresButton" type="Button" parent="Margin/PanelScroll/Content/StructureActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Group connected observable features into candidate reconstructed structures."
+text = "SCAN STRUCTURES"
+
+[node name="ShowStructureOverlayButton" type="CheckButton" parent="Margin/PanelScroll/Content/StructureActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show or hide reconstructed-structure annotations."
+button_pressed = true
+text = "OVERLAY"
+
+[node name="SelectedStructureLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "STRUCTURE: None selected"
+autowrap_mode = 2
+
+[node name="StructureSelector" type="OptionButton" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Select any stored structure, including dismissed structures."
+fit_to_longest_item = false
+
+[node name="StructureDispositionEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="AcceptStructureButton" type="Button" parent="Margin/PanelScroll/Content/StructureDispositionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Accept this reconstructed structure for later analysis. This does not declare it correct."
+disabled = true
+text = "ACCEPT"
+
+[node name="DismissStructureButton" type="Button" parent="Margin/PanelScroll/Content/StructureDispositionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "DISMISS"
+
+[node name="RestoreStructureButton" type="Button" parent="Margin/PanelScroll/Content/StructureDispositionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "RESTORE"
+
+[node name="StructureMembershipEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="NewStructureButton" type="Button" parent="Margin/PanelScroll/Content/StructureMembershipEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Create a player-defined structure and enter canvas membership editing."
+text = "NEW"
+
+[node name="EditStructureButton" type="CheckButton" parent="Margin/PanelScroll/Content/StructureMembershipEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Click visible features on the scan to include or exclude them from the selected structure."
+text = "EDIT"
+
+[node name="MergeStructureButton" type="Button" parent="Margin/PanelScroll/Content/StructureMembershipEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Press MERGE, then choose another structure from the selector."
+text = "MERGE"
+
+[node name="FragmentOverviewSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="FragmentOverviewTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show the visual record of the fragment selected for this analysis."
+text = "▶ SCANNED FRAGMENT"
+flat = true
+alignment = 0
+
+[node name="FragmentOverviewContent" type="VBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="FragmentOverviewImageFrame" type="PanelContainer" parent="Margin/PanelScroll/Content/FragmentOverviewContent"]
+custom_minimum_size = Vector2(0, 222)
+layout_mode = 2
+
+[node name="FragmentOverviewTexture" type="TextureRect" parent="Margin/PanelScroll/Content/FragmentOverviewContent/FragmentOverviewImageFrame"]
+unique_name_in_owner = true
+texture_filter = 1
+layout_mode = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="FragmentOverviewCaption" type="Label" parent="Margin/PanelScroll/Content/FragmentOverviewContent"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "VISUAL RECORD OF THE SCANNED FRAGMENT"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="OrientationSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="OrientationTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ ORIENTATION"
+flat = true
+alignment = 0
+
+[node name="OrientationRegionControls" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="PreviousOrientationRegionButton" type="Button" parent="Margin/PanelScroll/Content/OrientationRegionControls"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Select the previous retained region for upright-orientation analysis."
+disabled = true
+text = "←"
+
+[node name="OrientationRegionLabel" type="Label" parent="Margin/PanelScroll/Content/OrientationRegionControls"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "REGION: —"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NextOrientationRegionButton" type="Button" parent="Margin/PanelScroll/Content/OrientationRegionControls"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Select the next retained region for upright-orientation analysis."
+disabled = true
+text = "→"
+
+[node name="OrientationActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+visible = false
+layout_mode = 2
+
+[node name="EstimateOrientationButton" type="Button" parent="Margin/PanelScroll/Content/OrientationActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Estimate five upright-axis hypotheses from the selected region's visible structure geometry."
+text = "ESTIMATE AXES"
+
+[node name="ShowOrientationOverlayButton" type="CheckButton" parent="Margin/PanelScroll/Content/OrientationActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show or hide the vertical reference, proposed axis, and ghosted upright pose."
+button_pressed = true
+text = "OVERLAY"
+
+[node name="QuitOrientationViewButton" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Close orientation isolation and side-by-side comparison, returning to the normal fragment view."
+text = "QUIT ORIENTATION VIEW"
+
+[node name="SelectedOrientationLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "ORIENTATION: Select a candidate structure"
+autowrap_mode = 2
+
+[node name="OrientationSelector" type="OptionButton" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Select a geometric upright-axis alternative for player review."
+fit_to_longest_item = false
+
+[node name="OrientationEvidenceLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "EVIDENCE: Visible line directions only; upright polarity requires player review."
+autowrap_mode = 2
+
+[node name="OrientationEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="PreviousOrientationButton" type="Button" parent="Margin/PanelScroll/Content/OrientationEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show the previous geometric orientation hypothesis."
+disabled = true
+text = "←"
+
+[node name="OrientationStepLabel" type="Label" parent="Margin/PanelScroll/Content/OrientationEdits"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(38, 0)
+layout_mode = 2
+text = "H—"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="AcceptOrientationButton" type="Button" parent="Margin/PanelScroll/Content/OrientationEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Accept this hypothesis. In Performer mode the Rover automatically previews and executes its correction."
+disabled = true
+text = "ACCEPT"
+
+[node name="NextOrientationButton" type="Button" parent="Margin/PanelScroll/Content/OrientationEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show the next geometric orientation hypothesis."
+disabled = true
+text = "→"
+
+[node name="CorrectionSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+visible = false
+layout_mode = 2
+
+[node name="CorrectionTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "▶ ROTATION CORRECTION"
+flat = true
+alignment = 0
+
+[node name="CorrectionActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="ProposeCorrectionButton" type="Button" parent="Margin/PanelScroll/Content/CorrectionActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Calculate a signed shortest-path correction from the accepted H# without rotating the canvas."
+disabled = true
+text = "PROPOSE CORRECTION"
+
+[node name="CorrectionLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "ORIENTATION ERROR: Accept an H# first"
+autowrap_mode = 2
+
+[node name="CorrectionEditor" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="CorrectionDegreesLabel" type="Label" parent="Margin/PanelScroll/Content/CorrectionEditor"]
+layout_mode = 2
+text = "SIGNED DEGREES"
+vertical_alignment = 1
+
+[node name="CorrectionDegreesSpinBox" type="SpinBox" parent="Margin/PanelScroll/Content/CorrectionEditor"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -180.0
+max_value = 180.0
+suffix = "°"
+
+[node name="CorrectionDirectionLabel" type="Label" parent="Margin/PanelScroll/Content/CorrectionEditor"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 0)
+layout_mode = 2
+text = "NONE"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CorrectionEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="AcceptCorrectionButton" type="Button" parent="Margin/PanelScroll/Content/CorrectionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Preview and execute this signed correction. While active, use this button again to cancel at the current angle."
+disabled = true
+text = "START ROTATION"
+
+[node name="RejectCorrectionButton" type="Button" parent="Margin/PanelScroll/Content/CorrectionEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "REJECT"
+
+[node name="ArrowSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="ArrowTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ DIRECTIONAL ARROW"
+flat = true
+alignment = 0
+
+[node name="ArrowActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="DetectArrowsButton" type="Button" parent="Margin/PanelScroll/Content/ArrowActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Find arrow-shaped candidates from observable shaft and converging-head geometry only."
+text = "DETECT ARROWS"
+
+[node name="ShowArrowOverlayButton" type="CheckButton" parent="Margin/PanelScroll/Content/ArrowActions"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "OVERLAY"
+
+[node name="ArrowLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "ARROW: No candidates"
+autowrap_mode = 2
+
+[node name="ArrowSelector" type="OptionButton" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+fit_to_longest_item = false
+
+[node name="ArrowNavigation" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="PreviousArrowButton" type="Button" parent="Margin/PanelScroll/Content/ArrowNavigation"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "←"
+
+[node name="ArrowStepLabel" type="Label" parent="Margin/PanelScroll/Content/ArrowNavigation"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "A—"
+horizontal_alignment = 1
+
+[node name="NextArrowButton" type="Button" parent="Margin/PanelScroll/Content/ArrowNavigation"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "→"
+
+[node name="ArrowManual" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="DrawArrowButton" type="CheckButton" parent="Margin/PanelScroll/Content/ArrowManual"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Drag once from the arrow tail to its tip. This creates a player-defined candidate."
+text = "DRAW TAIL → TIP"
+
+[node name="ArrowEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="AcceptArrowButton" type="Button" parent="Margin/PanelScroll/Content/ArrowEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "ACCEPT"
+
+[node name="RejectArrowButton" type="Button" parent="Margin/PanelScroll/Content/ArrowEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "REJECT"
+
+[node name="RestoreArrowButton" type="Button" parent="Margin/PanelScroll/Content/ArrowEdits"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "RESTORE"
+
+[node name="DirectionSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
+layout_mode = 2
+
+[node name="DirectionTitle" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ WORLD DIRECTION"
+flat = true
+alignment = 0
+
+[node name="DirectionActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="MapDirectionButton" type="Button" parent="Margin/PanelScroll/Content/DirectionActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Transform accepted A# geometry through accepted H# into a Godot grid bearing."
+text = "MAP TO WORLD"
+
+[node name="DirectionStatusLabel" type="Label" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "BEARING: Accept A# and H#"
+autowrap_mode = 2
+
+[node name="DirectionInset" type="Control" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 230)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("1_direction")
 
 [node name="AutonomyAdvancedButton" type="Button" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true

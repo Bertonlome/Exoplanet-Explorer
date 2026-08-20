@@ -13,6 +13,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 	private Button rotateCounterClockwiseButton;
 	private Button rotateClockwiseButton;
 	private Label rotationValueLabel;
+	private SpinBox fineRotationSpinBox;
 	private CheckButton polarizationButton;
 	private CheckButton spectralButton;
 	private CheckButton surfaceButton;
@@ -32,6 +33,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 	private bool wasEverSolved;
 	private bool isRestoredSession;
 	private FragmentAnalysisActionOrigin initiationOrigin;
+	private bool isSyncingRotationControl;
 
 	public event Action<Vector2I, FragmentAnalysisState> StateSaved;
 
@@ -44,6 +46,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		rotateCounterClockwiseButton = GetNode<Button>("%RotateCounterClockwiseButton");
 		rotateClockwiseButton = GetNode<Button>("%RotateClockwiseButton");
 		rotationValueLabel = GetNode<Label>("%RotationValueLabel");
+		fineRotationSpinBox = GetNode<SpinBox>("%FineRotationSpinBox");
 		polarizationButton = GetNode<CheckButton>("%PolarizationButton");
 		spectralButton = GetNode<CheckButton>("%SpectralButton");
 		surfaceButton = GetNode<CheckButton>("%SurfaceButton");
@@ -64,6 +67,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 	{
 		UpdateResponsiveHeader();
 		UpdateFeatureOverlayView();
+		if (isRegionSequenceRefreshPending) RefreshRegionSequence();
 	}
 
 	public void SetupUI(
@@ -82,6 +86,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		GameUI.Instance?.SetWorldCameraInputEnabled(false);
 		monolithFragment = this.TryGetNodeAtPosition<MonolithFragment>(fragmentPosition);
 		fragmentVariant = monolithFragment?.currentVariant ?? MonolithFragment.Variant.Hominid;
+		SetFragmentOverviewTexture(monolithFragment?.FragmentTexture);
 		FragmentGlyphType glyphType = savedState?.GlyphType ?? GetGlyphType(fragmentVariant);
 		fragmentCanvas.SetSpatialContext(fragmentPosition, monolithPosition, glyphType);
 
@@ -107,6 +112,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		reloadButton.Pressed += OnReloadPressed;
 		rotateCounterClockwiseButton.Pressed += OnRotateCounterClockwisePressed;
 		rotateClockwiseButton.Pressed += OnRotateClockwisePressed;
+		fineRotationSpinBox.ValueChanged += OnFineRotationChanged;
 		fragmentCanvas.PuzzleStateChanged += OnPuzzleStateChanged;
 		polarizationButton.Toggled += OnPolarizationToggled;
 		spectralButton.Toggled += OnSpectralToggled;
@@ -145,6 +151,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		reloadButton.Pressed -= OnReloadPressed;
 		rotateCounterClockwiseButton.Pressed -= OnRotateCounterClockwisePressed;
 		rotateClockwiseButton.Pressed -= OnRotateClockwisePressed;
+		fineRotationSpinBox.ValueChanged -= OnFineRotationChanged;
 		fragmentCanvas.PuzzleStateChanged -= OnPuzzleStateChanged;
 		polarizationButton.Toggled -= OnPolarizationToggled;
 		spectralButton.Toggled -= OnSpectralToggled;
@@ -176,6 +183,14 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 			FragmentAnalysisActionOrigin.Player));
 	}
 
+	private void OnFineRotationChanged(double value)
+	{
+		if (isSyncingRotationControl) return;
+		DispatchAnalysisCommand(FragmentAnalysisCommand.Rotation(
+			(float)value,
+			FragmentAnalysisActionOrigin.Player));
+	}
+
 	private void OnPuzzleStateChanged(bool filterCombinationCorrect, bool rotationCorrect)
 	{
 		if (filterCombinationCorrect && rotationCorrect)
@@ -188,7 +203,12 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 
 	private void UpdateRotationLabel()
 	{
-		rotationValueLabel.Text = $"ROTATION: {Mathf.RoundToInt(fragmentCanvas.DisplayRotationDegrees)}°";
+		float rotation = fragmentCanvas.DisplayRotationDegrees;
+		rotationValueLabel.Text = $"ROTATION: {rotation:+0.0;-0.0;0.0}°";
+		if (!IsInstanceValid(fineRotationSpinBox)) return;
+		isSyncingRotationControl = true;
+		fineRotationSpinBox.Value = rotation;
+		isSyncingRotationControl = false;
 	}
 
 	private void SyncFilterState()

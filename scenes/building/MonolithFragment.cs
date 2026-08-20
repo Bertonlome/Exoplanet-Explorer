@@ -6,6 +6,17 @@ public partial class MonolithFragment : Node2D
 	[Export]
 	public Texture2D[] Variants;
 	private Sprite2D fragmentSprite;
+	public Texture2D FragmentTexture
+	{
+		get
+		{
+			if (fragmentSprite?.Texture != null) return fragmentSprite.Texture;
+			int variantIndex = (int)currentVariant;
+			return Variants != null && variantIndex >= 0 && variantIndex < Variants.Length
+				? Variants[variantIndex]
+				: null;
+		}
+	}
     public Variant currentVariant;
     public enum Variant
     {

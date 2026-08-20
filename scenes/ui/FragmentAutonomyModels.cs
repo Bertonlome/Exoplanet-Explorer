@@ -105,6 +105,36 @@ public enum FragmentRegionEditAction
 	Restore
 }
 
+public enum FragmentStructureEditAction
+{
+	Select,
+	Accept,
+	Dismiss,
+	Restore
+}
+
+public enum FragmentOrientationEditAction
+{
+	Select,
+	Accept,
+	Reject,
+	Restore
+}
+
+public enum FragmentRotationCorrectionEditAction
+{
+	Accept,
+	Reject
+}
+
+public enum FragmentArrowEditAction
+{
+	Select,
+	Accept,
+	Reject,
+	Restore
+}
+
 public enum FragmentSampleAnalysisStatus
 {
     Available,
@@ -338,6 +368,7 @@ public sealed class FragmentLockedRegionView
 {
 	public int RegionId { get; init; }
 	public Rect2 NormalizedBounds { get; init; }
+	public float RotationDegrees { get; init; }
 	public FragmentObservableScan Scan { get; init; }
 	public List<FragmentDetectedFeature> Features { get; init; } = new();
 }
@@ -345,14 +376,18 @@ public sealed class FragmentLockedRegionView
 public sealed class FragmentDetectedStructure
 {
     public int Id { get; init; }
+	public float Confidence { get; init; }
     public FragmentAnnotationProvenance Provenance { get; init; }
     public FragmentAnnotationDisposition Disposition { get; set; }
+	public bool IsPlayerEdited { get; set; }
     public List<int> FeatureIds { get; init; } = new();
 }
 
 public sealed class FragmentSignalMetrics
 {
     public float SignalToNoise { get; init; }
+	public bool IsComplete { get; init; } = true;
+	public int ComparisonCount { get; init; }
 }
 
 public sealed class FragmentSignalMeasurementReport
@@ -383,12 +418,53 @@ public sealed class FragmentProcessingHistoryEntry
 	public bool IsBookmarked { get; set; }
 }
 
+public sealed class FragmentProcessingAdjustment
+{
+	public FragmentAnalysisParameter Parameter { get; init; }
+	public bool BoolValue { get; init; }
+	public int IntValue { get; init; }
+	public string ParameterName { get; init; } = "None";
+	public string PreviousValue { get; init; } = "";
+	public string ProposedValue { get; init; } = "";
+	public string Rationale { get; init; } = "Explore an untested neighbouring configuration";
+	public string ConfigurationKey { get; init; } = "";
+	public bool IsBacktrack { get; init; }
+
+	public FragmentAnalysisCommand ToCommand(FragmentAnalysisActionOrigin origin) =>
+		Parameter switch
+		{
+			FragmentAnalysisParameter.PolarizationEnabled or
+			FragmentAnalysisParameter.SpectralEnabled or
+			FragmentAnalysisParameter.SurfaceEnabled or
+			FragmentAnalysisParameter.ElectromagneticEnabled or
+			FragmentAnalysisParameter.ResonanceEnabled or
+			FragmentAnalysisParameter.XRayEnabled =>
+				FragmentAnalysisCommand.Toggle(Parameter, BoolValue, origin),
+			_ => FragmentAnalysisCommand.Level(Parameter, IntValue, origin)
+		};
+}
+
 public sealed class FragmentOrientationHypothesis
 {
     public int Id { get; init; }
     public float AxisDegrees { get; init; }
     public float Confidence { get; init; }
     public FragmentAnnotationDisposition Disposition { get; set; }
+	public int SourceStructureId { get; init; }
+	public ulong GeometrySignature { get; init; }
+	public bool IsPolarityAmbiguous { get; init; }
+	public string Evidence { get; init; } = "Geometric line-axis estimate";
+}
+
+public sealed class FragmentRotationCorrection
+{
+	public int SourceOrientationId { get; init; }
+	public float SourceRotationDegrees { get; init; }
+	public float RoverDegrees { get; init; }
+	public float ProposedDegrees { get; set; }
+	public bool IsPlayerAdjusted { get; set; }
+	public FragmentAnnotationDisposition Disposition { get; set; } =
+		FragmentAnnotationDisposition.Proposed;
 }
 
 public sealed class FragmentArrowCandidate
@@ -399,6 +475,22 @@ public sealed class FragmentArrowCandidate
     public float Confidence { get; init; }
     public FragmentAnnotationDisposition Disposition { get; set; }
     public List<int> FeatureIds { get; init; } = new();
+	public FragmentAnnotationProvenance Provenance { get; init; } =
+		FragmentAnnotationProvenance.Rover;
+	public bool IsPlayerDefined { get; init; }
+	public string Evidence { get; init; } = "Geometric shaft/head candidate";
+}
+
+public sealed class FragmentDirectionInterpretation
+{
+	public int SourceArrowId { get; init; }
+	public int SourceOrientationId { get; init; }
+	public Vector2 ScanDirection { get; init; }
+	public Vector2 UprightDirection { get; init; }
+	public Vector2 WorldGridDirection { get; init; }
+	public float UprightCorrectionDegrees { get; init; }
+	public float BearingDegrees { get; init; }
+	public string CompassLabel { get; init; } = "—";
 }
 
 public sealed class FragmentRoverActionStatus
@@ -425,12 +517,22 @@ public sealed class FragmentAutonomyState
 	public int? ActiveCropRegionId { get; set; }
 	public List<FragmentLockedRegionView> LockedRegionViews { get; } = new();
     public List<FragmentDetectedStructure> DetectedStructures { get; } = new();
+	public int? SelectedStructureId { get; set; }
     public List<FragmentProcessingHistoryEntry> PreviousConfigurations { get; } = new();
-    public List<FragmentOrientationHypothesis> OrientationHypotheses { get; } = new();
-    public int? AcceptedOrientationId { get; set; }
+	public List<FragmentAnalysisParameter> LockedProcessingParameters { get; } = new();
+	public List<string> RejectedProcessingConfigurations { get; } = new();
+	public bool IsProcessingSearchActive { get; set; }
+	public List<FragmentOrientationHypothesis> OrientationHypotheses { get; } = new();
+	public int? SelectedOrientationId { get; set; }
+	public int? AcceptedOrientationId { get; set; }
+	public FragmentLockedRegionView OrientationSourceView { get; set; }
+	public FragmentDetectedStructure OrientationSourceStructure { get; set; }
+	public FragmentRotationCorrection RotationCorrection { get; set; }
     public List<FragmentArrowCandidate> ArrowCandidates { get; } = new();
+	public int? SelectedArrowId { get; set; }
     public int? AcceptedArrowId { get; set; }
     public Vector2? AcceptedWorldDirection { get; set; }
+	public FragmentDirectionInterpretation DirectionInterpretation { get; set; }
 
     public static FragmentAutonomyState CreateDefault(FragmentAutonomySettings settings)
     {
@@ -454,16 +556,44 @@ public sealed class FragmentAutonomyState
             IsPaused = IsPaused,
             SelectedFeatureId = SelectedFeatureId,
 			SelectedRegionId = SelectedRegionId,
-			ActiveCropRegionId = ActiveCropRegionId,
-            AcceptedOrientationId = AcceptedOrientationId,
+			SelectedStructureId = SelectedStructureId,
+            ActiveCropRegionId = ActiveCropRegionId,
+			IsProcessingSearchActive = IsProcessingSearchActive,
+			SelectedOrientationId = SelectedOrientationId,
+			AcceptedOrientationId = AcceptedOrientationId,
+			RotationCorrection = RotationCorrection == null ? null : new FragmentRotationCorrection
+			{
+				SourceOrientationId = RotationCorrection.SourceOrientationId,
+				SourceRotationDegrees = RotationCorrection.SourceRotationDegrees,
+				RoverDegrees = RotationCorrection.RoverDegrees,
+				ProposedDegrees = RotationCorrection.ProposedDegrees,
+				IsPlayerAdjusted = RotationCorrection.IsPlayerAdjusted,
+				Disposition = RotationCorrection.Disposition
+			},
+			SelectedArrowId = SelectedArrowId,
             AcceptedArrowId = AcceptedArrowId,
-            AcceptedWorldDirection = AcceptedWorldDirection
+			AcceptedWorldDirection = AcceptedWorldDirection,
+			DirectionInterpretation = DirectionInterpretation == null
+				? null
+				: new FragmentDirectionInterpretation
+				{
+					SourceArrowId = DirectionInterpretation.SourceArrowId,
+					SourceOrientationId = DirectionInterpretation.SourceOrientationId,
+					ScanDirection = DirectionInterpretation.ScanDirection,
+					UprightDirection = DirectionInterpretation.UprightDirection,
+					WorldGridDirection = DirectionInterpretation.WorldGridDirection,
+					UprightCorrectionDegrees = DirectionInterpretation.UprightCorrectionDegrees,
+					BearingDegrees = DirectionInterpretation.BearingDegrees,
+					CompassLabel = DirectionInterpretation.CompassLabel
+				}
         };
 
         foreach ((FragmentAutonomyCapability capability, FragmentAutonomyMode mode) in CapabilityOverrides)
             clone.CapabilityOverrides[capability] = mode;
         foreach ((FragmentAutonomyCapability capability, float reliability) in YellowReliability)
             clone.YellowReliability[capability] = reliability;
+		clone.LockedProcessingParameters.AddRange(LockedProcessingParameters);
+		clone.RejectedProcessingConfigurations.AddRange(RejectedProcessingConfigurations);
 		clone.RecentActions.AddRange(RecentActions);
         foreach (FragmentDetectedFeature feature in DetectedFeatures)
         {
@@ -500,6 +630,7 @@ public sealed class FragmentAutonomyState
 			{
 				RegionId = lockedView.RegionId,
 				NormalizedBounds = lockedView.NormalizedBounds,
+				RotationDegrees = lockedView.RotationDegrees,
 				Scan = lockedView.Scan == null ? null : new FragmentObservableScan
 				{
 					Revision = lockedView.Scan.Revision,
@@ -516,8 +647,10 @@ public sealed class FragmentAutonomyState
             clone.DetectedStructures.Add(new FragmentDetectedStructure
             {
                 Id = structure.Id,
+				Confidence = structure.Confidence,
                 Provenance = structure.Provenance,
                 Disposition = structure.Disposition,
+				IsPlayerEdited = structure.IsPlayerEdited,
                 FeatureIds = new List<int>(structure.FeatureIds)
             });
         }
@@ -543,7 +676,9 @@ public sealed class FragmentAutonomyState
 				},
 				Metrics = entry.Metrics == null ? null : new FragmentSignalMetrics
 				{
-					SignalToNoise = entry.Metrics.SignalToNoise
+					SignalToNoise = entry.Metrics.SignalToNoise,
+					IsComplete = entry.Metrics.IsComplete,
+					ComparisonCount = entry.Metrics.ComparisonCount
 				},
 				Origin = entry.Origin,
 				TargetRegionId = entry.TargetRegionId,
@@ -552,17 +687,50 @@ public sealed class FragmentAutonomyState
 				IsBookmarked = entry.IsBookmarked
             });
         }
-        foreach (FragmentOrientationHypothesis hypothesis in OrientationHypotheses)
+		foreach (FragmentOrientationHypothesis hypothesis in OrientationHypotheses)
         {
             clone.OrientationHypotheses.Add(new FragmentOrientationHypothesis
             {
                 Id = hypothesis.Id,
                 AxisDegrees = hypothesis.AxisDegrees,
                 Confidence = hypothesis.Confidence,
-                Disposition = hypothesis.Disposition
-            });
-        }
-        foreach (FragmentArrowCandidate candidate in ArrowCandidates)
+				Disposition = hypothesis.Disposition,
+				SourceStructureId = hypothesis.SourceStructureId,
+				GeometrySignature = hypothesis.GeometrySignature,
+				IsPolarityAmbiguous = hypothesis.IsPolarityAmbiguous,
+				Evidence = hypothesis.Evidence
+			});
+		}
+		if (OrientationSourceView != null)
+		{
+			clone.OrientationSourceView = new FragmentLockedRegionView
+			{
+				RegionId = OrientationSourceView.RegionId,
+				NormalizedBounds = OrientationSourceView.NormalizedBounds,
+				RotationDegrees = OrientationSourceView.RotationDegrees,
+				Scan = OrientationSourceView.Scan == null ? null : new FragmentObservableScan
+				{
+					Revision = OrientationSourceView.Scan.Revision,
+					SampleSize = OrientationSourceView.Scan.SampleSize,
+					Primitives = CloneObservablePrimitives(OrientationSourceView.Scan.Primitives)
+				}
+			};
+			foreach (FragmentDetectedFeature feature in OrientationSourceView.Features)
+				clone.OrientationSourceView.Features.Add(CloneFeature(feature));
+		}
+		if (OrientationSourceStructure != null)
+		{
+			clone.OrientationSourceStructure = new FragmentDetectedStructure
+			{
+				Id = OrientationSourceStructure.Id,
+				Confidence = OrientationSourceStructure.Confidence,
+				Provenance = OrientationSourceStructure.Provenance,
+				Disposition = OrientationSourceStructure.Disposition,
+				IsPlayerEdited = OrientationSourceStructure.IsPlayerEdited,
+				FeatureIds = new List<int>(OrientationSourceStructure.FeatureIds)
+			};
+		}
+		foreach (FragmentArrowCandidate candidate in ArrowCandidates)
         {
             clone.ArrowCandidates.Add(new FragmentArrowCandidate
             {
@@ -571,7 +739,10 @@ public sealed class FragmentAutonomyState
                 Tip = candidate.Tip,
                 Confidence = candidate.Confidence,
                 Disposition = candidate.Disposition,
-                FeatureIds = new List<int>(candidate.FeatureIds)
+				FeatureIds = new List<int>(candidate.FeatureIds),
+				Provenance = candidate.Provenance,
+				IsPlayerDefined = candidate.IsPlayerDefined,
+				Evidence = candidate.Evidence
             });
         }
 

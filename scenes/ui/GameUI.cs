@@ -216,6 +216,14 @@ public partial class GameUI : CanvasLayer
 		minimapViewport?.RefreshMinimapData();
 	}
 
+	public void SetFragmentBearing(
+		Vector2I fragmentPosition,
+		Vector2? direction,
+		string compassLabel = null)
+	{
+		minimapViewport?.SetFragmentBearing(fragmentPosition, direction, compassLabel);
+	}
+
 	private void OnMinimapBuildingChanged(BuildingComponent buildingComponent)
 	{
 		RefreshMinimap();

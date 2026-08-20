@@ -1,10 +1,12 @@
-[gd_scene load_steps=9 format=3 uid="uid://cb8e7vaji1v7h"]
+[gd_scene load_steps=11 format=3 uid="uid://cb8e7vaji1v7h"]
 
 [ext_resource type="Script" path="res://scenes/ui/FragmentAnalysisUI.cs" id="1_0ks4x"]
 [ext_resource type="Script" path="res://scenes/ui/FragmentCanvas.cs" id="2_wqr11"]
 [ext_resource type="Script" path="res://scenes/ui/FragmentGenerationSettings.cs" id="4_ip4le"]
 [ext_resource type="Script" path="res://scenes/ui/FragmentRockSettings.cs" id="5_mcumt"]
 [ext_resource type="Theme" uid="uid://lrxwuh3o4l5k" path="res://resources/sci-fi-theme.tres" id="6_37kou"]
+[ext_resource type="Texture2D" uid="uid://d1vo7wkt5gtc7" path="res://assets/ui/locked_opened.png" id="7_lock_open"]
+[ext_resource type="Texture2D" uid="uid://je0dbm3ehein" path="res://assets/ui/locked_closed.png" id="8_lock_closed"]
 
 [sub_resource type="Resource" id="Resource_62ami"]
 script = ExtResource("4_ip4le")
@@ -184,12 +186,20 @@ text = "CCW -10°"
 
 [node name="RotationValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
 unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(150, 0)
+custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
 text = "ROTATION: 0°"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="FineRotationSpinBox" type="SpinBox" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(92, 0)
+layout_mode = 2
+tooltip_text = "Set the reconstruction rotation precisely in 1-degree steps. Manual input cancels Rover rotation at its current angle."
+min_value = -180.0
+max_value = 180.0
+suffix = "°"
 
 [node name="RotateClockwiseButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
 unique_name_in_owner = true
@@ -224,6 +234,57 @@ layout_mode = 2
 theme_override_constants/separation = 6
 alignment = 1
 
+[node name="ProcessingSearchBar" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="SearchTitle" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSearchBar"]
+layout_mode = 2
+text = "ROVER SEARCH"
+vertical_alignment = 1
+
+[node name="ProcessingSearchPlanLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSearchBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(700, 0)
+layout_mode = 2
+text = "PLAN: Select a measured region"
+vertical_alignment = 1
+text_overrun_behavior = 3
+
+[node name="ProcessingSearchBackButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSearchBar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Restore the previous tested processing configuration and pause search."
+disabled = true
+text = "←"
+
+[node name="ProcessingSearchStartButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSearchBar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Start or stop deterministic one-parameter configuration search."
+text = "START"
+
+[node name="ProcessingSearchForwardButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSearchBar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Restore the next tested processing configuration and pause search."
+disabled = true
+text = "→"
+
+[node name="ProcessingSearchApplyButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSearchBar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Apply the announced proposal. Support mode always waits for approval."
+disabled = true
+text = "APPLY"
+
+[node name="ProcessingSearchSkipButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSearchBar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Reject this candidate and announce another."
+disabled = true
+text = "SKIP"
+
 [node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 15
@@ -233,6 +294,18 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Reconstruct missing sections without identifying their source."
 text = "POLARIZATION"
+
+[node name="PolarizationLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Unlocked: Rover search may change Polarization enabled state and level."
+toggle_mode = true
+texture_normal = ExtResource("7_lock_open")
+texture_pressed = ExtResource("8_lock_closed")
+ignore_texture_size = true
+stretch_mode = 5
 
 [node name="Control" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 custom_minimum_size = Vector2(120, 0)
@@ -244,6 +317,18 @@ layout_mode = 2
 tooltip_text = "Enhance important signal geometry."
 text = "SPECTRAL SIGNATURE"
 
+[node name="SpectralLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Unlocked: Rover search may change Spectral enabled state and level."
+toggle_mode = true
+texture_normal = ExtResource("7_lock_open")
+texture_pressed = ExtResource("8_lock_closed")
+ignore_texture_size = true
+stretch_mode = 5
+
 [node name="Control2" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 
@@ -253,11 +338,35 @@ layout_mode = 2
 tooltip_text = "Increase signal contrast and suppress mineral noise."
 text = "SURFACE TOPOGRAPHY"
 
+[node name="SurfaceLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Unlocked: Rover search may change Surface Topography enabled state and level."
+toggle_mode = true
+texture_normal = ExtResource("7_lock_open")
+texture_pressed = ExtResource("8_lock_closed")
+ignore_texture_size = true
+stretch_mode = 5
+
 [node name="ElectromagneticButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Reveal the electromagnetic scan channel."
 text = "ELECTROMAGNETIC RESPONSE"
+
+[node name="ElectromagneticLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Unlocked: Rover search may change the Electromagnetic channel."
+toggle_mode = true
+texture_normal = ExtResource("7_lock_open")
+texture_pressed = ExtResource("8_lock_closed")
+ignore_texture_size = true
+stretch_mode = 5
 
 [node name="ResonanceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
@@ -265,11 +374,35 @@ layout_mode = 2
 tooltip_text = "Reveal the resonance scan channel."
 text = "RESONANCE MAP"
 
+[node name="ResonanceLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Unlocked: Rover search may change the Resonance channel."
+toggle_mode = true
+texture_normal = ExtResource("7_lock_open")
+texture_pressed = ExtResource("8_lock_closed")
+ignore_texture_size = true
+stretch_mode = 5
+
 [node name="XRayButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Reveal the X-Ray scan channel."
 text = "X-RAY"
+
+[node name="XRayLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Unlocked: Rover search may change the X-Ray channel."
+toggle_mode = true
+texture_normal = ExtResource("7_lock_open")
+texture_pressed = ExtResource("8_lock_closed")
+ignore_texture_size = true
+stretch_mode = 5
 
 [node name="ProcessingSliders" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -288,6 +421,7 @@ horizontal_alignment = 1
 
 [node name="PolarizationSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/PolarizationControl"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 min_value = 1.0
 max_value = 5.0
@@ -308,6 +442,7 @@ horizontal_alignment = 1
 
 [node name="SpectralSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SpectralControl"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 min_value = 1.0
 max_value = 5.0
@@ -328,6 +463,7 @@ horizontal_alignment = 1
 
 [node name="SurfaceSlider" type="HSlider" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingSliders/SurfaceControl"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 min_value = 1.0
 max_value = 5.0

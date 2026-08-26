@@ -9,12 +9,17 @@ public partial class FragmentAnalysisRover : Node
 	// and UI work reaches the freeze range observed during long uninterrupted runs.
 	private const int HardMaximumContinuousSearchSteps = 40;
 
+	private sealed class AutonomousConfigurationCandidate
+	{
+		public FragmentAnalysisControlState Controls { get; init; }
+		public string Key { get; init; }
+	}
+
     [Export]
     private FragmentAutonomySettings settings = new();
 
     private IFragmentObservationSource observationSource;
     private IFragmentAnalysisCommandSink commandSink;
-    private FragmentAutonomyTruth truth;
 	private FragmentRoverActionStatus status = new() { Activity = FragmentRoverActivity.Off };
 	private ulong lastFeatureRevision = ulong.MaxValue;
 	private readonly List<FragmentActionHistoryEntry> actionHistory = new();
@@ -22,6 +27,7 @@ public partial class FragmentAnalysisRover : Node
 	private float navigationPreviewRemaining = -1f;
 	private readonly List<int> featureReviewRegionIds = new();
 	private readonly List<int> featureReviewPriorityRegionIds = new();
+	private readonly List<int> structureReviewPriorityRegionIds = new();
 	private bool isAcceptedRegionFeatureReviewActive;
 	private float measurementDelayRemaining = -1f;
 	private ulong lastMeasurementRevision = ulong.MaxValue;
@@ -48,6 +54,25 @@ public partial class FragmentAnalysisRover : Node
 	private float rotationDeltaDegrees;
 	private bool isRotationTweenActive;
 	private bool preserveOrientationAcrossKnownRotation;
+	private int rotationSourceRegionId = -1;
+	private Rect2 rotationSourceRegionBounds;
+	private Vector2 rotationSourcePivotNormalized = new(0.5f, 0.5f);
+	private FragmentAutonomousWorkflowStage autonomousWorkflowStage =
+		FragmentAutonomousWorkflowStage.Inactive;
+	private readonly List<AutonomousConfigurationCandidate> autonomousConfigurations = new();
+	private readonly List<int> autonomousRegionIds = new();
+	private readonly Dictionary<int, FragmentAnalysisControlState> autonomousRegionBestConfigurations = new();
+	private float autonomousStepRemaining = -1f;
+	private int autonomousConfigurationIndex;
+	private int autonomousTestsCompleted;
+	private int autonomousRegionIndex;
+	private int autonomousTargetRegionId = -1;
+	private float autonomousBestScore = float.NegativeInfinity;
+	private int autonomousBestDenseRegionCount;
+	private int autonomousReachableRegionConfigurationCount;
+	private int autonomousBestFeatureCount;
+	private FragmentAnalysisControlState autonomousBestConfiguration;
+	private FragmentAnalysisControlState autonomousAppliedConfiguration;
 
 	public FragmentAutonomySettings Settings => settings;
 	public FragmentAutonomyState State { get; private set; }
@@ -76,6 +101,18 @@ public partial class FragmentAnalysisRover : Node
 			settings?.MaximumContinuousSearchSteps ?? HardMaximumContinuousSearchSteps,
 			1,
 			HardMaximumContinuousSearchSteps);
+	public FragmentAutonomousWorkflowStage AutonomousWorkflowStage => autonomousWorkflowStage;
+	public bool IsAutonomousWorkflowActive =>
+		autonomousWorkflowStage != FragmentAutonomousWorkflowStage.Inactive &&
+		autonomousWorkflowStage != FragmentAutonomousWorkflowStage.Complete;
+	public bool IsAutonomousWorkflowWaitingForPlayer => autonomousWorkflowStage is
+		FragmentAutonomousWorkflowStage.AwaitingRegionReview or
+		FragmentAutonomousWorkflowStage.AwaitingFeatureReview or
+		FragmentAutonomousWorkflowStage.AwaitingRegionChoice or
+		FragmentAutonomousWorkflowStage.AwaitingStructureReview or
+		FragmentAutonomousWorkflowStage.AwaitingOrientationReview or
+		FragmentAutonomousWorkflowStage.AwaitingArrowReview or
+		FragmentAutonomousWorkflowStage.AwaitingPlayerArrow;
 	public bool CanSearchBack => GetProcessingHistoryIndex() > 0;
 	public bool CanSearchForward
 	{
@@ -108,6 +145,7 @@ public partial class FragmentAnalysisRover : Node
 	public event Action<FragmentSignalMeasurementReport> MetricsChanged;
 	public event Action ProcessingHistoryChanged;
 	public event Action ProcessingSearchChanged;
+	public event Action<FragmentAutonomousWorkflowStage> AutonomousWorkflowChanged;
 
     public void Configure(FragmentAutonomySettings configuredSettings)
     {
@@ -117,14 +155,13 @@ public partial class FragmentAnalysisRover : Node
     public void Initialize(
         IFragmentObservationSource observationSource,
         IFragmentAnalysisCommandSink commandSink,
-        FragmentAutonomyTruth truth,
         FragmentAutonomyState restoredState = null)
     {
         Shutdown();
         settings ??= new FragmentAutonomySettings();
         this.observationSource = observationSource;
         this.commandSink = commandSink;
-        this.truth = truth;
+		ResetAutonomousWorkflowTransient();
         State = restoredState?.Clone() ?? FragmentAutonomyState.CreateDefault(settings);
 		State.DetectedFeatures.RemoveAll(
 			feature => feature.Provenance == FragmentAnnotationProvenance.Player);
@@ -137,15 +174,23 @@ public partial class FragmentAnalysisRover : Node
 			!State.DetectedStructures.Exists(
 				structure => structure.Id == State.SelectedStructureId.Value))
 			State.SelectedStructureId = null;
+		foreach (FragmentArrowCandidate arrow in State.ArrowCandidates)
+			if (arrow.RegionId < 0) arrow.RegionId = ResolveArrowRegionId(arrow);
         EnsureReliabilityDefaults();
+		foreach (FragmentRegionRotationState rotation in State.RegionRotations)
+			commandSink.DispatchAnalysisCommand(FragmentAnalysisCommand.RegionRotation(
+				rotation.RegionId,
+				rotation.RegionBounds,
+				rotation.PivotNormalized,
+				rotation.Degrees,
+				FragmentAnalysisActionOrigin.Restore));
 		processingHistorySequence = 0;
 		foreach (FragmentProcessingHistoryEntry entry in State.PreviousConfigurations)
 			processingHistorySequence = Math.Max(processingHistorySequence, entry.Sequence);
         commandSink.AnalysisChanged += OnAnalysisChanged;
         RefreshIdleStatus();
-		// A restored session already owns stable reviewed F#/S#/H#/A# identities. Re-running the
-		// detector here marks a live orientation snapshot stale and cascades into clearing the
-		// accepted world bearing. Only bootstrap detection when no retained feature state exists.
+		// A restored session already owns stable reviewed F#/S#/H#/A# identities. Only bootstrap
+		// detection when no retained feature state exists; otherwise preserve those review IDs.
 		if (restoredState == null || State.DetectedFeatures.Count == 0)
 			RefreshDetectedFeatures();
 		RefreshSignalMetrics(true);
@@ -162,12 +207,12 @@ public partial class FragmentAnalysisRover : Node
 
         observationSource = null;
         commandSink = null;
-        truth = null;
 		lastFeatureRevision = ulong.MaxValue;
 		actionHistory.Clear();
 		actionHistoryIndex = -1;
 		featureReviewRegionIds.Clear();
 		featureReviewPriorityRegionIds.Clear();
+		structureReviewPriorityRegionIds.Clear();
 		isAcceptedRegionFeatureReviewActive = false;
 		measurementDelayRemaining = -1f;
 		lastMeasurementRevision = ulong.MaxValue;
@@ -189,18 +234,24 @@ public partial class FragmentAnalysisRover : Node
 		isRefreshingSignalMetrics = false;
 		processingTransitionCounts.Clear();
 		preserveOrientationAcrossKnownRotation = false;
+		rotationSourceRegionId = -1;
+		rotationSourceRegionBounds = default;
+		rotationSourcePivotNormalized = new Vector2(0.5f, 0.5f);
+		ResetAutonomousWorkflowTransient();
 		ResetRotationExecutionState();
 		ClearNavigationTarget(false);
     }
 
-	public void ResetForPuzzle(FragmentAutonomyTruth newTruth)
+	public void ResetForPuzzle()
 	{
 		CancelRotationExecution("New puzzle loaded", false, false);
 		ClearNavigationTarget(true);
 		CancelPendingProcessingAdjustment();
 		featureReviewRegionIds.Clear();
 		featureReviewPriorityRegionIds.Clear();
+		structureReviewPriorityRegionIds.Clear();
 		isAcceptedRegionFeatureReviewActive = false;
+		ResetAutonomousWorkflowTransient();
         FragmentAutonomyState previous = State ?? FragmentAutonomyState.CreateDefault(settings);
         FragmentAutonomyState reset = FragmentAutonomyState.CreateDefault(settings);
         reset.GlobalMode = previous.GlobalMode;
@@ -211,7 +262,6 @@ public partial class FragmentAnalysisRover : Node
             reset.YellowReliability[capability] = reliability;
 
         State = reset;
-        truth = newTruth;
 		lastFeatureRevision = ulong.MaxValue;
 		processingHistorySequence = 0;
 		RefreshDetectedFeatures();
@@ -266,6 +316,8 @@ public partial class FragmentAnalysisRover : Node
 		CancelRotationExecution("Autonomy allocation changed", true, false);
 		ClearNavigationTarget(true);
 		CancelPendingProcessingAdjustment();
+		if (mode != FragmentAutonomyMode.Performer)
+			StopAutonomousWorkflow(recordHistory: false);
         State.GlobalMode = mode;
 		if (mode == FragmentAutonomyMode.Off)
 		{
@@ -340,6 +392,9 @@ public partial class FragmentAnalysisRover : Node
 			continuousSearchSteps = 0;
 			RefreshDetectedFeatures(true);
 			if (State.IsProcessingSearchActive) PlanNextProcessingAdjustment();
+			if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.WaitingForRotation &&
+				!IsRotationInProgress && State.RotationCorrection != null)
+				ApplyApprovedRotationCorrection(State.RotationCorrection);
 		}
 		RecordAction(State.IsPaused ? "PAUSE" : "RESUME");
 		ProcessingSearchChanged?.Invoke();
@@ -384,6 +439,7 @@ public partial class FragmentAnalysisRover : Node
 			if (processingActionWatchdogRemaining <= 0f)
 				PauseProcessingSearchForSafety("Measurement timeout");
 		}
+		ProcessAutonomousWorkflow((float)delta);
 	}
 
 	public void ProposeNavigationTarget(int regionId)
@@ -592,15 +648,32 @@ public partial class FragmentAnalysisRover : Node
 			FragmentObservableScan changedScan = observationSource?.CaptureObservableScan();
 			TransformLiveAnnotationsForRotation(
 				annotationRotationDelta,
-				changedScan?.SampleSize ?? Vector2.One);
+				changedScan?.SampleSize ?? Vector2.One,
+				changedScan?.RotationPivotNormalized ?? new Vector2(0.5f, 0.5f));
 			FeaturesChanged?.Invoke();
 			RegionsChanged?.Invoke();
 			StructuresChanged?.Invoke();
-			TryAutoMapDirection();
+			ComputeDirectionInterpretation(false, playerRequested: true);
 			preserveOrientationAcrossKnownRotation = true;
 		}
-		RefreshDetectedFeatures();
+		bool autonomousConfigurationTest =
+			change.Parameter == FragmentAnalysisParameter.Configuration &&
+			autonomousWorkflowStage is
+				FragmentAutonomousWorkflowStage.SearchingRegions or
+				FragmentAutonomousWorkflowStage.SearchingRegionFeatures;
+		RefreshDetectedFeatures(
+			force: change.Parameter == FragmentAnalysisParameter.Rotation ||
+				change.Parameter == FragmentAnalysisParameter.Configuration,
+			retainUnmatchedReviewed: change.Parameter != FragmentAnalysisParameter.Rotation,
+			requestSelectedFeatureFocus: change.Parameter != FragmentAnalysisParameter.Rotation && !autonomousConfigurationTest);
 		preserveOrientationAcrossKnownRotation = false;
+		if (autonomousConfigurationTest)
+		{
+			measurementDelayRemaining = -1f;
+			pendingMeasurementOrigin = FragmentAnalysisActionOrigin.System;
+			pendingProcessingAction = null;
+			return;
+		}
 		pendingMeasurementOrigin = change.Origin;
 		if (change.Origin != FragmentAnalysisActionOrigin.Rover ||
 			string.IsNullOrEmpty(pendingProcessingAction))
@@ -608,9 +681,13 @@ public partial class FragmentAnalysisRover : Node
 		ScheduleSignalMeasurement();
     }
 
-	public void RefreshDetectedFeatures(bool force = false, bool recordHistory = false)
+	public void RefreshDetectedFeatures(
+		bool force = false,
+		bool recordHistory = false,
+		bool retainUnmatchedReviewed = true,
+		bool requestSelectedFeatureFocus = true)
 	{
-		if (State == null || observationSource == null || State.IsPaused ||
+		if (State == null || observationSource == null || (State.IsPaused && !force) ||
 			GetEffectiveMode(FragmentAutonomyCapability.SenseSampleFeatures) == FragmentAutonomyMode.Off)
 		{
 			return;
@@ -659,13 +736,14 @@ public partial class FragmentAnalysisRover : Node
 				(structure.IsPlayerEdited ||
 				 structure.Disposition == FragmentAnnotationDisposition.Accepted) &&
 				structure.FeatureIds.Contains(previous.Id));
-			if (matchedPreviousIds.Contains(previous.Id) ||
+			if (!retainUnmatchedReviewed || matchedPreviousIds.Contains(previous.Id) ||
 				(previous.Disposition == FragmentAnnotationDisposition.Proposed && !protectedByStructure))
 			{
 				continue;
 			}
 			State.DetectedFeatures.Add(previous);
 		}
+		PruneMissingStructureMembers();
 		ApplyActiveCropToFeatures();
 		InvalidateOrientationIfGeometryChanged();
 
@@ -698,10 +776,10 @@ public partial class FragmentAnalysisRover : Node
 		if (recordHistory) RecordAction($"SCAN: {roverCount} feature groups");
 		if (!IsNavigationInProgress && !awaitingSearchMeasurement) StatusChanged?.Invoke(status);
 		FeaturesChanged?.Invoke();
-		if (!IsNavigationInProgress) RequestSelectedFeatureFocus();
+		if (!IsNavigationInProgress && requestSelectedFeatureFocus) RequestSelectedFeatureFocus();
 	}
 
-	public void RefreshCandidateRegions(bool force = false)
+	public void RefreshCandidateRegions(bool force = false, bool publish = true)
 	{
 		if (State == null || State.IsPaused ||
 			GetEffectiveMode(FragmentAutonomyCapability.InterpretSignalRegions) == FragmentAutonomyMode.Off)
@@ -746,17 +824,24 @@ public partial class FragmentAnalysisRover : Node
 		if (State.SelectedRegionId.HasValue &&
 			!State.CandidateRegions.Exists(region => region.Id == State.SelectedRegionId.Value))
 			State.SelectedRegionId = null;
-		State.SelectedRegionId ??= FindFirstProposedRegionId();
+		FragmentCandidateRegion selectedRegion = State.SelectedRegionId is int selectedRegionId
+			? State.CandidateRegions.Find(region => region.Id == selectedRegionId)
+			: null;
+		if (selectedRegion == null ||
+			(selectedRegion.Provenance == FragmentAnnotationProvenance.Rover &&
+			 selectedRegion.Disposition == FragmentAnnotationDisposition.Proposed))
+			State.SelectedRegionId = FindFirstProposedRegionId();
 
+		if (!publish) return;
 		int roverCount = State.CandidateRegions.FindAll(
 			region => region.Provenance == FragmentAnnotationProvenance.Rover).Count;
 		status = new FragmentRoverActionStatus
 		{
 			Activity = GetIdleActivity(),
-			CurrentAction = $"Grouped {roverCount} candidate regions",
+			CurrentAction = $"Generated {roverCount} regions of interest",
 			NextAction = "Review, accept, dismiss, or draw a region",
 			CurrentTarget = "Visible feature clusters",
-			MeasuredResult = $"{roverCount} candidate regions",
+			MeasuredResult = $"{roverCount} regions of interest",
 			LockedParameters = "None"
 		};
 		if (force) RecordAction($"GROUP: {roverCount} regions");
@@ -843,9 +928,14 @@ public partial class FragmentAnalysisRover : Node
 
 	public void ApplyStructureEdit(FragmentStructureEditAction action, int structureId)
 	{
+		PruneStructureReviewPriority();
 		FragmentDetectedStructure structure = State?.DetectedStructures.Find(
 			candidate => candidate.Id == structureId);
 		if (structure == null) return;
+		// While side-by-side review is active, no structure action may silently target an
+		// annotation rendered on another carousel page.
+		if (structureReviewPriorityRegionIds.Count > 0 &&
+			!IsStructureInRegions(structure, structureReviewPriorityRegionIds)) return;
 		if (action == FragmentStructureEditAction.Select)
 		{
 			if (State.SelectedStructureId != structureId) InvalidateOrientationHypotheses();
@@ -888,9 +978,11 @@ public partial class FragmentAnalysisRover : Node
 		int nextId = GetNextArrowId();
 		foreach (FragmentArrowCandidate candidate in detected)
 		{
+			int regionId = ResolveArrowRegionId(candidate);
 			// A rejected geometric direction stays rejected across rescans instead of returning
 			// immediately under a fresh identifier.
-			if (retained.Exists(existing => SameArrowGeometry(existing, candidate))) continue;
+			if (retained.Exists(existing => existing.RegionId == regionId &&
+				SameArrowGeometry(existing, candidate))) continue;
 			retained.Add(new FragmentArrowCandidate
 			{
 				Id = nextId++,
@@ -900,16 +992,20 @@ public partial class FragmentAnalysisRover : Node
 				Disposition = FragmentAnnotationDisposition.Proposed,
 				FeatureIds = new List<int>(candidate.FeatureIds),
 				Provenance = FragmentAnnotationProvenance.Rover,
-				Evidence = candidate.Evidence
+				Evidence = candidate.Evidence,
+				RegionId = regionId
 			});
 		}
 		State.ArrowCandidates.Clear();
 		State.ArrowCandidates.AddRange(retained);
 		State.ArrowCandidates.Sort((first, second) => first.Id.CompareTo(second.Id));
 		if (State.SelectedArrowId.HasValue && !State.ArrowCandidates.Exists(candidate =>
-			candidate.Id == State.SelectedArrowId.Value)) State.SelectedArrowId = null;
+			candidate.Id == State.SelectedArrowId.Value &&
+			(candidate.RegionId < 0 || candidate.RegionId == State.SelectedRegionId)))
+			State.SelectedArrowId = null;
 		State.SelectedArrowId ??= State.ArrowCandidates.Find(candidate =>
-			candidate.Disposition == FragmentAnnotationDisposition.Proposed)?.Id;
+			candidate.Disposition == FragmentAnnotationDisposition.Proposed &&
+			(candidate.RegionId < 0 || candidate.RegionId == State.SelectedRegionId))?.Id;
 
 		int proposals = State.ArrowCandidates.FindAll(candidate =>
 			candidate.Disposition == FragmentAnnotationDisposition.Proposed).Count;
@@ -941,6 +1037,7 @@ public partial class FragmentAnalysisRover : Node
 		{
 			foreach (FragmentArrowCandidate previous in State.ArrowCandidates)
 				if (previous.Id != arrowId &&
+					previous.RegionId == candidate.RegionId &&
 					previous.Disposition == FragmentAnnotationDisposition.Accepted)
 					previous.Disposition = FragmentAnnotationDisposition.Proposed;
 			candidate.Disposition = FragmentAnnotationDisposition.Accepted;
@@ -961,12 +1058,46 @@ public partial class FragmentAnalysisRover : Node
 			State.SelectedArrowId = arrowId;
 		}
 		PublishArrowEditStatus(action.ToString().ToUpperInvariant(), candidate);
-		if (action == FragmentArrowEditAction.Accept) TryAutoMapDirection();
+		if (action == FragmentArrowEditAction.Accept)
+		{
+			ComputeDirectionInterpretation(true, playerRequested: true);
+		if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingArrowReview)
+			{
+				if (State.DirectionInterpretation != null)
+					CompleteAutonomousWorkflow();
+				else
+				{
+					SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingPlayerArrow);
+					PublishAutonomousStatus(
+						"Accepted arrow could not produce a bearing",
+						"Draw a replacement arrow from tail to tip",
+						$"Region {autonomousTargetRegionId}",
+						"Valid tail-to-tip geometry required",
+						FragmentRoverActivity.WaitingForPlayer);
+				}
+			}
+		}
+		else if (action == FragmentArrowEditAction.Reject &&
+			autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingArrowReview &&
+			!State.SelectedArrowId.HasValue)
+		{
+			SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingPlayerArrow);
+			PublishAutonomousStatus(
+				"No accepted arrow candidate remains",
+				"Draw one arrow from tail to tip",
+				$"Region {autonomousTargetRegionId}",
+				"Player geometry required",
+				FragmentRoverActivity.WaitingForPlayer);
+			}
 	}
 
-	public void ComputeDirectionInterpretation(bool recordHistory = true)
+	public void ComputeDirectionInterpretation(
+		bool recordHistory = true,
+		bool playerRequested = false)
 	{
-		if (State == null || State.IsPaused || observationSource == null || commandSink == null ||
+		if (State == null || observationSource == null || commandSink == null ||
+			(State.IsPaused && !playerRequested)) return;
+		if (!playerRequested &&
 			GetEffectiveMode(FragmentAutonomyCapability.InterpretMonolithDirection) ==
 				FragmentAutonomyMode.Off) return;
 		FragmentArrowCandidate arrow = State.AcceptedArrowId is int arrowId
@@ -974,28 +1105,13 @@ public partial class FragmentAnalysisRover : Node
 				candidate.Id == arrowId &&
 				candidate.Disposition == FragmentAnnotationDisposition.Accepted)
 			: null;
-		FragmentOrientationHypothesis orientation = State.AcceptedOrientationId is int orientationId
-			? State.OrientationHypotheses.Find(candidate =>
-				candidate.Id == orientationId &&
-				candidate.Disposition == FragmentAnnotationDisposition.Accepted)
-			: null;
-		if (arrow == null || orientation == null)
+		if (arrow == null)
 		{
 			InvalidateDirectionInterpretation();
 			return;
 		}
-		float currentRotation = commandSink.CaptureControlState().RotationDegrees;
-		float sourceRotation = State.OrientationSourceView?.RotationDegrees ?? currentRotation;
-		bool acceptedCorrectionAlreadyApplied =
-			State.RotationCorrection?.SourceOrientationId == orientation.Id &&
-			State.RotationCorrection.Disposition == FragmentAnnotationDisposition.Accepted;
-		float correction = acceptedCorrectionAlreadyApplied
-			? 0f
-			: FragmentOrientationEstimator.CalculateCorrection(
-				orientation, currentRotation, sourceRotation);
 		Vector2 sampleSize = observationSource.CaptureObservableScan()?.SampleSize ?? Vector2.One;
-		FragmentDirectionInterpretation mapped = FragmentDirectionMapper.Map(
-			arrow, orientation, sampleSize, correction);
+		FragmentDirectionInterpretation mapped = FragmentDirectionMapper.Map(arrow, sampleSize);
 		if (mapped == null)
 		{
 			InvalidateDirectionInterpretation();
@@ -1008,7 +1124,7 @@ public partial class FragmentAnalysisRover : Node
 			Activity = GetIdleActivity(),
 			CurrentAction = "Mapped accepted arrow into the world grid frame",
 			NextAction = "Compare the analyzer inset with the persistent minimap ray",
-			CurrentTarget = $"A{mapped.SourceArrowId} through H{mapped.SourceOrientationId}",
+			CurrentTarget = $"Accepted arrow A{mapped.SourceArrowId}",
 			MeasuredResult = FragmentDirectionMapper.FormatBearing(mapped),
 			LockedParameters = GetLockedProcessingParameterNames()
 		};
@@ -1030,12 +1146,8 @@ public partial class FragmentAnalysisRover : Node
 		FragmentDirectionInterpretation mapped = State?.DirectionInterpretation;
 		if (mapped == null) return;
 		bool valid = State.AcceptedArrowId == mapped.SourceArrowId &&
-			State.AcceptedOrientationId == mapped.SourceOrientationId &&
 			State.ArrowCandidates.Exists(candidate =>
 				candidate.Id == mapped.SourceArrowId &&
-				candidate.Disposition == FragmentAnnotationDisposition.Accepted) &&
-			State.OrientationHypotheses.Exists(candidate =>
-				candidate.Id == mapped.SourceOrientationId &&
 				candidate.Disposition == FragmentAnnotationDisposition.Accepted);
 		if (!valid) InvalidateDirectionInterpretation();
 	}
@@ -1065,11 +1177,23 @@ public partial class FragmentAnalysisRover : Node
 			Disposition = FragmentAnnotationDisposition.Proposed,
 			Provenance = FragmentAnnotationProvenance.Player,
 			IsPlayerDefined = true,
-			Evidence = "PLAYER TAIL-TO-TIP GEOMETRY"
+			Evidence = "PLAYER TAIL-TO-TIP GEOMETRY",
+			RegionId = ResolveArrowRegionId(tail, tip, null)
 		};
 		State.ArrowCandidates.Add(candidate);
 		State.SelectedArrowId = id;
+		InvalidateDirectionInterpretation();
 		PublishArrowEditStatus("Drew", candidate);
+		if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingPlayerArrow)
+		{
+			SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingArrowReview);
+			PublishAutonomousStatus(
+				$"Player arrow A{id} is ready",
+				"Accept A# to calculate and publish world bearing",
+				$"Region {candidate.RegionId}",
+				"Player tail-to-tip geometry",
+				FragmentRoverActivity.WaitingForPlayer);
+		}
 		return id;
 	}
 
@@ -1092,12 +1216,16 @@ public partial class FragmentAnalysisRover : Node
 	private int? FindNextProposedArrowId(int afterArrowId)
 	{
 		if (State == null || State.ArrowCandidates.Count == 0) return null;
+		FragmentArrowCandidate current = State.ArrowCandidates.Find(candidate =>
+			candidate.Id == afterArrowId);
+		int regionId = current?.RegionId ?? State.SelectedRegionId ?? -1;
 		int start = State.ArrowCandidates.FindIndex(candidate => candidate.Id == afterArrowId);
 		for (int offset = 1; offset <= State.ArrowCandidates.Count; offset++)
 		{
 			FragmentArrowCandidate candidate = State.ArrowCandidates[
 				(start + offset + State.ArrowCandidates.Count) % State.ArrowCandidates.Count];
-			if (candidate.Disposition == FragmentAnnotationDisposition.Proposed) return candidate.Id;
+			if (candidate.Disposition == FragmentAnnotationDisposition.Proposed &&
+				(candidate.RegionId < 0 || candidate.RegionId == regionId)) return candidate.Id;
 		}
 		return null;
 	}
@@ -1117,19 +1245,54 @@ public partial class FragmentAnalysisRover : Node
 		first.Tail.DistanceSquaredTo(second.Tail) < 0.0004f &&
 		first.Tip.DistanceSquaredTo(second.Tip) < 0.0004f;
 
+	private int ResolveArrowRegionId(FragmentArrowCandidate arrow) =>
+		ResolveArrowRegionId(arrow.Tail, arrow.Tip, arrow.FeatureIds);
+
+	private int ResolveArrowRegionId(
+		Vector2 tail,
+		Vector2 tip,
+		IReadOnlyList<int> featureIds)
+	{
+		if (State == null) return -1;
+		Vector2 center = (tail + tip) * 0.5f;
+		FragmentCandidateRegion best = null;
+		foreach (FragmentCandidateRegion region in State.CandidateRegions)
+		{
+			if (region.Disposition == FragmentAnnotationDisposition.Dismissed) continue;
+			bool sharesFeature = false;
+			if (featureIds != null)
+				for (int index = 0; index < featureIds.Count && !sharesFeature; index++)
+					sharesFeature = region.FeatureIds.Contains(featureIds[index]);
+			if (!sharesFeature && !region.NormalizedBounds.HasPoint(center)) continue;
+			if (best == null || region.Id == State.SelectedRegionId ||
+				region.NormalizedBounds.Size.X * region.NormalizedBounds.Size.Y <
+				best.NormalizedBounds.Size.X * best.NormalizedBounds.Size.Y) best = region;
+		}
+		return best?.Id ?? State.SelectedRegionId ?? -1;
+	}
+
 	private int? FindNextProposedStructureId(int afterStructureId)
 	{
 		if (State == null || State.DetectedStructures.Count == 0) return null;
+		int? visible = FindNextMatching(structure =>
+			IsStructureInRegions(structure, structureReviewPriorityRegionIds));
+		if (structureReviewPriorityRegionIds.Count > 0) return visible;
+		return FindNextMatching(_ => true);
+
+		int? FindNextMatching(Func<FragmentDetectedStructure, bool> additionalPredicate)
+		{
 		int start = State.DetectedStructures.FindIndex(structure =>
 			structure.Id == afterStructureId);
 		for (int offset = 1; offset <= State.DetectedStructures.Count; offset++)
 		{
 			FragmentDetectedStructure candidate = State.DetectedStructures[
 				(start + offset + State.DetectedStructures.Count) % State.DetectedStructures.Count];
-			if (candidate.Disposition == FragmentAnnotationDisposition.Proposed)
+			if (candidate.Disposition == FragmentAnnotationDisposition.Proposed &&
+				additionalPredicate(candidate))
 				return candidate.Id;
 		}
 		return null;
+		}
 	}
 
 	public int AddPlayerStructure(int? initialFeatureId = null)
@@ -1177,6 +1340,66 @@ public partial class FragmentAnalysisRover : Node
 		structure.IsPlayerEdited = true;
 		InvalidateOrientationHypotheses();
 		PublishStructureEditStatus($"{action} F{featureId} from", structure.Id);
+	}
+
+	public void RemoveSelectedStructureFeature(int featureId)
+	{
+		FragmentDetectedStructure structure = State?.SelectedStructureId is int structureId
+			? State.DetectedStructures.Find(candidate => candidate.Id == structureId)
+			: null;
+		if (structure == null ||
+			structure.Disposition == FragmentAnnotationDisposition.Dismissed ||
+			!structure.FeatureIds.Remove(featureId)) return;
+		structure.IsPlayerEdited = true;
+		InvalidateOrientationHypotheses();
+		PublishStructureEditStatus($"Removed F{featureId} from", structure.Id);
+	}
+
+	public int AddPlayerStrokeToSelectedStructure(Vector2 start, Vector2 end)
+	{
+		FragmentDetectedStructure structure = State?.SelectedStructureId is int structureId
+			? State.DetectedStructures.Find(candidate => candidate.Id == structureId)
+			: null;
+		if (structure == null ||
+			structure.Disposition == FragmentAnnotationDisposition.Dismissed ||
+			start.DistanceSquaredTo(end) < 0.000025f) return -1;
+		start = start.Clamp(Vector2.Zero, Vector2.One);
+		end = end.Clamp(Vector2.Zero, Vector2.One);
+		int featureId = GetNextFeatureId();
+		State.DetectedFeatures.Add(new FragmentDetectedFeature
+		{
+			Id = featureId,
+			Start = start,
+			End = end,
+			Confidence = 1f,
+			Provenance = FragmentAnnotationProvenance.Player,
+			Disposition = FragmentAnnotationDisposition.Accepted
+		});
+		structure.FeatureIds.Add(featureId);
+		structure.FeatureIds.Sort();
+		structure.IsPlayerEdited = true;
+		if (State.SelectedRegionId is int regionId)
+		{
+			FragmentCandidateRegion region = State.CandidateRegions.Find(candidate =>
+				candidate.Id == regionId &&
+				candidate.Disposition != FragmentAnnotationDisposition.Dismissed);
+			if (region != null)
+			{
+				if (!region.FeatureIds.Contains(featureId)) region.FeatureIds.Add(featureId);
+				if (!IsRegionViewLocked(region.Id))
+				{
+					Rect2 strokeBounds = new(start, Vector2.Zero);
+					strokeBounds = strokeBounds.Expand(end).Grow(0.012f);
+					region.NormalizedBounds = region.NormalizedBounds.Merge(strokeBounds);
+				}
+			}
+		}
+		State.SelectedFeatureId = featureId;
+		InvalidateOrientationHypotheses();
+		FeaturesChanged?.Invoke();
+		RegionsChanged?.Invoke();
+		PublishStructureEditStatus($"Drew F{featureId} in", structure.Id);
+		return featureId;
 	}
 
 	public void MergeStructures(int targetStructureId, int sourceStructureId)
@@ -1280,7 +1503,7 @@ public partial class FragmentAnalysisRover : Node
 				RegionId = region.Id,
 				NormalizedBounds = region.NormalizedBounds,
 				RotationDegrees = locked?.RotationDegrees ??
-					commandSink?.CaptureControlState().RotationDegrees ?? 0f,
+					commandSink?.CaptureRegionRotationDegrees(region.Id) ?? 0f,
 				Scan = CloneObservableScan(scan)
 			};
 			foreach (FragmentDetectedFeature feature in regionFeatures)
@@ -1301,7 +1524,7 @@ public partial class FragmentAnalysisRover : Node
 					scan.SampleSize,
 					GetYellowReliability(
 						FragmentAutonomyCapability.InterpretUprightOrientation),
-					5));
+					8));
 			State.AcceptedOrientationId = null;
 			State.SelectedOrientationId = State.OrientationHypotheses.Count > 0
 				? State.OrientationHypotheses[0].Id
@@ -1313,12 +1536,6 @@ public partial class FragmentAnalysisRover : Node
 				hypothesis.Disposition != FragmentAnnotationDisposition.Dismissed)?.Id ??
 				State.OrientationHypotheses[0].Id;
 		}
-		EnsureCorrectOrientationCandidate(
-			State.OrientationHypotheses,
-			structure,
-			signature,
-			State.OrientationSourceView?.RotationDegrees ??
-				commandSink?.CaptureControlState().RotationDegrees ?? 0f);
 		status = new FragmentRoverActionStatus
 		{
 			Activity = GetIdleActivity(),
@@ -1336,36 +1553,6 @@ public partial class FragmentAnalysisRover : Node
 			RecordAction($"ORIENTATION: {State.OrientationHypotheses.Count} hypotheses for R{region.Id}");
 		StatusChanged?.Invoke(status);
 		OrientationsChanged?.Invoke();
-	}
-
-	private void EnsureCorrectOrientationCandidate(
-		List<FragmentOrientationHypothesis> hypotheses,
-		FragmentDetectedStructure structure,
-		ulong signature,
-		float sourceRotationDegrees)
-	{
-		if (truth == null || hypotheses == null || hypotheses.Count == 0) return;
-		float requiredAxis = Mathf.Wrap(
-			sourceRotationDegrees - truth.CorrectRotationDegrees,
-			-180f,
-			180f);
-		if (hypotheses.Exists(hypothesis => MathF.Abs(Mathf.Wrap(
-			hypothesis.AxisDegrees - requiredAxis, -180f, 180f)) <= 0.25f)) return;
-		int index = hypotheses.FindLastIndex(hypothesis =>
-			hypothesis.Disposition != FragmentAnnotationDisposition.Accepted);
-		if (index < 0) return;
-		FragmentOrientationHypothesis replaced = hypotheses[index];
-		hypotheses[index] = new FragmentOrientationHypothesis
-		{
-			Id = replaced.Id,
-			AxisDegrees = requiredAxis,
-			Confidence = replaced.Confidence,
-			Disposition = FragmentAnnotationDisposition.Proposed,
-			SourceStructureId = structure.Id,
-			GeometrySignature = signature,
-			IsPolarityAmbiguous = true,
-			Evidence = "COMPOSITE GEOMETRY AXIS · POLARITY AMBIGUOUS"
-		};
 	}
 
 	public void ApplyOrientationEdit(FragmentOrientationEditAction action, int hypothesisId)
@@ -1413,11 +1600,10 @@ public partial class FragmentAnalysisRover : Node
 				? "Use the accepted hypothesis for supervised correction"
 				: "Continue orientation review",
 			CurrentTarget = $"Orientation H{hypothesisId}",
-			MeasuredResult = $"Axis {hypothesis.AxisDegrees:+0.0;-0.0;0.0}° · confidence {hypothesis.Confidence:0.00}",
+			MeasuredResult = $"Axis {hypothesis.AxisDegrees:+0.0;-0.0;0.0}°",
 			LockedParameters = GetLockedProcessingParameterNames()
 		};
 		RecordAction($"{result} H{hypothesisId}");
-		InvalidateDirectionInterpretation();
 		if (action == FragmentOrientationEditAction.Accept ||
 			(action == FragmentOrientationEditAction.Reject &&
 			 State.RotationCorrection?.SourceOrientationId == hypothesisId))
@@ -1427,7 +1613,9 @@ public partial class FragmentAnalysisRover : Node
 		}
 		StatusChanged?.Invoke(status);
 		OrientationsChanged?.Invoke();
-		if (action == FragmentOrientationEditAction.Accept) TryAutoMapDirection();
+		if (action == FragmentOrientationEditAction.Accept &&
+			autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingOrientationReview)
+			SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.WaitingForRotation);
 		if (action == FragmentOrientationEditAction.Accept && !State.IsPaused &&
 			GetEffectiveMode(FragmentAutonomyCapability.DecideRotationCorrection) ==
 				FragmentAutonomyMode.Performer &&
@@ -1451,7 +1639,9 @@ public partial class FragmentAnalysisRover : Node
 				hypothesis.Disposition == FragmentAnnotationDisposition.Accepted)
 			: null;
 		if (accepted == null) return;
-		float currentRotation = commandSink.CaptureControlState().RotationDegrees;
+		int sourceRegionId = State.OrientationSourceView?.RegionId ?? -1;
+		if (sourceRegionId < 0) return;
+		float currentRotation = commandSink.CaptureRegionRotationDegrees(sourceRegionId);
 		float sourceRotation = State.OrientationSourceView?.RotationDegrees ?? currentRotation;
 		float correction = FragmentOrientationEstimator.CalculateCorrection(
 			accepted,
@@ -1459,6 +1649,7 @@ public partial class FragmentAnalysisRover : Node
 			sourceRotation);
 		State.RotationCorrection = new FragmentRotationCorrection
 		{
+			RegionId = sourceRegionId,
 			SourceOrientationId = accepted.Id,
 			SourceRotationDegrees = sourceRotation,
 			RoverDegrees = correction,
@@ -1515,7 +1706,18 @@ public partial class FragmentAnalysisRover : Node
 			CancelPendingProcessingAdjustment();
 			ProcessingSearchChanged?.Invoke();
 		}
-		rotationStartDegrees = commandSink.CaptureControlState().RotationDegrees;
+		// The accepted H# keeps its private orientation snapshot, but the comparison lock is a
+		// display reference and must not survive into the live rotation. Release only the source
+		// region's lock before scheduling the preview/tween; unrelated player locks remain intact.
+		bool releasedOrientationSourceLock = ReleaseOrientationSourceRegionLock();
+		FragmentCandidateRegion sourceRegion = State.CandidateRegions.Find(region =>
+			region.Id == correction.RegionId &&
+			region.Disposition != FragmentAnnotationDisposition.Dismissed);
+		if (sourceRegion == null) return;
+		rotationSourceRegionId = sourceRegion.Id;
+		rotationSourceRegionBounds = sourceRegion.NormalizedBounds;
+		rotationSourcePivotNormalized = GetOrientationSourcePivotNormalized(sourceRegion);
+		rotationStartDegrees = commandSink.CaptureRegionRotationDegrees(rotationSourceRegionId);
 		rotationDeltaDegrees = Mathf.Wrap(correction.ProposedDegrees, -180f, 180f);
 		rotationTargetDegrees = Mathf.Wrap(
 			rotationStartDegrees + rotationDeltaDegrees,
@@ -1542,7 +1744,50 @@ public partial class FragmentAnalysisRover : Node
 			$"{rotationDeltaDegrees:+0.0;-0.0;0.0}°");
 		StatusChanged?.Invoke(status);
 		RotationExecutionChanged?.Invoke();
+		// RotationExecutionChanged closes side-by-side first. Refreshing the unlocked region after
+		// that avoids a carousel-selection callback invalidating the just-accepted H#.
+		if (releasedOrientationSourceLock) RegionsChanged?.Invoke();
 		if (rotationPreviewRemaining <= 0f) BeginRotationTween();
+	}
+
+	private bool ReleaseOrientationSourceRegionLock()
+	{
+		if (State?.OrientationSourceView?.RegionId is not int sourceRegionId) return false;
+		return State.LockedRegionViews.RemoveAll(view => view.RegionId == sourceRegionId) > 0;
+	}
+
+	private Vector2 GetOrientationSourcePivotNormalized(FragmentCandidateRegion region)
+	{
+		FragmentDetectedStructure structure = State?.OrientationSourceStructure;
+		IReadOnlyList<FragmentDetectedFeature> features = State?.OrientationSourceView?.Features;
+		if (structure == null || features == null) return region.NormalizedBounds.GetCenter();
+		Vector2 sum = Vector2.Zero;
+		int count = 0;
+		foreach (int featureId in structure.FeatureIds)
+		{
+			FragmentDetectedFeature feature = null;
+			for (int index = 0; index < features.Count; index++)
+				if (features[index].Id == featureId)
+				{
+					feature = features[index];
+					break;
+				}
+			if (feature == null) continue;
+			if (feature.Segments == null || feature.Segments.Count == 0)
+			{
+				sum += feature.Start + feature.End;
+				count += 2;
+			}
+			else
+				foreach (FragmentFeatureSegment segment in feature.Segments)
+				{
+					sum += segment.Start + segment.End;
+					count += 2;
+				}
+		}
+		return count > 0
+			? (sum / count).Clamp(Vector2.Zero, Vector2.One)
+			: region.NormalizedBounds.GetCenter();
 	}
 
 	public void CancelRotationCorrectionExecution() =>
@@ -1570,7 +1815,10 @@ public partial class FragmentAnalysisRover : Node
 			rotationStartDegrees + rotationDeltaDegrees * eased,
 			-180f,
 			180f);
-		commandSink.DispatchAnalysisCommand(FragmentAnalysisCommand.Rotation(
+		commandSink.DispatchAnalysisCommand(FragmentAnalysisCommand.RegionRotation(
+			rotationSourceRegionId,
+			rotationSourceRegionBounds,
+			rotationSourcePivotNormalized,
 			displayed,
 			FragmentAnalysisActionOrigin.Rover));
 		RotationExecutionChanged?.Invoke();
@@ -1602,6 +1850,9 @@ public partial class FragmentAnalysisRover : Node
 		int sourceOrientationId = correction?.SourceOrientationId ?? 0;
 		float appliedDelta = rotationDeltaDegrees;
 		float finalTarget = rotationTargetDegrees;
+		int completedRegionId = rotationSourceRegionId;
+		Rect2 completedRegionBounds = rotationSourceRegionBounds;
+		Vector2 completedPivot = rotationSourcePivotNormalized;
 		bool playerAdjusted = correction?.IsPlayerAdjusted == true;
 		ResetRotationExecutionState();
 		if (correction != null)
@@ -1609,9 +1860,29 @@ public partial class FragmentAnalysisRover : Node
 		FragmentObservableScan completedScan = observationSource?.CaptureObservableScan();
 		TransformLiveAnnotationsForRotation(
 			appliedDelta,
-			completedScan?.SampleSize ?? Vector2.One);
+			completedScan?.SampleSize ?? Vector2.One,
+			completedPivot,
+			completedRegionId);
+		FragmentRegionRotationState storedRotation = State.RegionRotations.Find(rotation =>
+			rotation.RegionId == completedRegionId);
+		if (storedRotation == null)
+		{
+			storedRotation = new FragmentRegionRotationState
+			{
+				RegionId = completedRegionId,
+				// Preserve the pre-rotation selection mask so a reopened canvas identifies the
+				// same puzzle strokes before replaying this region-local transform.
+				RegionBounds = completedRegionBounds
+			};
+			State.RegionRotations.Add(storedRotation);
+		}
+		storedRotation.PivotNormalized = completedPivot;
+		storedRotation.Degrees = finalTarget;
 		preserveOrientationAcrossKnownRotation = true;
-		RefreshDetectedFeatures(true);
+		RefreshDetectedFeatures(
+			true,
+			retainUnmatchedReviewed: false,
+			requestSelectedFeatureFocus: false);
 		preserveOrientationAcrossKnownRotation = false;
 		RegionsChanged?.Invoke();
 		StructuresChanged?.Invoke();
@@ -1635,12 +1906,20 @@ public partial class FragmentAnalysisRover : Node
 		StatusChanged?.Invoke(status);
 		RotationExecutionChanged?.Invoke();
 		RotationCorrectionApplied?.Invoke(finalTarget);
-		ComputeDirectionInterpretation(false);
+		ComputeDirectionInterpretation(false, playerRequested: true);
+		BeginAutonomousArrowReview();
 	}
 
 	private void CancelRotationExecution(string reason, bool preserveCorrection, bool recordHistory)
 	{
 		if (!IsRotationInProgress) return;
+		if (isRotationTweenActive && rotationSourceRegionId >= 0 && commandSink != null)
+			commandSink.DispatchAnalysisCommand(FragmentAnalysisCommand.RegionRotation(
+				rotationSourceRegionId,
+				rotationSourceRegionBounds,
+				rotationSourcePivotNormalized,
+				rotationStartDegrees,
+				FragmentAnalysisActionOrigin.Rover));
 		ResetRotationExecutionState();
 		if (State?.RotationCorrection != null)
 		{
@@ -1672,41 +1951,70 @@ public partial class FragmentAnalysisRover : Node
 		rotationTweenElapsed = 0f;
 		rotationTweenDuration = 0f;
 		isRotationTweenActive = false;
+		rotationSourceRegionId = -1;
+		rotationSourceRegionBounds = default;
+		rotationSourcePivotNormalized = new Vector2(0.5f, 0.5f);
 	}
 
 	private static string GetRotationDirection(float degrees) =>
 		degrees > 0.01f ? "CW" : degrees < -0.01f ? "CCW" : "NONE";
 
-	private void TransformLiveAnnotationsForRotation(float degrees, Vector2 sampleSize)
+	private void TransformLiveAnnotationsForRotation(
+		float degrees,
+		Vector2 sampleSize,
+		Vector2 rotationPivotNormalized,
+		int targetRegionId = -1)
 	{
 		if (State == null || MathF.Abs(degrees) <= 0.0001f) return;
 		Vector2 safeSize = new(
 			MathF.Max(sampleSize.X, 1f),
 			MathF.Max(sampleSize.Y, 1f));
+		Vector2 renderPivot = rotationPivotNormalized.Clamp(Vector2.Zero, Vector2.One) * safeSize;
 		float radians = Mathf.DegToRad(degrees);
-		Dictionary<int, Vector2> featurePivots = new();
-		foreach (FragmentDetectedStructure structure in State.DetectedStructures)
+		List<FragmentDetectedFeature> originalFeatures = new(State.DetectedFeatures);
+		Dictionary<int, List<int>> regionFeatureIds = new();
+		Dictionary<int, Vector2> regionPivots = new();
+		foreach (FragmentCandidateRegion region in State.CandidateRegions)
 		{
-			Vector2 pivotSum = Vector2.Zero;
-			int pivotCount = 0;
-			foreach (int featureId in structure.FeatureIds)
+			List<int> featureIds = new();
+			foreach (FragmentDetectedFeature feature in originalFeatures)
 			{
-				FragmentDetectedFeature member = State.DetectedFeatures.Find(feature =>
-					feature.Id == featureId);
-				if (member == null) continue;
-				AccumulateFeaturePoints(member, ref pivotSum, ref pivotCount);
+				if (feature.Disposition == FragmentAnnotationDisposition.Dismissed) continue;
+				if (region.FeatureIds.Contains(feature.Id) ||
+					region.NormalizedBounds.HasPoint(GetFeatureCenter(feature)))
+					featureIds.Add(feature.Id);
 			}
-			if (pivotCount <= 0) continue;
-			Vector2 pivot = pivotSum / pivotCount;
-			foreach (int featureId in structure.FeatureIds)
-				featurePivots[featureId] = pivot;
+			regionFeatureIds[region.Id] = featureIds;
+			regionPivots[region.Id] = renderPivot;
 		}
-		List<FragmentDetectedFeature> transformed = new(State.DetectedFeatures.Count);
-		foreach (FragmentDetectedFeature feature in State.DetectedFeatures)
+
+		Dictionary<int, int> featureRegionIds = new();
+		foreach (FragmentDetectedFeature feature in originalFeatures)
 		{
-			Vector2 pivot = featurePivots.TryGetValue(feature.Id, out Vector2 structurePivot)
-				? structurePivot
-				: CalculateFeaturePivot(feature);
+			FragmentCandidateRegion owner = FindBestRegion(feature.Id, GetFeatureCenter(feature));
+			if (owner != null) featureRegionIds[feature.Id] = owner.Id;
+		}
+		Dictionary<int, int> arrowRegionIds = new();
+		foreach (FragmentArrowCandidate arrow in State.ArrowCandidates)
+		{
+			FragmentCandidateRegion owner = FindBestArrowRegion(arrow);
+			if (owner != null) arrowRegionIds[arrow.Id] = owner.Id;
+		}
+
+		List<FragmentDetectedFeature> transformed = new(State.DetectedFeatures.Count);
+		foreach (FragmentDetectedFeature feature in originalFeatures)
+		{
+			bool shouldTransform = targetRegionId < 0 ||
+				(featureRegionIds.TryGetValue(feature.Id, out int ownerRegionId) &&
+				 ownerRegionId == targetRegionId);
+			if (!shouldTransform)
+			{
+				transformed.Add(CloneDetectedFeature(feature));
+				continue;
+			}
+			Vector2 pivot = featureRegionIds.TryGetValue(feature.Id, out int regionId)
+				? regionPivots[regionId]
+				: renderPivot;
 			List<FragmentFeatureSegment> segments = new(feature.Segments.Count);
 			foreach (FragmentFeatureSegment segment in feature.Segments)
 				segments.Add(new FragmentFeatureSegment
@@ -1731,18 +2039,24 @@ public partial class FragmentAnalysisRover : Node
 		List<FragmentArrowCandidate> transformedArrows = new(State.ArrowCandidates.Count);
 		foreach (FragmentArrowCandidate candidate in State.ArrowCandidates)
 		{
-			Vector2 pivot = (candidate.Tail + candidate.Tip) * 0.5f * safeSize;
+			bool shouldTransform = targetRegionId < 0 ||
+				(arrowRegionIds.TryGetValue(candidate.Id, out int ownerRegionId) &&
+				 ownerRegionId == targetRegionId);
+			Vector2 pivot = arrowRegionIds.TryGetValue(candidate.Id, out int regionId)
+				? regionPivots[regionId]
+				: renderPivot;
 			transformedArrows.Add(new FragmentArrowCandidate
 			{
 				Id = candidate.Id,
-				Tail = TransformPoint(candidate.Tail, pivot),
-				Tip = TransformPoint(candidate.Tip, pivot),
+				Tail = shouldTransform ? TransformPoint(candidate.Tail, pivot) : candidate.Tail,
+				Tip = shouldTransform ? TransformPoint(candidate.Tip, pivot) : candidate.Tip,
 				Confidence = candidate.Confidence,
 				Disposition = candidate.Disposition,
 				FeatureIds = new List<int>(candidate.FeatureIds),
 				Provenance = candidate.Provenance,
 				IsPlayerDefined = candidate.IsPlayerDefined,
-				Evidence = candidate.Evidence
+				Evidence = candidate.Evidence,
+				RegionId = candidate.RegionId
 			});
 		}
 		State.ArrowCandidates.Clear();
@@ -1750,10 +2064,14 @@ public partial class FragmentAnalysisRover : Node
 
 		foreach (FragmentCandidateRegion region in State.CandidateRegions)
 		{
+			if (targetRegionId >= 0 && region.Id != targetRegionId) continue;
 			Rect2 bounds = region.NormalizedBounds;
 			Rect2 transformedBounds = new();
 			bool hasTransformedPoint = false;
-			foreach (int featureId in region.FeatureIds)
+			Vector2 pivot = regionPivots[region.Id];
+			foreach (Vector2 corner in GetRectCorners(bounds))
+				AddRegionPoint(TransformPoint(corner, pivot));
+			foreach (int featureId in regionFeatureIds[region.Id])
 			{
 				FragmentDetectedFeature member = State.DetectedFeatures.Find(feature =>
 					feature.Id == featureId);
@@ -1770,6 +2088,15 @@ public partial class FragmentAnalysisRover : Node
 						AddRegionPoint(segment.End);
 					}
 			}
+			foreach ((int arrowId, int ownerRegionId) in arrowRegionIds)
+				if (ownerRegionId == region.Id)
+				{
+					FragmentArrowCandidate arrow = State.ArrowCandidates.Find(candidate =>
+						candidate.Id == arrowId);
+					if (arrow == null) continue;
+					AddRegionPoint(arrow.Tail);
+					AddRegionPoint(arrow.Tip);
+				}
 			if (hasTransformedPoint)
 			{
 				const float margin = 0.015f;
@@ -1790,39 +2117,72 @@ public partial class FragmentAnalysisRover : Node
 			}
 		}
 
-		Vector2 TransformPoint(Vector2 normalized, Vector2 pivotPixels)
+		FragmentCandidateRegion FindBestRegion(int featureId, Vector2 center)
+		{
+			foreach (FragmentRegionRotationState committed in State.RegionRotations)
+			{
+				FragmentCandidateRegion owner = State.CandidateRegions.Find(region =>
+					region.Id == committed.RegionId &&
+					region.Disposition != FragmentAnnotationDisposition.Dismissed &&
+					(region.FeatureIds.Contains(featureId) ||
+					 region.NormalizedBounds.HasPoint(center)));
+				if (owner != null) return owner;
+			}
+			FragmentCandidateRegion best = null;
+			foreach (FragmentCandidateRegion region in State.CandidateRegions)
+			{
+				if (!regionFeatureIds[region.Id].Contains(featureId) &&
+					!region.NormalizedBounds.HasPoint(center)) continue;
+				if (best == null || region.Id == State.SelectedRegionId ||
+					(region.Disposition == FragmentAnnotationDisposition.Accepted &&
+					 best.Disposition != FragmentAnnotationDisposition.Accepted) ||
+					RectArea(region.NormalizedBounds) < RectArea(best.NormalizedBounds))
+					best = region;
+			}
+			return best;
+		}
+
+		FragmentCandidateRegion FindBestArrowRegion(FragmentArrowCandidate arrow)
+		{
+			if (arrow.RegionId >= 0)
+			{
+				FragmentCandidateRegion assigned = State.CandidateRegions.Find(region =>
+					region.Id == arrow.RegionId &&
+					region.Disposition != FragmentAnnotationDisposition.Dismissed);
+				if (assigned != null) return assigned;
+			}
+			Vector2 center = (arrow.Tail + arrow.Tip) * 0.5f;
+			FragmentCandidateRegion best = null;
+			foreach (FragmentCandidateRegion region in State.CandidateRegions)
+			{
+				bool sharesFeature = arrow.FeatureIds.Exists(
+					regionFeatureIds[region.Id].Contains);
+				if (!sharesFeature && !region.NormalizedBounds.HasPoint(center)) continue;
+				if (best == null || region.Id == State.SelectedRegionId ||
+					RectArea(region.NormalizedBounds) < RectArea(best.NormalizedBounds))
+					best = region;
+			}
+			return best;
+		}
+
+		Vector2 TransformPoint(Vector2 normalized, Vector2 pivot)
 		{
 			Vector2 pixels = normalized * safeSize;
-			return (pivotPixels + (pixels - pivotPixels).Rotated(radians)) / safeSize;
+			return (pivot + (pixels - pivot).Rotated(radians)) / safeSize;
 		}
 
-		Vector2 CalculateFeaturePivot(FragmentDetectedFeature feature)
+		static Vector2[] GetRectCorners(Rect2 rectangle)
 		{
-			Vector2 sum = Vector2.Zero;
-			int count = 0;
-			AccumulateFeaturePoints(feature, ref sum, ref count);
-			return count > 0 ? sum / count : new Vector2(0.5f, 0.5f) * safeSize;
+			return new[]
+			{
+				rectangle.Position,
+				new Vector2(rectangle.End.X, rectangle.Position.Y),
+				rectangle.End,
+				new Vector2(rectangle.Position.X, rectangle.End.Y)
+			};
 		}
 
-		void AccumulateFeaturePoints(
-			FragmentDetectedFeature feature,
-			ref Vector2 sum,
-			ref int count)
-		{
-			if (feature.Segments.Count == 0)
-			{
-				sum += feature.Start * safeSize;
-				sum += feature.End * safeSize;
-				count += 2;
-				return;
-			}
-			foreach (FragmentFeatureSegment segment in feature.Segments)
-			{
-				sum += segment.Start * safeSize;
-				sum += segment.End * safeSize;
-				count += 2;
-			}
-		}
+		static float RectArea(Rect2 rectangle) => rectangle.Size.X * rectangle.Size.Y;
 	}
 
 	private void PublishRotationCorrectionStatus(string action)
@@ -1877,7 +2237,6 @@ public partial class FragmentAnalysisRover : Node
 		State.OrientationSourceView = null;
 		State.OrientationSourceStructure = null;
 		State.RotationCorrection = null;
-		InvalidateDirectionInterpretation();
 		OrientationsChanged?.Invoke();
 		RotationCorrectionChanged?.Invoke();
 	}
@@ -2038,7 +2397,11 @@ public partial class FragmentAnalysisRover : Node
 		RegionReviewCompleted?.Invoke(acceptedRegions.Count);
 		StatusChanged?.Invoke(status);
 		UpdateCurrentHistorySnapshot();
-		if (acceptedRegions.Count == 1)
+		if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingRegionReview &&
+			acceptedRegions.Count > 0)
+			BeginAutonomousFeatureSearch();
+		if (acceptedRegions.Count == 1 &&
+			autonomousWorkflowStage != FragmentAutonomousWorkflowStage.SearchingRegionFeatures)
 			RegionFocusRequested?.Invoke(acceptedRegions[0].Id);
 	}
 
@@ -2151,7 +2514,7 @@ public partial class FragmentAnalysisRover : Node
 		{
 			RegionId = regionId,
 			NormalizedBounds = region.NormalizedBounds,
-			RotationDegrees = commandSink?.CaptureControlState().RotationDegrees ?? 0f,
+			RotationDegrees = commandSink?.CaptureRegionRotationDegrees(regionId) ?? 0f,
 			Scan = CloneObservableScan(currentScan)
 		};
 		foreach (FragmentDetectedFeature feature in State.DetectedFeatures)
@@ -2184,6 +2547,7 @@ public partial class FragmentAnalysisRover : Node
 		{
 			Revision = source.Revision,
 			SampleSize = source.SampleSize,
+			RotationPivotNormalized = source.RotationPivotNormalized,
 			Primitives = primitives
 		};
 	}
@@ -2202,6 +2566,19 @@ public partial class FragmentAnalysisRover : Node
 		Provenance = feature.Provenance,
 		Disposition = feature.Disposition
 	};
+
+	private void PruneMissingStructureMembers()
+	{
+		HashSet<int> availableFeatureIds = new();
+		foreach (FragmentDetectedFeature feature in State.DetectedFeatures)
+			if (feature.Disposition != FragmentAnnotationDisposition.Dismissed)
+				availableFeatureIds.Add(feature.Id);
+		foreach (FragmentDetectedStructure structure in State.DetectedStructures)
+			structure.FeatureIds.RemoveAll(featureId => !availableFeatureIds.Contains(featureId));
+		if (State.SelectedStructureId is int selectedId &&
+			State.DetectedStructures.Find(structure => structure.Id == selectedId)?.FeatureIds.Count == 0)
+			State.SelectedStructureId = null;
+	}
 
 	private void ApplyRegionCrop()
 	{
@@ -2345,7 +2722,9 @@ public partial class FragmentAnalysisRover : Node
 		FragmentDetectedFeature feature = State.DetectedFeatures.Find(
 			candidate => candidate.Id == featureId);
 		if (feature == null) return;
-		if (action != FragmentFeatureEditAction.Select &&
+		bool strictAutonomousRegionReview =
+			autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingFeatureReview;
+		if ((action != FragmentFeatureEditAction.Select || strictAutonomousRegionReview) &&
 			featureReviewPriorityRegionIds.Count > 0 &&
 			!IsFeatureInRegions(feature, featureReviewPriorityRegionIds)) return;
 		switch (action)
@@ -2381,6 +2760,8 @@ public partial class FragmentAnalysisRover : Node
 		AlignSelectedRegionToFeature(State.SelectedFeatureId);
 		PublishFeatureEditStatus($"{action} feature", featureId);
 		RequestSelectedFeatureFocus();
+		if (action != FragmentFeatureEditAction.Restore)
+			AdvanceAutonomousFeatureReviewIfComplete();
 	}
 
 	private void PublishFeatureEditStatus(string action, int featureId)
@@ -2445,10 +2826,46 @@ public partial class FragmentAnalysisRover : Node
 			if (matchedIds.Contains(feature.Id)) continue;
 			float distanceSquared = GetFeatureCenter(feature).DistanceSquaredTo(candidateCenter);
 			if (distanceSquared >= bestDistanceSquared) continue;
+			float previousLength = GetFeatureLength(feature);
+			float candidateLength = GetFeatureLength(candidate);
+			float shorter = MathF.Min(previousLength, candidateLength);
+			float longer = MathF.Max(previousLength, candidateLength);
+			if (shorter <= 0.0001f || longer / shorter > 2.5f) continue;
+			Vector2 previousAxis = GetFeatureAxis(feature);
+			Vector2 candidateAxis = GetFeatureAxis(candidate);
+			if (previousAxis.LengthSquared() > 0.0001f &&
+				candidateAxis.LengthSquared() > 0.0001f &&
+				MathF.Abs(previousAxis.Dot(candidateAxis)) < 0.7f)
+				continue;
 			best = feature;
 			bestDistanceSquared = distanceSquared;
 		}
 		return best;
+	}
+
+	private static float GetFeatureLength(FragmentDetectedFeature feature)
+	{
+		if (feature.Segments == null || feature.Segments.Count == 0)
+			return feature.Start.DistanceTo(feature.End);
+		float length = 0f;
+		foreach (FragmentFeatureSegment segment in feature.Segments)
+			length += segment.Start.DistanceTo(segment.End);
+		return length;
+	}
+
+	private static Vector2 GetFeatureAxis(FragmentDetectedFeature feature)
+	{
+		Vector2 axis = feature.End - feature.Start;
+		float longestSquared = axis.LengthSquared();
+		if (feature.Segments != null)
+			foreach (FragmentFeatureSegment segment in feature.Segments)
+			{
+				Vector2 candidate = segment.End - segment.Start;
+				if (candidate.LengthSquared() <= longestSquared) continue;
+				axis = candidate;
+				longestSquared = candidate.LengthSquared();
+			}
+		return longestSquared > 0.0001f ? axis.Normalized() : Vector2.Zero;
 	}
 
 	private static Vector2 GetFeatureCenter(FragmentDetectedFeature feature)
@@ -2468,6 +2885,8 @@ public partial class FragmentAnalysisRover : Node
 			IsFeatureInActiveReviewRegions(feature) &&
 			IsFeatureInRegions(feature, featureReviewPriorityRegionIds))?.Id;
 		if (priority.HasValue) return priority;
+		if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingFeatureReview)
+			return null;
 		return State?.DetectedFeatures.Find(feature =>
 			feature.Provenance == FragmentAnnotationProvenance.Rover &&
 			feature.Disposition == FragmentAnnotationDisposition.Proposed &&
@@ -2480,6 +2899,8 @@ public partial class FragmentAnalysisRover : Node
 		int? priority = FindNextMatching(feature =>
 			IsFeatureInRegions(feature, featureReviewPriorityRegionIds));
 		if (priority.HasValue) return priority;
+		if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingFeatureReview)
+			return null;
 		return FindNextMatching(_ => true);
 
 		int? FindNextMatching(Func<FragmentDetectedFeature, bool> additionalPredicate)
@@ -2504,7 +2925,14 @@ public partial class FragmentAnalysisRover : Node
 	public void SetFeatureReviewPriority(IReadOnlyList<int> displayedRegionIds)
 	{
 		featureReviewPriorityRegionIds.Clear();
-		if (displayedRegionIds != null)
+		if ((autonomousWorkflowStage is
+			FragmentAutonomousWorkflowStage.SearchingRegionFeatures or
+			FragmentAutonomousWorkflowStage.AwaitingFeatureReview) &&
+			IsRetainedRegion(autonomousTargetRegionId))
+		{
+			featureReviewPriorityRegionIds.Add(autonomousTargetRegionId);
+		}
+		else if (displayedRegionIds != null)
 			foreach (int id in displayedRegionIds)
 				if (!featureReviewPriorityRegionIds.Contains(id))
 					featureReviewPriorityRegionIds.Add(id);
@@ -2529,6 +2957,47 @@ public partial class FragmentAnalysisRover : Node
 		return feature != null && IsFeatureInRegions(feature, featureReviewPriorityRegionIds);
 	}
 
+	public void SetStructureReviewPriority(IReadOnlyList<int> displayedRegionIds)
+	{
+		structureReviewPriorityRegionIds.Clear();
+		if (displayedRegionIds != null)
+			foreach (int id in displayedRegionIds)
+				if (!structureReviewPriorityRegionIds.Contains(id) && IsRetainedRegion(id))
+					structureReviewPriorityRegionIds.Add(id);
+		if (structureReviewPriorityRegionIds.Count == 0) return;
+
+		FragmentDetectedStructure selected = State?.SelectedStructureId is int selectedId
+			? State.DetectedStructures.Find(structure => structure.Id == selectedId)
+			: null;
+		if (selected != null &&
+			IsStructureInRegions(selected, structureReviewPriorityRegionIds)) return;
+
+		FragmentDetectedStructure next = State?.DetectedStructures.Find(structure =>
+			structure.Disposition == FragmentAnnotationDisposition.Proposed &&
+			IsStructureInRegions(structure, structureReviewPriorityRegionIds));
+		next ??= State?.DetectedStructures.Find(structure =>
+			structure.Disposition == FragmentAnnotationDisposition.Accepted &&
+			IsStructureInRegions(structure, structureReviewPriorityRegionIds));
+		int? nextId = next?.Id;
+		if (State?.SelectedStructureId == nextId) return;
+		InvalidateOrientationHypotheses();
+		State.SelectedStructureId = nextId;
+		if (next != null &&
+			FindVisibleRegionForStructure(next, structureReviewPriorityRegionIds) is int regionId)
+			State.SelectedRegionId = regionId;
+		StructuresChanged?.Invoke();
+	}
+
+	public bool CanEditStructureOnCurrentReviewPage(int structureId)
+	{
+		PruneStructureReviewPriority();
+		if (structureReviewPriorityRegionIds.Count == 0) return true;
+		FragmentDetectedStructure structure = State?.DetectedStructures.Find(candidate =>
+			candidate.Id == structureId);
+		return structure != null &&
+			IsStructureInRegions(structure, structureReviewPriorityRegionIds);
+	}
+
 	private void PruneFeatureReviewPriority()
 	{
 		if (State == null)
@@ -2537,6 +3006,16 @@ public partial class FragmentAnalysisRover : Node
 			return;
 		}
 		featureReviewPriorityRegionIds.RemoveAll(regionId => !IsRetainedRegion(regionId));
+	}
+
+	private void PruneStructureReviewPriority()
+	{
+		if (State == null)
+		{
+			structureReviewPriorityRegionIds.Clear();
+			return;
+		}
+		structureReviewPriorityRegionIds.RemoveAll(regionId => !IsRetainedRegion(regionId));
 	}
 
 	private bool IsRetainedRegion(int regionId) => State?.CandidateRegions.Exists(region =>
@@ -2553,6 +3032,87 @@ public partial class FragmentAnalysisRover : Node
 			ContainsId(regionIds, region.Id) &&
 			region.Disposition != FragmentAnnotationDisposition.Dismissed &&
 			(region.FeatureIds.Contains(feature.Id) || region.NormalizedBounds.HasPoint(center)));
+	}
+
+	private bool IsStructureInRegions(
+		FragmentDetectedStructure structure,
+		IReadOnlyList<int> regionIds) =>
+		FindVisibleRegionForStructure(structure, regionIds).HasValue;
+
+	private int? FindVisibleRegionForStructure(
+		FragmentDetectedStructure structure,
+		IReadOnlyList<int> regionIds)
+	{
+		if (State == null || structure == null || regionIds == null || regionIds.Count == 0 ||
+			structure.Disposition == FragmentAnnotationDisposition.Dismissed) return null;
+		foreach (int regionId in regionIds)
+		{
+			FragmentCandidateRegion region = State.CandidateRegions.Find(candidate =>
+				candidate.Id == regionId &&
+				candidate.Disposition != FragmentAnnotationDisposition.Dismissed);
+			if (region == null) continue;
+			FragmentLockedRegionView locked = State.LockedRegionViews.Find(view =>
+				view.RegionId == region.Id);
+			Rect2 bounds = locked?.NormalizedBounds ?? region.NormalizedBounds;
+			IReadOnlyList<FragmentDetectedFeature> renderedFeatures =
+				locked?.Features ?? State.DetectedFeatures;
+			foreach (int featureId in structure.FeatureIds)
+			{
+				FragmentDetectedFeature feature = null;
+				for (int index = 0; index < renderedFeatures.Count; index++)
+					if (renderedFeatures[index].Id == featureId &&
+						renderedFeatures[index].Disposition != FragmentAnnotationDisposition.Dismissed)
+					{
+						feature = renderedFeatures[index];
+						break;
+					}
+				if (feature != null && DoesFeatureIntersectRegion(feature, bounds)) return region.Id;
+			}
+		}
+		return null;
+	}
+
+	private static bool DoesFeatureIntersectRegion(
+		FragmentDetectedFeature feature,
+		Rect2 bounds)
+	{
+		if (feature.Segments == null || feature.Segments.Count == 0)
+			return DoesSegmentIntersectRegion(feature.Start, feature.End, bounds);
+		foreach (FragmentFeatureSegment segment in feature.Segments)
+			if (DoesSegmentIntersectRegion(segment.Start, segment.End, bounds)) return true;
+		return false;
+	}
+
+	private static bool DoesSegmentIntersectRegion(Vector2 start, Vector2 end, Rect2 bounds)
+	{
+		Vector2 delta = end - start;
+		float minimum = 0f;
+		float maximum = 1f;
+		return ClipStructureSegment(-delta.X, start.X - bounds.Position.X, ref minimum, ref maximum) &&
+			ClipStructureSegment(delta.X, bounds.End.X - start.X, ref minimum, ref maximum) &&
+			ClipStructureSegment(-delta.Y, start.Y - bounds.Position.Y, ref minimum, ref maximum) &&
+			ClipStructureSegment(delta.Y, bounds.End.Y - start.Y, ref minimum, ref maximum);
+	}
+
+	private static bool ClipStructureSegment(
+		float direction,
+		float distance,
+		ref float minimum,
+		ref float maximum)
+	{
+		if (Mathf.IsZeroApprox(direction)) return distance >= 0f;
+		float ratio = distance / direction;
+		if (direction < 0f)
+		{
+			if (ratio > maximum) return false;
+			if (ratio > minimum) minimum = ratio;
+		}
+		else
+		{
+			if (ratio < minimum) return false;
+			if (ratio < maximum) maximum = ratio;
+		}
+		return true;
 	}
 
 	private bool IsFeatureInActiveReviewRegions(FragmentDetectedFeature feature)
@@ -2681,6 +3241,736 @@ public partial class FragmentAnalysisRover : Node
 		{
 			PlanNextProcessingAdjustment();
 		}
+	}
+
+	public void StartAutonomousWorkflow()
+	{
+		if (State == null || commandSink == null) return;
+		if (State.GlobalMode != FragmentAutonomyMode.Performer)
+		{
+			PublishAutonomousStatus(
+				"Autonomous workflow is not allocated",
+				"Select PERFORMER, then press PLAY ROVER",
+				"Current fragment",
+				"No autonomous search started",
+				FragmentRoverActivity.WaitingForPlayer);
+			return;
+		}
+		if (IsAutonomousWorkflowActive)
+		{
+			if (State.IsPaused) SetPaused(false);
+			return;
+		}
+
+		StopProcessingSearch();
+		ResetAutonomousWorkflowTransient();
+		State.IsPaused = false;
+		State.CandidateRegions.RemoveAll(region =>
+			region.Provenance == FragmentAnnotationProvenance.Rover &&
+			region.Disposition == FragmentAnnotationDisposition.Proposed);
+		if (State.SelectedRegionId is int selectedRegionId &&
+			!State.CandidateRegions.Exists(region => region.Id == selectedRegionId))
+			State.SelectedRegionId = null;
+		autonomousWorkflowStage = FragmentAutonomousWorkflowStage.SearchingRegions;
+		BuildAutonomousRegionConfigurations();
+		RecordAction("AUTONOMOUS WORKFLOW: START");
+		RegionsChanged?.Invoke();
+		AutonomousWorkflowChanged?.Invoke(autonomousWorkflowStage);
+		AllocationChanged?.Invoke();
+		ApplyNextAutonomousRegionConfiguration();
+	}
+
+	public void StopAutonomousWorkflow(bool recordHistory = true)
+	{
+		if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.Inactive) return;
+		ResetAutonomousWorkflowTransient();
+		if (State != null) State.IsPaused = false;
+		if (recordHistory) RecordAction("AUTONOMOUS WORKFLOW: STOP");
+		RefreshIdleStatus("Autonomous workflow stopped");
+		AutonomousWorkflowChanged?.Invoke(autonomousWorkflowStage);
+		AllocationChanged?.Invoke();
+	}
+
+	public void ContinueAutonomousWorkflow()
+	{
+		if (State == null || State.GlobalMode != FragmentAutonomyMode.Performer) return;
+		if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingRegionChoice)
+		{
+			FragmentCandidateRegion chosen = State.SelectedRegionId is int regionId
+				? State.CandidateRegions.Find(region =>
+					region.Id == regionId &&
+					region.Disposition == FragmentAnnotationDisposition.Accepted)
+				: null;
+			if (chosen == null)
+			{
+				PublishAutonomousStatus(
+					"Select one accepted region",
+					"Choose R# in REGIONS OF INTEREST, then confirm",
+					"No semantic region selected",
+					"Player decision required",
+					FragmentRoverActivity.WaitingForPlayer);
+				return;
+			}
+
+			autonomousTargetRegionId = chosen.Id;
+			if (autonomousRegionBestConfigurations.TryGetValue(chosen.Id, out var best))
+				ApplyAutonomousConfiguration(best);
+			State.LockedRegionViews.RemoveAll(view => view.RegionId == chosen.Id);
+			State.SelectedRegionId = chosen.Id;
+			State.ActiveCropRegionId = chosen.Id;
+			featureReviewPriorityRegionIds.Clear();
+			structureReviewPriorityRegionIds.Clear();
+			RefreshStructures(true);
+			FragmentDetectedStructure structure = FindBestStructureForRegion(chosen);
+			State.SelectedStructureId = structure?.Id;
+			SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingStructureReview);
+			PublishAutonomousStatus(
+				$"Reconstructed structure for R{chosen.Id}",
+				"Edit if needed, then select VALIDATE & CONTINUE",
+				$"Region {chosen.Id}",
+				structure == null
+					? "No non-empty structure; draw/edit one before continuing"
+					: $"Selected S{structure.Id} with {structure.FeatureIds.Count} features",
+				FragmentRoverActivity.WaitingForPlayer);
+			StructuresChanged?.Invoke();
+			return;
+		}
+
+		if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.AwaitingStructureReview)
+		{
+			FragmentCandidateRegion region = State.CandidateRegions.Find(candidate =>
+				candidate.Id == autonomousTargetRegionId &&
+				candidate.Disposition == FragmentAnnotationDisposition.Accepted);
+			FragmentDetectedStructure structure = State.SelectedStructureId is int structureId
+				? State.DetectedStructures.Find(candidate =>
+					candidate.Id == structureId &&
+					candidate.Disposition != FragmentAnnotationDisposition.Dismissed &&
+					candidate.FeatureIds.Count > 0)
+				: null;
+			if (region == null || structure == null || !StructureTouchesRegion(structure, region))
+			{
+				PublishAutonomousStatus(
+					"A non-empty structure in the chosen region is required",
+					"Use EDIT STRUCTURE, then validate again",
+					region == null ? "Chosen region unavailable" : $"Region {region.Id}",
+					"Structure validation not complete",
+					FragmentRoverActivity.WaitingForPlayer);
+				return;
+			}
+
+			if (structure.Disposition != FragmentAnnotationDisposition.Accepted)
+				ApplyStructureEdit(FragmentStructureEditAction.Accept, structure.Id);
+			SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingOrientationReview);
+			EstimateOrientationHypotheses(true);
+			PublishAutonomousStatus(
+				$"Estimated orientation hypotheses for R{region.Id}",
+				"Compare each H# with the scanned fragment and accept one",
+				$"Region {region.Id} · Structure S{structure.Id}",
+				$"{State.OrientationHypotheses.Count} observable H# candidates",
+				FragmentRoverActivity.WaitingForPlayer);
+		}
+	}
+
+	private void ProcessAutonomousWorkflow(float delta)
+	{
+		if (State == null || State.IsPaused ||
+			State.GlobalMode != FragmentAutonomyMode.Performer) return;
+		if (autonomousWorkflowStage != FragmentAutonomousWorkflowStage.SearchingRegions &&
+			autonomousWorkflowStage != FragmentAutonomousWorkflowStage.SearchingRegionFeatures)
+			return;
+		if (autonomousStepRemaining < 0f) return;
+		autonomousStepRemaining -= MathF.Max(delta, 0f);
+		int catchUpSteps = 0;
+		while (autonomousStepRemaining <= 0f && catchUpSteps++ < 8 &&
+			autonomousWorkflowStage is FragmentAutonomousWorkflowStage.SearchingRegions or
+				FragmentAutonomousWorkflowStage.SearchingRegionFeatures)
+		{
+			float overdue = -autonomousStepRemaining;
+			if (autonomousWorkflowStage == FragmentAutonomousWorkflowStage.SearchingRegions)
+				EvaluateAutonomousRegionConfiguration();
+			else
+				EvaluateAutonomousFeatureConfiguration();
+			if (autonomousStepRemaining >= 0f) autonomousStepRemaining -= overdue;
+		}
+	}
+
+	private void BuildAutonomousRegionConfigurations()
+	{
+		autonomousConfigurations.Clear();
+		autonomousConfigurationIndex = 0;
+		autonomousTestsCompleted = 0;
+		autonomousBestScore = float.NegativeInfinity;
+		autonomousBestDenseRegionCount = 0;
+		autonomousBestConfiguration = null;
+		FragmentAnalysisControlState current = commandSink.CaptureControlState();
+		List<int> searchableBits = new();
+		if (!IsProcessingParameterLocked(FragmentAnalysisParameter.PolarizationEnabled))
+			searchableBits.Add(0);
+		if (!IsProcessingParameterLocked(FragmentAnalysisParameter.SpectralEnabled))
+			searchableBits.Add(1);
+		if (!IsProcessingParameterLocked(FragmentAnalysisParameter.SurfaceEnabled))
+			searchableBits.Add(2);
+		if (!IsProcessingParameterLocked(FragmentAnalysisParameter.ElectromagneticEnabled))
+			searchableBits.Add(3);
+		if (!IsProcessingParameterLocked(FragmentAnalysisParameter.ResonanceEnabled))
+			searchableBits.Add(4);
+		if (!IsProcessingParameterLocked(FragmentAnalysisParameter.XRayEnabled))
+			searchableBits.Add(5);
+		autonomousReachableRegionConfigurationCount = 1 << searchableBits.Count;
+
+		int startMask = GetConfigurationMask(current);
+		Queue<int> frontier = new();
+		HashSet<int> visitedMasks = new() { startMask };
+		HashSet<string> configurationKeys = new();
+		frontier.Enqueue(startMask);
+		int maximum = Math.Clamp(settings?.MaximumRegionSearchTests ?? 64, 1, 64);
+		while (frontier.Count > 0 && autonomousConfigurations.Count < maximum)
+		{
+			int mask = frontier.Dequeue();
+			FragmentAnalysisControlState controls = CreateConfiguration(
+				current, mask, current.PolarizationLevel,
+				current.SpectralLevel, current.SurfaceLevel);
+			string key = GetAutonomousConfigurationKey(controls);
+			if (configurationKeys.Add(key))
+				autonomousConfigurations.Add(new AutonomousConfigurationCandidate
+				{
+					Controls = controls,
+					Key = key
+				});
+			foreach (int bit in searchableBits)
+			{
+				int neighbor = mask ^ (1 << bit);
+				if (visitedMasks.Add(neighbor)) frontier.Enqueue(neighbor);
+			}
+		}
+	}
+
+	private void ApplyNextAutonomousRegionConfiguration()
+	{
+		if (autonomousConfigurationIndex >= autonomousConfigurations.Count)
+		{
+			FinishAutonomousRegionSearch();
+			return;
+		}
+		AutonomousConfigurationCandidate candidate =
+			autonomousConfigurations[autonomousConfigurationIndex++];
+		ApplyAutonomousConfiguration(candidate.Controls);
+		float budget = MathF.Max(settings?.RegionSearchBudgetSeconds ?? 5f, 0.1f);
+		autonomousStepRemaining = budget / Math.Max(autonomousConfigurations.Count, 1);
+		PublishAutonomousStatus(
+			$"BFS ON/OFF configuration {autonomousConfigurationIndex}/" +
+				$"{autonomousConfigurations.Count}",
+			$"Score distinct compact dense regions (up to " +
+				$"{Math.Clamp(settings?.MaximumScoredDenseRegionCount ?? 5, 1, 5)})",
+			"Whole fragment",
+			$"Best: {autonomousBestDenseRegionCount} dense regions · " +
+				$"{autonomousReachableRegionConfigurationCount}/64 reachable combinations",
+			FragmentRoverActivity.Executing);
+	}
+
+	private void EvaluateAutonomousRegionConfiguration()
+	{
+		IReadOnlyList<FragmentCandidateRegion> regions =
+			FragmentRegionDetector.GroupCandidateRegions(State.DetectedFeatures);
+		(float score, int denseCount) = ScoreAutonomousRegions(regions);
+		autonomousTestsCompleted++;
+		if (score > autonomousBestScore)
+		{
+			autonomousBestScore = score;
+			autonomousBestDenseRegionCount = denseCount;
+			autonomousBestConfiguration = CloneControlState(autonomousAppliedConfiguration);
+		}
+		if (autonomousTestsCompleted >= autonomousConfigurations.Count)
+		{
+			FinishAutonomousRegionSearch();
+			return;
+		}
+		ApplyNextAutonomousRegionConfiguration();
+	}
+
+	private void FinishAutonomousRegionSearch()
+	{
+		if (autonomousBestConfiguration != null)
+			ApplyAutonomousConfiguration(autonomousBestConfiguration);
+		RefreshCandidateRegions(true, false);
+		PruneAutonomousRegionProposals();
+		autonomousStepRemaining = -1f;
+		SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingRegionReview);
+		int proposed = State.CandidateRegions.FindAll(region =>
+			region.Disposition == FragmentAnnotationDisposition.Proposed).Count;
+		PublishAutonomousStatus(
+			$"Region search paused with {proposed} proposals",
+			"Accept, dismiss, resize, or draw regions until no proposal remains",
+			"Dense observable feature clusters",
+			$"Best result after {autonomousTestsCompleted} tests: " +
+				$"{autonomousBestDenseRegionCount} dense regions",
+			FragmentRoverActivity.WaitingForPlayer);
+		RecordAction($"AUTONOMOUS REGION SEARCH: {proposed} proposals after " +
+			$"{autonomousTestsCompleted} BFS tests");
+		RegionsChanged?.Invoke();
+		RefreshSignalMetrics(true);
+	}
+
+	private (float Score, int DenseCount) ScoreAutonomousRegions(
+		IReadOnlyList<FragmentCandidateRegion> regions)
+	{
+		if (regions == null) return (0f, 0);
+		List<(FragmentCandidateRegion Region, float Quality)> denseRegions = new();
+		foreach (FragmentCandidateRegion region in regions)
+		{
+			int count = Math.Max(region.FeatureIds?.Count ?? 0, 0);
+			float area = MathF.Max(region.NormalizedBounds.Size.X *
+				region.NormalizedBounds.Size.Y, 0.0025f);
+			float density = count / area;
+			bool isDense = count >= Math.Max(settings?.MinimumDenseRegionFeatureCount ?? 3, 1) &&
+				density >= MathF.Max(settings?.MinimumDenseRegionDensity ?? 18f, 1f);
+			if (!isDense) continue;
+			denseRegions.Add((region,
+				MathF.Min(density, 1000f) + count * 12f - area * 20f));
+		}
+		denseRegions.Sort((first, second) => second.Quality.CompareTo(first.Quality));
+		int dense = Math.Min(denseRegions.Count,
+			Math.Clamp(settings?.MaximumScoredDenseRegionCount ?? 5, 1, 5));
+		float score = dense * 100000f;
+		for (int index = 0; index < dense; index++)
+		{
+			score += denseRegions[index].Quality;
+			for (int other = 0; other < index; other++)
+				score += denseRegions[index].Region.NormalizedBounds.GetCenter().DistanceTo(
+					denseRegions[other].Region.NormalizedBounds.GetCenter()) * 100f;
+		}
+		return (score, dense);
+	}
+
+	private void PruneAutonomousRegionProposals()
+	{
+		List<(FragmentCandidateRegion Region, float Density)> ranked = new();
+		foreach (FragmentCandidateRegion region in State.CandidateRegions)
+		{
+			if (region.Provenance != FragmentAnnotationProvenance.Rover ||
+				region.Disposition != FragmentAnnotationDisposition.Proposed) continue;
+			float area = MathF.Max(region.NormalizedBounds.Size.X *
+				region.NormalizedBounds.Size.Y, 0.0025f);
+			ranked.Add((region, region.FeatureIds.Count / area));
+		}
+		if (ranked.Count == 0) return;
+		ranked.Sort((first, second) => second.Density.CompareTo(first.Density));
+		float threshold = MathF.Max(
+			settings?.MinimumDenseRegionDensity ?? 18f,
+			ranked[0].Density * 0.5f);
+		int maximumKeep = Math.Min(
+			Math.Clamp(settings?.MaximumScoredDenseRegionCount ?? 5, 1, 5), ranked.Count);
+		HashSet<int> retained = new();
+		for (int index = 0; index < maximumKeep; index++)
+			if (ranked[index].Region.FeatureIds.Count >=
+					Math.Max(settings?.MinimumDenseRegionFeatureCount ?? 3, 1) &&
+				ranked[index].Density >= threshold)
+				retained.Add(ranked[index].Region.Id);
+		if (retained.Count == 0) retained.Add(ranked[0].Region.Id);
+		State.CandidateRegions.RemoveAll(region =>
+			region.Provenance == FragmentAnnotationProvenance.Rover &&
+			region.Disposition == FragmentAnnotationDisposition.Proposed &&
+			!retained.Contains(region.Id));
+		State.SelectedRegionId = State.CandidateRegions.Find(region =>
+			region.Disposition == FragmentAnnotationDisposition.Proposed)?.Id;
+	}
+
+	private void BeginAutonomousFeatureSearch()
+	{
+		autonomousRegionIds.Clear();
+		foreach (FragmentCandidateRegion region in State.CandidateRegions)
+			if (region.Disposition == FragmentAnnotationDisposition.Accepted)
+				autonomousRegionIds.Add(region.Id);
+		autonomousRegionIds.Sort();
+		if (autonomousRegionIds.Count == 0)
+		{
+			SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingRegionReview);
+			PublishAutonomousStatus(
+				"No accepted regions remain",
+				"Draw or restore a region and accept it",
+				"Whole fragment",
+				"Feature search cannot start",
+				FragmentRoverActivity.WaitingForPlayer);
+			return;
+		}
+		autonomousRegionIndex = 0;
+		StartAutonomousFeatureSearchForCurrentRegion();
+	}
+
+	private void StartAutonomousFeatureSearchForCurrentRegion()
+	{
+		if (autonomousRegionIndex >= autonomousRegionIds.Count)
+		{
+			EnterAutonomousRegionChoice();
+			return;
+		}
+		autonomousTargetRegionId = autonomousRegionIds[autonomousRegionIndex];
+		State.SelectedRegionId = autonomousTargetRegionId;
+		featureReviewPriorityRegionIds.Clear();
+		featureReviewPriorityRegionIds.Add(autonomousTargetRegionId);
+		BuildAutonomousFeatureConfigurations();
+		SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.SearchingRegionFeatures);
+		RegionsChanged?.Invoke();
+		ApplyNextAutonomousFeatureConfiguration();
+	}
+
+	private void BuildAutonomousFeatureConfigurations()
+	{
+		autonomousConfigurations.Clear();
+		autonomousConfigurationIndex = 0;
+		autonomousTestsCompleted = 0;
+		autonomousBestScore = float.NegativeInfinity;
+		autonomousBestFeatureCount = -1;
+		autonomousBestConfiguration = null;
+		FragmentAnalysisControlState current = commandSink.CaptureControlState();
+		int maximum = Math.Clamp(
+			settings?.MaximumFeatureSearchTestsPerRegion ?? 144, 1, 400);
+		System.Random random = CreateAutonomousRandom(0x7F31 + autonomousTargetRegionId * 97);
+		HashSet<string> keys = new();
+		AddCandidate(current);
+		int attempts = 0;
+		while (autonomousConfigurations.Count < maximum && attempts++ < maximum * 20)
+		{
+			int mask = random.Next(64);
+			FragmentAnalysisControlState candidate = CreateConfiguration(
+				current,
+				mask,
+				random.Next(1, 6),
+				random.Next(1, 6),
+				random.Next(1, 6));
+			AddCandidate(candidate);
+		}
+
+		void AddCandidate(FragmentAnalysisControlState controls)
+		{
+			string key = GetAutonomousConfigurationKey(controls);
+			if (!keys.Add(key)) return;
+			autonomousConfigurations.Add(new AutonomousConfigurationCandidate
+			{
+				Controls = controls,
+				Key = key
+			});
+		}
+	}
+
+	private void ApplyNextAutonomousFeatureConfiguration()
+	{
+		if (autonomousConfigurationIndex >= autonomousConfigurations.Count)
+		{
+			FinishAutonomousFeatureSearch();
+			return;
+		}
+		AutonomousConfigurationCandidate candidate =
+			autonomousConfigurations[autonomousConfigurationIndex++];
+		ApplyAutonomousConfiguration(candidate.Controls);
+		float budget = MathF.Max(settings?.FeatureSearchBudgetSeconds ?? 5f, 0.1f);
+		autonomousStepRemaining = budget / Math.Max(autonomousConfigurations.Count, 1);
+		PublishAutonomousStatus(
+			$"Optimizing features for R{autonomousTargetRegionId}: " +
+				$"{autonomousConfigurationIndex}/{autonomousConfigurations.Count}",
+			"Retain the configuration with the most visible regional features",
+			$"Region {autonomousTargetRegionId}",
+			$"Best visible feature count: {Math.Max(autonomousBestFeatureCount, 0)}",
+			FragmentRoverActivity.Executing);
+	}
+
+	private void EvaluateAutonomousFeatureConfiguration()
+	{
+		FragmentCandidateRegion region = State.CandidateRegions.Find(candidate =>
+			candidate.Id == autonomousTargetRegionId &&
+			candidate.Disposition == FragmentAnnotationDisposition.Accepted);
+		if (region == null)
+		{
+			EnterAutonomousRegionChoice();
+			return;
+		}
+		int count = CountFeaturesInRegion(region);
+		autonomousTestsCompleted++;
+		if (count > autonomousBestFeatureCount)
+		{
+			autonomousBestFeatureCount = count;
+			autonomousBestScore = count;
+			autonomousBestConfiguration = CloneControlState(autonomousAppliedConfiguration);
+		}
+		if (autonomousTestsCompleted >= autonomousConfigurations.Count)
+			FinishAutonomousFeatureSearch();
+		else
+			ApplyNextAutonomousFeatureConfiguration();
+	}
+
+	private void FinishAutonomousFeatureSearch()
+	{
+		if (autonomousBestConfiguration != null)
+			ApplyAutonomousConfiguration(autonomousBestConfiguration);
+		autonomousRegionBestConfigurations[autonomousTargetRegionId] =
+			CloneControlState(autonomousBestConfiguration ?? commandSink.CaptureControlState());
+		FragmentCandidateRegion region = State.CandidateRegions.Find(candidate =>
+			candidate.Id == autonomousTargetRegionId);
+		if (region == null)
+		{
+			EnterAutonomousRegionChoice();
+			return;
+		}
+		region.FeatureIds.Clear();
+		region.FeatureIds.AddRange(FindFeaturesInRegion(region.NormalizedBounds));
+		State.SelectedFeatureId = State.DetectedFeatures.Find(feature =>
+			feature.Disposition == FragmentAnnotationDisposition.Proposed &&
+			IsFeatureInRegion(feature, region))?.Id;
+		autonomousStepRemaining = -1f;
+		SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingFeatureReview);
+		PublishAutonomousStatus(
+			$"Feature search for R{region.Id} is ready for validation",
+			State.SelectedFeatureId.HasValue
+				? "Accept or dismiss each proposed F#"
+				: "No unresolved F# remains; advancing",
+			$"Region {region.Id}",
+			$"Best of {autonomousTestsCompleted} tests: {autonomousBestFeatureCount} features",
+			FragmentRoverActivity.WaitingForPlayer);
+		FeaturesChanged?.Invoke();
+		RegionsChanged?.Invoke();
+		if (!State.SelectedFeatureId.HasValue)
+			AdvanceAutonomousFeatureReviewIfComplete();
+	}
+
+	private void AdvanceAutonomousFeatureReviewIfComplete()
+	{
+		if (autonomousWorkflowStage != FragmentAutonomousWorkflowStage.AwaitingFeatureReview)
+			return;
+		FragmentCandidateRegion region = State.CandidateRegions.Find(candidate =>
+			candidate.Id == autonomousTargetRegionId);
+		if (region == null) return;
+		bool unresolved = State.DetectedFeatures.Exists(feature =>
+			feature.Disposition == FragmentAnnotationDisposition.Proposed &&
+			IsFeatureInRegion(feature, region));
+		if (unresolved) return;
+		if (!IsRegionViewLocked(region.Id)) ToggleRegionViewLock(region.Id);
+		autonomousRegionIndex++;
+		StartAutonomousFeatureSearchForCurrentRegion();
+	}
+
+	private void EnterAutonomousRegionChoice()
+	{
+		featureReviewPriorityRegionIds.Clear();
+		structureReviewPriorityRegionIds.Clear();
+		State.SelectedRegionId = autonomousRegionIds.Count > 0
+			? autonomousRegionIds[0]
+			: null;
+		SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.AwaitingRegionChoice);
+		PublishAutonomousStatus(
+			"All accepted regions have been feature-reviewed",
+			"Compare the fragment reference, select one R#, then confirm",
+			"Accepted regions",
+			$"{autonomousRegionIds.Count} reviewed regions available",
+			FragmentRoverActivity.WaitingForPlayer);
+		RegionsChanged?.Invoke();
+	}
+
+	private void BeginAutonomousArrowReview()
+	{
+		if (autonomousWorkflowStage != FragmentAutonomousWorkflowStage.WaitingForRotation) return;
+		RefreshArrowCandidates(true);
+		bool hasCandidate = State.ArrowCandidates.Exists(candidate =>
+			candidate.Disposition == FragmentAnnotationDisposition.Proposed &&
+			(candidate.RegionId < 0 || candidate.RegionId == autonomousTargetRegionId));
+		SetAutonomousWorkflowStage(hasCandidate
+			? FragmentAutonomousWorkflowStage.AwaitingArrowReview
+			: FragmentAutonomousWorkflowStage.AwaitingPlayerArrow);
+		PublishAutonomousStatus(
+			hasCandidate
+				? $"Detected arrow candidates in R{autonomousTargetRegionId}"
+				: $"No arrow candidate detected in R{autonomousTargetRegionId}",
+			hasCandidate
+				? "Accept or reject A#"
+				: "Draw one arrow from tail to tip",
+			$"Region {autonomousTargetRegionId}",
+			hasCandidate ? "Player arrow validation required" : "Player geometry required",
+			FragmentRoverActivity.WaitingForPlayer);
+	}
+
+	private void CompleteAutonomousWorkflow()
+	{
+		SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage.Complete);
+		PublishAutonomousStatus(
+			"Autonomous fragment analysis complete",
+			"Review the minimap bearing or edit retained analysis",
+			$"Region {autonomousTargetRegionId}",
+			State.DirectionInterpretation == null
+				? "Arrow accepted; bearing unavailable"
+				: "World bearing and minimap ray published",
+			FragmentRoverActivity.Idle);
+		RecordAction("AUTONOMOUS WORKFLOW: COMPLETE");
+	}
+
+	private void ApplyAutonomousConfiguration(FragmentAnalysisControlState configuration)
+	{
+		if (configuration == null || commandSink == null) return;
+		autonomousAppliedConfiguration = CloneControlState(configuration);
+		commandSink.DispatchAnalysisConfiguration(
+			autonomousAppliedConfiguration,
+			FragmentAnalysisActionOrigin.Rover);
+	}
+
+	private FragmentAnalysisControlState CreateConfiguration(
+		FragmentAnalysisControlState baseline,
+		int mask,
+		int polarizationLevel,
+		int spectralLevel,
+		int surfaceLevel)
+	{
+		bool polarizationLocked = IsProcessingParameterLocked(
+			FragmentAnalysisParameter.PolarizationEnabled);
+		bool spectralLocked = IsProcessingParameterLocked(FragmentAnalysisParameter.SpectralEnabled);
+		bool surfaceLocked = IsProcessingParameterLocked(FragmentAnalysisParameter.SurfaceEnabled);
+		bool electromagneticLocked = IsProcessingParameterLocked(
+			FragmentAnalysisParameter.ElectromagneticEnabled);
+		bool resonanceLocked = IsProcessingParameterLocked(FragmentAnalysisParameter.ResonanceEnabled);
+		bool xrayLocked = IsProcessingParameterLocked(FragmentAnalysisParameter.XRayEnabled);
+		return new FragmentAnalysisControlState
+		{
+			PolarizationEnabled = polarizationLocked
+				? baseline.PolarizationEnabled : (mask & 1) != 0,
+			PolarizationLevel = polarizationLocked
+				? baseline.PolarizationLevel : polarizationLevel,
+			SpectralEnabled = spectralLocked ? baseline.SpectralEnabled : (mask & 2) != 0,
+			SpectralLevel = spectralLocked ? baseline.SpectralLevel : spectralLevel,
+			SurfaceEnabled = surfaceLocked ? baseline.SurfaceEnabled : (mask & 4) != 0,
+			SurfaceLevel = surfaceLocked ? baseline.SurfaceLevel : surfaceLevel,
+			ElectromagneticEnabled = electromagneticLocked
+				? baseline.ElectromagneticEnabled : (mask & 8) != 0,
+			ResonanceEnabled = resonanceLocked
+				? baseline.ResonanceEnabled : (mask & 16) != 0,
+			XRayEnabled = xrayLocked ? baseline.XRayEnabled : (mask & 32) != 0,
+			RotationDegrees = baseline.RotationDegrees,
+			ViewZoom = baseline.ViewZoom,
+			ViewPan = baseline.ViewPan
+		};
+	}
+
+	private System.Random CreateAutonomousRandom(int salt)
+	{
+		ulong revision = observationSource?.CaptureObservableScan()?.Revision ?? 0;
+		return new System.Random(unchecked((int)(revision ^ (uint)salt)));
+	}
+
+	private static void Shuffle<T>(List<T> values, System.Random random)
+	{
+		for (int index = values.Count - 1; index > 0; index--)
+		{
+			int other = random.Next(index + 1);
+			(values[index], values[other]) = (values[other], values[index]);
+		}
+	}
+
+	private static string GetAutonomousConfigurationKey(FragmentAnalysisControlState controls) =>
+		$"{(controls.PolarizationEnabled ? controls.PolarizationLevel : 0)}-" +
+		$"{(controls.SpectralEnabled ? controls.SpectralLevel : 0)}-" +
+		$"{(controls.SurfaceEnabled ? controls.SurfaceLevel : 0)}-" +
+		$"{(controls.ElectromagneticEnabled ? 1 : 0)}" +
+		$"{(controls.ResonanceEnabled ? 1 : 0)}{(controls.XRayEnabled ? 1 : 0)}";
+
+	private static int GetConfigurationMask(FragmentAnalysisControlState controls)
+	{
+		int mask = 0;
+		if (controls.PolarizationEnabled) mask |= 1;
+		if (controls.SpectralEnabled) mask |= 2;
+		if (controls.SurfaceEnabled) mask |= 4;
+		if (controls.ElectromagneticEnabled) mask |= 8;
+		if (controls.ResonanceEnabled) mask |= 16;
+		if (controls.XRayEnabled) mask |= 32;
+		return mask;
+	}
+
+	private int CountFeaturesInRegion(FragmentCandidateRegion region) =>
+		State.DetectedFeatures.FindAll(feature =>
+			feature.Disposition != FragmentAnnotationDisposition.Dismissed &&
+			IsFeatureInRegion(feature, region)).Count;
+
+	private static bool IsFeatureInRegion(
+		FragmentDetectedFeature feature,
+		FragmentCandidateRegion region) =>
+		region.FeatureIds.Contains(feature.Id) ||
+		region.NormalizedBounds.HasPoint(GetFeatureCenter(feature));
+
+	private FragmentDetectedStructure FindBestStructureForRegion(FragmentCandidateRegion region)
+	{
+		FragmentDetectedStructure best = null;
+		int bestCount = 0;
+		foreach (FragmentDetectedStructure structure in State.DetectedStructures)
+		{
+			if (structure.Disposition == FragmentAnnotationDisposition.Dismissed) continue;
+			int count = CountStructureFeaturesInRegion(structure, region);
+			if (count <= bestCount) continue;
+			best = structure;
+			bestCount = count;
+		}
+		return best;
+	}
+
+	private bool StructureTouchesRegion(
+		FragmentDetectedStructure structure,
+		FragmentCandidateRegion region) =>
+		CountStructureFeaturesInRegion(structure, region) > 0;
+
+	private int CountStructureFeaturesInRegion(
+		FragmentDetectedStructure structure,
+		FragmentCandidateRegion region)
+	{
+		int count = 0;
+		foreach (int featureId in structure.FeatureIds)
+		{
+			FragmentDetectedFeature feature = State.DetectedFeatures.Find(candidate =>
+				candidate.Id == featureId &&
+				candidate.Disposition != FragmentAnnotationDisposition.Dismissed);
+			if (feature != null && IsFeatureInRegion(feature, region)) count++;
+		}
+		return count;
+	}
+
+	private void SetAutonomousWorkflowStage(FragmentAutonomousWorkflowStage stage)
+	{
+		if (autonomousWorkflowStage == stage) return;
+		autonomousWorkflowStage = stage;
+		AutonomousWorkflowChanged?.Invoke(stage);
+		AllocationChanged?.Invoke();
+	}
+
+	private void PublishAutonomousStatus(
+		string current,
+		string next,
+		string target,
+		string result,
+		FragmentRoverActivity activity)
+	{
+		status = new FragmentRoverActionStatus
+		{
+			Activity = activity,
+			CurrentAction = current,
+			NextAction = next,
+			CurrentTarget = target,
+			MeasuredResult = result,
+			LockedParameters = GetLockedProcessingParameterNames()
+		};
+		StatusChanged?.Invoke(status);
+		AutonomousWorkflowChanged?.Invoke(autonomousWorkflowStage);
+	}
+
+	private void ResetAutonomousWorkflowTransient()
+	{
+		autonomousWorkflowStage = FragmentAutonomousWorkflowStage.Inactive;
+		autonomousConfigurations.Clear();
+		autonomousRegionIds.Clear();
+		autonomousRegionBestConfigurations.Clear();
+		autonomousStepRemaining = -1f;
+		autonomousConfigurationIndex = 0;
+		autonomousTestsCompleted = 0;
+		autonomousRegionIndex = 0;
+		autonomousTargetRegionId = -1;
+		autonomousBestScore = float.NegativeInfinity;
+		autonomousBestDenseRegionCount = 0;
+		autonomousReachableRegionConfigurationCount = 0;
+		autonomousBestFeatureCount = 0;
+		autonomousBestConfiguration = null;
+		autonomousAppliedConfiguration = null;
 	}
 
 	public void StartProcessingSearch()
@@ -3197,6 +4487,10 @@ public partial class FragmentAnalysisRover : Node
 	private void RestoreHistoryEntry(FragmentActionHistoryEntry entry, string direction)
 	{
 		if (entry == null) return;
+		bool stoppedAutonomousWorkflow = autonomousWorkflowStage != FragmentAutonomousWorkflowStage.Inactive;
+		ResetAutonomousWorkflowTransient();
+		if(stoppedAutonomousWorkflow)
+			AutonomousWorkflowChanged?.Invoke(AutonomousWorkflowStage);
 		CancelPendingProcessingAdjustment();
 		ClearNavigationTarget(true);
 		featureReviewRegionIds.Clear();
@@ -3375,6 +4669,7 @@ public partial class FragmentAnalysisRover : Node
 			FragmentAnalysisParameter.XRayEnabled => "X-Ray channel",
 			FragmentAnalysisParameter.Rotation => "Rotation",
 			FragmentAnalysisParameter.View => "View",
+			FragmentAnalysisParameter.Configuration => "Processing configuration",
             _ => "Analysis changed"
         };
     }

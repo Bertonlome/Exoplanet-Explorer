@@ -26,6 +26,8 @@ public partial class FragmentRegionSequenceView : Control
 	private FragmentRotationCorrection rotationCorrection;
 	private readonly List<FragmentDetectedFeature> orientationFeatures = new();
 	private Color orientationStructureColor = new(1f, 0.2f, 0.85f, 1f);
+	private bool showFeatures = true;
+	private bool showStructures = true;
 	private Label toolbarPageLabel;
 	private Button toolbarPreviousButton;
 	private Button toolbarNextButton;
@@ -174,6 +176,20 @@ public partial class FragmentRegionSequenceView : Control
 		QueueRedraw();
 	}
 
+	public void SetShowFeatures(bool visible)
+	{
+		if (showFeatures == visible) return;
+		showFeatures = visible;
+		QueueRedraw();
+	}
+
+	public void SetShowStructures(bool visible)
+	{
+		if (showStructures == visible) return;
+		showStructures = visible;
+		QueueRedraw();
+	}
+
 	public void SetOrientationIsolation(
 		bool isolated,
 		int? sourceRegionId,
@@ -297,8 +313,10 @@ public partial class FragmentRegionSequenceView : Control
 				float width = Mathf.Clamp(primitive.Width * fitScale, 1f, 8f);
 				DrawLine(paneStart, paneEnd, color, width, true);
 			}
-			DrawFeatureAnnotations(renderedBounds, contentPane, renderedFeatures);
-			DrawStructures(renderedBounds, contentPane, renderedFeatures);
+			if (showFeatures)
+				DrawFeatureAnnotations(renderedBounds, contentPane, renderedFeatures);
+			if (showStructures)
+				DrawStructures(renderedBounds, contentPane, renderedFeatures);
 		}
 		Color regionColor = region.Disposition == FragmentAnnotationDisposition.Accepted
 			? new Color(0.25f, 1f, 0.45f, 1f)
@@ -483,7 +501,7 @@ public partial class FragmentRegionSequenceView : Control
 	{
 		foreach (FragmentDetectedFeature feature in renderedFeatures)
 		{
-			if (IsAcceptedStructureMember(feature.Id)) continue;
+			if (showStructures && IsAcceptedStructureMember(feature.Id)) continue;
 			bool isPending = selectedFeatureId == feature.Id &&
 				feature.Disposition == FragmentAnnotationDisposition.Proposed;
 			Color color = feature.Provenance == FragmentAnnotationProvenance.Player

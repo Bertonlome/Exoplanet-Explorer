@@ -23,6 +23,28 @@ public partial class FragmentAutonomySettings : Resource
 	[Export(PropertyHint.Range, "0,1,0.01")]
 	public float MeasurementDebounceSeconds { get; set; } = 0.12f;
 
+	[ExportGroup("Autonomous Workflow")]
+	[Export(PropertyHint.Range, "1,30,0.5")]
+	public float RegionSearchBudgetSeconds { get; set; } = 5f;
+
+	[Export(PropertyHint.Range, "1,30,0.5")]
+	public float FeatureSearchBudgetSeconds { get; set; } = 5f;
+
+	[Export(PropertyHint.Range, "1,5,1")]
+	public int MaximumScoredDenseRegionCount { get; set; } = 5;
+
+	[Export(PropertyHint.Range, "1,12,1")]
+	public int MinimumDenseRegionFeatureCount { get; set; } = 3;
+
+	[Export(PropertyHint.Range, "1,200,1")]
+	public float MinimumDenseRegionDensity { get; set; } = 18f;
+
+	[Export(PropertyHint.Range, "6,64,1")]
+	public int MaximumRegionSearchTests { get; set; } = 64;
+
+	[Export(PropertyHint.Range, "6,400,1")]
+	public int MaximumFeatureSearchTestsPerRegion { get; set; } = 144;
+
 	[ExportGroup("Search Safety")]
 	[Export(PropertyHint.Range, "1,40,1")]
 	public int MaximumContinuousSearchSteps { get; set; } = 40;

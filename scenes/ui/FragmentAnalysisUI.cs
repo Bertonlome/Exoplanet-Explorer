@@ -43,10 +43,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		fragmentCanvas = GetNode<FragmentCanvas>("%FragmentCanvas");
 		quitButton = GetNode<Button>("%QuitButton");
 		reloadButton = GetNode<Button>("%ReloadButton");
-		rotateCounterClockwiseButton = GetNode<Button>("%RotateCounterClockwiseButton");
-		rotateClockwiseButton = GetNode<Button>("%RotateClockwiseButton");
-		rotationValueLabel = GetNode<Label>("%RotationValueLabel");
-		fineRotationSpinBox = GetNode<SpinBox>("%FineRotationSpinBox");
+		// Rotation controls are created in the rover panel; fields remain null until InitializeAutonomyNodes assigns them.
 		polarizationButton = GetNode<CheckButton>("%PolarizationButton");
 		spectralButton = GetNode<CheckButton>("%SpectralButton");
 		surfaceButton = GetNode<CheckButton>("%SurfaceButton");
@@ -86,8 +83,9 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		GameUI.Instance?.SetWorldCameraInputEnabled(false);
 		monolithFragment = this.TryGetNodeAtPosition<MonolithFragment>(fragmentPosition);
 		fragmentVariant = monolithFragment?.currentVariant ?? MonolithFragment.Variant.Hominid;
-		SetFragmentOverviewTexture(monolithFragment?.FragmentTexture);
 		FragmentGlyphType glyphType = savedState?.GlyphType ?? GetGlyphType(fragmentVariant);
+		SetFragmentOverviewTexture(monolithFragment?.FragmentTexture ??
+			LoadFragmentReferenceTexture(glyphType));
 		fragmentCanvas.SetSpatialContext(fragmentPosition, monolithPosition, glyphType);
 
 		if (savedState == null)
@@ -108,11 +106,13 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		InitializeAutonomy(restoredRoverState);
 		UpdateFragmentLifecycleLabel(isRestoredSession, wasEverSolved);
 
+		// Show mode selection popup for first-time analysis (not restored).
+		if (savedState == null && !wasRestored)
+			ShowInitialModeDialog();
+
 		quitButton.Pressed += HideUI;
 		reloadButton.Pressed += OnReloadPressed;
-		rotateCounterClockwiseButton.Pressed += OnRotateCounterClockwisePressed;
-		rotateClockwiseButton.Pressed += OnRotateClockwisePressed;
-		fineRotationSpinBox.ValueChanged += OnFineRotationChanged;
+		// Rotation buttons are now in the rover panel; signals connected via ConnectAutonomySignals.
 		fragmentCanvas.PuzzleStateChanged += OnPuzzleStateChanged;
 		polarizationButton.Toggled += OnPolarizationToggled;
 		spectralButton.Toggled += OnSpectralToggled;
@@ -149,9 +149,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		DisconnectAutonomySignals();
 		quitButton.Pressed -= HideUI;
 		reloadButton.Pressed -= OnReloadPressed;
-		rotateCounterClockwiseButton.Pressed -= OnRotateCounterClockwisePressed;
-		rotateClockwiseButton.Pressed -= OnRotateClockwisePressed;
-		fineRotationSpinBox.ValueChanged -= OnFineRotationChanged;
+		// Rotation buttons disconnected via DisconnectAutonomySignals.
 		fragmentCanvas.PuzzleStateChanged -= OnPuzzleStateChanged;
 		polarizationButton.Toggled -= OnPolarizationToggled;
 		spectralButton.Toggled -= OnSpectralToggled;
@@ -171,24 +169,36 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 
 	private void OnRotateCounterClockwisePressed()
 	{
-		DispatchAnalysisCommand(FragmentAnalysisCommand.Rotation(
-			fragmentCanvas.DisplayRotationDegrees - RotationStepDegrees,
-			FragmentAnalysisActionOrigin.Player));
+		DispatchManualRotation(
+			fragmentCanvas.DisplayRotationDegrees - RotationStepDegrees);
 	}
 
 	private void OnRotateClockwisePressed()
 	{
-		DispatchAnalysisCommand(FragmentAnalysisCommand.Rotation(
-			fragmentCanvas.DisplayRotationDegrees + RotationStepDegrees,
-			FragmentAnalysisActionOrigin.Player));
+		DispatchManualRotation(
+			fragmentCanvas.DisplayRotationDegrees + RotationStepDegrees);
 	}
 
 	private void OnFineRotationChanged(double value)
 	{
 		if (isSyncingRotationControl) return;
-		DispatchAnalysisCommand(FragmentAnalysisCommand.Rotation(
-			(float)value,
-			FragmentAnalysisActionOrigin.Player));
+		DispatchManualRotation((float)value);
+	}
+
+	private void DispatchManualRotation(float degrees)
+	{
+		suppressSectionAutoScroll = true;
+		try
+		{
+			DispatchAnalysisCommand(FragmentAnalysisCommand.Rotation(
+				degrees,
+				FragmentAnalysisActionOrigin.Player));
+		}
+		finally
+		{
+			suppressSectionAutoScroll = false;
+		}
+		HideOrientationPreviewAfterRotation();
 	}
 
 	private void OnPuzzleStateChanged(bool filterCombinationCorrect, bool rotationCorrect)
@@ -210,6 +220,9 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		fineRotationSpinBox.Value = rotation;
 		isSyncingRotationControl = false;
 	}
+
+	public float CaptureRegionRotationDegrees(int regionId) =>
+		fragmentCanvas?.GetRegionRotationDegrees(regionId) ?? 0f;
 
 	private void SyncFilterState()
 	{
@@ -284,6 +297,17 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 			MonolithFragment.Variant.Television => FragmentGlyphType.Television,
 			_ => FragmentGlyphType.Hominid
 		};
+	}
+
+	private static Texture2D LoadFragmentReferenceTexture(FragmentGlyphType glyphType)
+	{
+		string path = glyphType switch
+		{
+			FragmentGlyphType.Key => "res://assets/monolith_fragment_v2.png",
+			FragmentGlyphType.Television => "res://assets/monolith_fragment_v3.png",
+			_ => "res://assets/monolith_fragment_v1.png"
+		};
+		return GD.Load<Texture2D>(path);
 	}
 
 	private void OnPolarizationToggled(bool enabled) => DispatchToggle(

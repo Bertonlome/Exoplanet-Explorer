@@ -12,30 +12,29 @@ public static class FragmentDirectionMapper
 
 	public static FragmentDirectionInterpretation Map(
 		FragmentArrowCandidate arrow,
-		FragmentOrientationHypothesis orientation,
-		Vector2 sampleSize,
-		float uprightCorrectionDegrees)
+		Vector2 sampleSize)
 	{
-		if (arrow == null || orientation == null) return null;
+		if (arrow == null) return null;
 		Vector2 safeSize = new(MathF.Max(sampleSize.X, 1f), MathF.Max(sampleSize.Y, 1f));
 		Vector2 scan = (arrow.Tip - arrow.Tail) * safeSize;
 		if (scan.LengthSquared() <= 0.0001f) return null;
 		scan = scan.Normalized();
-		Vector2 upright = scan.Rotated(Mathf.DegToRad(uprightCorrectionDegrees)).Normalized();
-		// Analyzer pixels and Godot grid coordinates both use +X right and +Y down.
-		Vector2 world = upright;
+		// The displayed analyzer is the reference frame: screen up is world/grid north. H# remains
+		// useful for optional rotation, but bearing interpretation deliberately needs only A#.
+		Vector2 world = scan;
 		float bearing = Mathf.PosMod(
 			Mathf.RadToDeg(MathF.Atan2(world.X, -world.Y)),
 			360f);
 		int compassIndex = Mathf.RoundToInt(bearing / 45f) % CompassLabels.Length;
 		return new FragmentDirectionInterpretation
 		{
+			RegionId = arrow.RegionId,
 			SourceArrowId = arrow.Id,
-			SourceOrientationId = orientation.Id,
+			SourceOrientationId = 0,
 			ScanDirection = scan,
-			UprightDirection = upright,
+			UprightDirection = scan,
 			WorldGridDirection = world,
-			UprightCorrectionDegrees = uprightCorrectionDegrees,
+			UprightCorrectionDegrees = 0f,
 			BearingDegrees = bearing,
 			CompassLabel = CompassLabels[compassIndex]
 		};
@@ -43,7 +42,7 @@ public static class FragmentDirectionMapper
 
 	public static string FormatBearing(FragmentDirectionInterpretation direction) =>
 		direction == null
-			? "BEARING: Awaiting accepted arrow and orientation"
+			? "BEARING: Awaiting accepted arrow"
 			: $"{direction.CompassLabel} · {direction.BearingDegrees:0.0}° · " +
 				$"({direction.WorldGridDirection.X:+0.00;-0.00;0.00}, " +
 				$"{direction.WorldGridDirection.Y:+0.00;-0.00;0.00})";
@@ -57,11 +56,10 @@ public static class FragmentDirectionMapper
 			(CreateArrow(Vector2.Down), "S", Vector2.Down),
 			(CreateArrow(new Vector2(1f, -1f)), "NE", new Vector2(1f, -1f).Normalized())
 		};
-		FragmentOrientationHypothesis orientation = new() { Id = 1 };
 		foreach ((FragmentArrowCandidate arrow, string compass, Vector2 expected) in cases)
 		{
 			FragmentDirectionInterpretation mapped = Map(
-				arrow, orientation, new Vector2(960f, 540f), 0f);
+				arrow, new Vector2(960f, 540f));
 			if (mapped == null || mapped.CompassLabel != compass ||
 				mapped.WorldGridDirection.DistanceTo(expected) > 0.001f)
 			{

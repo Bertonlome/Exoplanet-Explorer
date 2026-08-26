@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://cb8e7vaji1v7h"]
+[gd_scene load_steps=18 format=3 uid="uid://cb8e7vaji1v7h"]
 
 [ext_resource type="Script" path="res://scenes/ui/FragmentAnalysisUI.cs" id="1_0ks4x"]
 [ext_resource type="Script" path="res://scenes/ui/FragmentCanvas.cs" id="2_wqr11"]
@@ -7,6 +7,12 @@
 [ext_resource type="Theme" uid="uid://lrxwuh3o4l5k" path="res://resources/sci-fi-theme.tres" id="6_37kou"]
 [ext_resource type="Texture2D" uid="uid://d1vo7wkt5gtc7" path="res://assets/ui/locked_opened.png" id="7_lock_open"]
 [ext_resource type="Texture2D" uid="uid://je0dbm3ehein" path="res://assets/ui/locked_closed.png" id="8_lock_closed"]
+[ext_resource type="Texture2D" uid="uid://1rxpfxjxh0wh" path="res://assets/ui/polarization_icon.png" id="9_polarization"]
+[ext_resource type="Texture2D" uid="uid://bu7ihlet7va3w" path="res://assets/ui/spectral_signature_icon.png" id="10_spectral"]
+[ext_resource type="Texture2D" uid="uid://d1gjke8pc1smg" path="res://assets/ui/surface_topography_icon.png" id="11_surface"]
+[ext_resource type="Texture2D" uid="uid://cjk66yohpuiw8" path="res://assets/ui/electromagnetic_response_icon.png" id="12_electromagnetic"]
+[ext_resource type="Texture2D" uid="uid://j4rpobkpyqwj" path="res://assets/ui/resonance_map_icon.png" id="13_resonance"]
+[ext_resource type="Texture2D" uid="uid://clsnnccgjknxv" path="res://assets/ui/x-ray_icon.png" id="14_xray"]
 
 [sub_resource type="Resource" id="Resource_62ami"]
 script = ExtResource("4_ip4le")
@@ -124,6 +130,14 @@ DepositWidth = 1.5
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ppqcn"]
 bg_color = Color(0, 0, 0, 1)
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_processing_on"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.243137, 0.890196, 0.717647, 1)
+
 [node name="FragmentAnalysisUI" type="CanvasLayer"]
 script = ExtResource("1_0ks4x")
 
@@ -177,35 +191,6 @@ text = "QUIT "
 unique_name_in_owner = true
 layout_mode = 2
 text = "Reload"
-
-[node name="RotateCounterClockwiseButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Rotate the reconstruction 10 degrees counter-clockwise."
-text = "CCW -10°"
-
-[node name="RotationValueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 0)
-layout_mode = 2
-text = "ROTATION: 0°"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="FineRotationSpinBox" type="SpinBox" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(92, 0)
-layout_mode = 2
-tooltip_text = "Set the reconstruction rotation precisely in 1-degree steps. Manual input cancels Rover rotation at its current angle."
-min_value = -180.0
-max_value = 180.0
-suffix = "°"
-
-[node name="RotateClockwiseButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer3"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Rotate the reconstruction 10 degrees clockwise."
-text = "CW +10°"
 
 [node name="AnalysisFrame" type="PanelContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -285,17 +270,31 @@ tooltip_text = "Reject this candidate and announce another."
 disabled = true
 text = "SKIP"
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="ProcessingToggles" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 15
+theme_override_constants/separation = 8
 
-[node name="PolarizationButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="PolarizationToggle" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Buttons" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/PolarizationToggle"]
+layout_mode = 2
+alignment = 1
+
+[node name="PolarizationButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/PolarizationToggle/Buttons"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 64)
 layout_mode = 2
 tooltip_text = "Reconstruct missing sections without identifying their source."
-text = "POLARIZATION"
+theme_override_constants/icon_max_width = 84
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
+icon = ExtResource("9_polarization")
+expand_icon = true
 
-[node name="PolarizationLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="PolarizationLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/PolarizationToggle/Buttons"]
 unique_name_in_owner = true
 texture_filter = 1
 custom_minimum_size = Vector2(28, 28)
@@ -307,17 +306,32 @@ texture_pressed = ExtResource("8_lock_closed")
 ignore_texture_size = true
 stretch_mode = 5
 
-[node name="Control" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
-custom_minimum_size = Vector2(120, 0)
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/PolarizationToggle"]
 layout_mode = 2
+text = "POLARIZATION"
+horizontal_alignment = 1
 
-[node name="SpectralButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="SpectralToggle" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Buttons" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SpectralToggle"]
+layout_mode = 2
+alignment = 1
+
+[node name="SpectralButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SpectralToggle/Buttons"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 64)
 layout_mode = 2
 tooltip_text = "Enhance important signal geometry."
-text = "SPECTRAL SIGNATURE"
+theme_override_constants/icon_max_width = 84
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
+icon = ExtResource("10_spectral")
+expand_icon = true
 
-[node name="SpectralLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="SpectralLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SpectralToggle/Buttons"]
 unique_name_in_owner = true
 texture_filter = 1
 custom_minimum_size = Vector2(28, 28)
@@ -329,16 +343,32 @@ texture_pressed = ExtResource("8_lock_closed")
 ignore_texture_size = true
 stretch_mode = 5
 
-[node name="Control2" type="Control" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SpectralToggle"]
 layout_mode = 2
+text = "SPECTRAL SIGNATURE"
+horizontal_alignment = 1
 
-[node name="SurfaceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="SurfaceToggle" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Buttons" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SurfaceToggle"]
+layout_mode = 2
+alignment = 1
+
+[node name="SurfaceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SurfaceToggle/Buttons"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 64)
 layout_mode = 2
 tooltip_text = "Increase signal contrast and suppress mineral noise."
-text = "SURFACE TOPOGRAPHY"
+theme_override_constants/icon_max_width = 84
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
+icon = ExtResource("11_surface")
+expand_icon = true
 
-[node name="SurfaceLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="SurfaceLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SurfaceToggle/Buttons"]
 unique_name_in_owner = true
 texture_filter = 1
 custom_minimum_size = Vector2(28, 28)
@@ -350,13 +380,32 @@ texture_pressed = ExtResource("8_lock_closed")
 ignore_texture_size = true
 stretch_mode = 5
 
-[node name="ElectromagneticButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SurfaceToggle"]
+layout_mode = 2
+text = "SURFACE TOPOGRAPHY"
+horizontal_alignment = 1
+
+[node name="ElectromagneticToggle" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Buttons" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ElectromagneticToggle"]
+layout_mode = 2
+alignment = 1
+
+[node name="ElectromagneticButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ElectromagneticToggle/Buttons"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 64)
 layout_mode = 2
 tooltip_text = "Reveal the electromagnetic scan channel."
-text = "ELECTROMAGNETIC RESPONSE"
+theme_override_constants/icon_max_width = 84
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
+icon = ExtResource("12_electromagnetic")
+expand_icon = true
 
-[node name="ElectromagneticLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="ElectromagneticLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ElectromagneticToggle/Buttons"]
 unique_name_in_owner = true
 texture_filter = 1
 custom_minimum_size = Vector2(28, 28)
@@ -368,13 +417,33 @@ texture_pressed = ExtResource("8_lock_closed")
 ignore_texture_size = true
 stretch_mode = 5
 
-[node name="ResonanceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ElectromagneticToggle"]
+layout_mode = 2
+text = "ELECTROMAGNETIC RESPONSE"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="ResonanceToggle" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Buttons" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ResonanceToggle"]
+layout_mode = 2
+alignment = 1
+
+[node name="ResonanceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ResonanceToggle/Buttons"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 64)
 layout_mode = 2
 tooltip_text = "Reveal the resonance scan channel."
-text = "RESONANCE MAP"
+theme_override_constants/icon_max_width = 84
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
+icon = ExtResource("13_resonance")
+expand_icon = true
 
-[node name="ResonanceLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="ResonanceLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ResonanceToggle/Buttons"]
 unique_name_in_owner = true
 texture_filter = 1
 custom_minimum_size = Vector2(28, 28)
@@ -386,13 +455,32 @@ texture_pressed = ExtResource("8_lock_closed")
 ignore_texture_size = true
 stretch_mode = 5
 
-[node name="XRayButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ResonanceToggle"]
+layout_mode = 2
+text = "RESONANCE MAP"
+horizontal_alignment = 1
+
+[node name="XRayToggle" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Buttons" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/XRayToggle"]
+layout_mode = 2
+alignment = 1
+
+[node name="XRayButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/XRayToggle/Buttons"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 64)
 layout_mode = 2
 tooltip_text = "Reveal the X-Ray scan channel."
-text = "X-RAY"
+theme_override_constants/icon_max_width = 84
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
+icon = ExtResource("14_xray")
+expand_icon = true
 
-[node name="XRayLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="XRayLockButton" type="TextureButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/XRayToggle/Buttons"]
 unique_name_in_owner = true
 texture_filter = 1
 custom_minimum_size = Vector2(28, 28)
@@ -403,6 +491,11 @@ texture_normal = ExtResource("7_lock_open")
 texture_pressed = ExtResource("8_lock_closed")
 ignore_texture_size = true
 stretch_mode = 5
+
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/XRayToggle"]
+layout_mode = 2
+text = "X-RAY"
+horizontal_alignment = 1
 
 [node name="ProcessingSliders" type="HBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -493,3 +586,49 @@ theme_override_font_sizes/font_size = 12
 text = "MEASURED CHANGE: BASELINE"
 horizontal_alignment = 1
 autowrap_mode = 2
+
+[node name="InitialModeOverlay" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 100
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("6_37kou")
+
+[node name="Center" type="CenterContainer" parent="InitialModeOverlay"]
+layout_mode = 2
+
+[node name="ModeChoices" type="VBoxContainer" parent="InitialModeOverlay/Center"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="InitialModeOverlay/Center/ModeChoices"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "ANALYSIS MODE"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="InitialModeOverlay/Center/ModeChoices"]
+layout_mode = 2
+text = "How should the Rover assist with this analysis?"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="InitialManualButton" type="Button" parent="InitialModeOverlay/Center/ModeChoices"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "MANUAL — player analyses alone"
+
+[node name="InitialSupportButton" type="Button" parent="InitialModeOverlay/Center/ModeChoices"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "ROVER SUPPORT — Rover assists the player"
+
+[node name="InitialAutonomousButton" type="Button" parent="InitialModeOverlay/Center/ModeChoices"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "ROVER AUTONOMOUS — Rover acts, player supervises"

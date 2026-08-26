@@ -51,6 +51,15 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
 	private float _navigationStartZoom;
 	private float _navigationTargetZoom;
 	private Rect2 _navigationTargetBounds;
+	private sealed class RegionRotation
+	{
+		public int RegionId;
+		public Rect2 SelectionBounds;
+		public Vector2 PivotNormalized;
+		public float Degrees;
+		public readonly HashSet<FragmentLine> Lines = new();
+	}
+	private readonly List<RegionRotation> _regionRotations = new();
 
     public FragmentPuzzle Puzzle { get; private set; }
     public float ViewZoom => _viewZoom;
@@ -259,10 +268,70 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
         EmitPuzzleStateChanged();
     }
 
+	public void SetProcessingConfiguration(FragmentAnalysisControlState configuration)
+	{
+		if (configuration == null) return;
+		_polarizationEnabled = configuration.PolarizationEnabled;
+		_polarizationLevel = Mathf.Clamp(configuration.PolarizationLevel, 1, 5);
+		_spectralEnabled = configuration.SpectralEnabled;
+		_spectralLevel = Mathf.Clamp(configuration.SpectralLevel, 1, 5);
+		_surfaceEnabled = configuration.SurfaceEnabled;
+		_surfaceLevel = Mathf.Clamp(configuration.SurfaceLevel, 1, 5);
+		_electromagneticEnabled = configuration.ElectromagneticEnabled;
+		_resonanceEnabled = configuration.ResonanceEnabled;
+		_xRayEnabled = configuration.XRayEnabled;
+		_observationRevision++;
+		QueueRedraw();
+		EmitPuzzleStateChanged();
+	}
+
     // Kept as a compatibility alias for existing callers.
     public void SetLayer(FilterType filter, bool enabled) => SetFilter(filter, enabled);
 
     public void SetPuzzleRotationDegrees(float degrees) => DisplayRotationDegrees = degrees;
+
+	public float GetRegionRotationDegrees(int regionId) =>
+		_regionRotations.Find(rotation => rotation.RegionId == regionId)?.Degrees ?? 0f;
+
+	public void SetRegionRotationDegrees(
+		int regionId,
+		Rect2 normalizedBounds,
+		Vector2 pivotNormalized,
+		float degrees)
+	{
+		if (Puzzle == null || regionId < 0) return;
+		RegionRotation rotation = _regionRotations.Find(candidate => candidate.RegionId == regionId);
+		if (rotation == null)
+		{
+			rotation = new RegionRotation
+			{
+				RegionId = regionId,
+				SelectionBounds = normalizedBounds,
+				PivotNormalized = pivotNormalized.Clamp(Vector2.Zero, Vector2.One)
+			};
+			foreach (FragmentLine line in Puzzle.Lines)
+			{
+				// A rendered stroke acquires one orientation owner. A later overlapping R# may
+				// capture other strokes, but cannot rotate geometry already committed to R1.
+				if (_regionRotations.Exists(existing => existing.Lines.Contains(line))) continue;
+				Vector2 center = line.HasCustomRotationCenter ? line.RotationCenter : Puzzle.FigureCenter;
+				Vector2 start = TransformPuzzlePointToVirtual(line.Start, center, line);
+				Vector2 end = TransformPuzzlePointToVirtual(line.End, center, line);
+				Vector2 size = GetVirtualCanvasSize();
+				Vector2 normalizedStart = start / size;
+				Vector2 normalizedEnd = end / size;
+				if (SegmentIntersectsRect(normalizedStart, normalizedEnd, normalizedBounds))
+					rotation.Lines.Add(line);
+			}
+			_regionRotations.Add(rotation);
+		}
+		rotation.SelectionBounds = normalizedBounds;
+		rotation.PivotNormalized = pivotNormalized.Clamp(Vector2.Zero, Vector2.One);
+		rotation.Degrees = Mathf.Wrap(degrees, -180f, 180f);
+		_observationRevision++;
+		QueueRedraw();
+		EmitPuzzleStateChanged();
+	}
 
     public void SetSpatialContext(
         Vector2I fragmentPosition,
@@ -296,10 +365,28 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
     public bool IsAtCorrectRotation()
     {
         if (Puzzle == null) return false;
-        float difference = Mathf.Abs(Mathf.RadToDeg(Mathf.AngleDifference(
-            Mathf.DegToRad(DisplayRotationDegrees),
-            Mathf.DegToRad(Puzzle.CorrectRotationDegrees))));
-        return difference <= generationSettings.CorrectRotationToleranceDegrees;
+		if (RotationMatches(DisplayRotationDegrees)) return true;
+		int signalCount = 0;
+		foreach (FragmentLine line in Puzzle.Lines)
+			if (line.Role == FragmentLineRole.Signal) signalCount++;
+		int requiredMembership = Math.Max(1, Mathf.CeilToInt(signalCount * 0.6f));
+		foreach (RegionRotation rotation in _regionRotations)
+		{
+			int membership = 0;
+			foreach (FragmentLine line in rotation.Lines)
+				if (line.Role == FragmentLineRole.Signal) membership++;
+			if (membership >= requiredMembership &&
+				RotationMatches(DisplayRotationDegrees + rotation.Degrees)) return true;
+		}
+		return false;
+
+		bool RotationMatches(float degrees)
+		{
+			float difference = Mathf.Abs(Mathf.RadToDeg(Mathf.AngleDifference(
+				Mathf.DegToRad(degrees),
+				Mathf.DegToRad(Puzzle.CorrectRotationDegrees))));
+			return difference <= generationSettings.CorrectRotationToleranceDegrees;
+		}
     }
 
     public bool IsPuzzleSolved() =>
@@ -324,6 +411,7 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
             _fragmentPosition,
             _monolithPosition,
             _glyphType);
+		_regionRotations.Clear();
         _displayRotationDegrees = Puzzle.InitialRotationDegrees;
         _viewZoom = 1f;
         _viewPan = Vector2.Zero;
@@ -354,7 +442,8 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
             return new FragmentObservableScan
             {
                 Revision = _observationRevision,
-                SampleSize = GetVirtualCanvasSize()
+                SampleSize = GetVirtualCanvasSize(),
+				RotationPivotNormalized = new Vector2(0.5f, 0.5f)
             };
         }
 
@@ -383,6 +472,9 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
 		{
 			Revision = _observationRevision,
 			SampleSize = GetVirtualCanvasSize(),
+			RotationPivotNormalized = new Vector2(
+				Puzzle.FigureCenter.X / MathF.Max(Puzzle.ReferenceSize.X, 1f),
+				Puzzle.FigureCenter.Y / MathF.Max(Puzzle.ReferenceSize.Y, 1f)),
 			Primitives = primitives
 		};
     }
@@ -584,8 +676,8 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
         Vector2 rotationCenter = line.HasCustomRotationCenter
             ? line.RotationCenter
             : Puzzle.FigureCenter;
-        Vector2 start = TransformPuzzlePoint(line.Start, rotationCenter);
-        Vector2 end = TransformPuzzlePoint(line.End, rotationCenter);
+        Vector2 start = TransformPuzzlePoint(line.Start, rotationCenter, line);
+        Vector2 end = TransformPuzzlePoint(line.End, rotationCenter, line);
 
         if (reconstructionQuality >= 1f)
         {
@@ -804,7 +896,18 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
         };
     }
 
-    private Vector2 TransformPuzzlePoint(Vector2 point, Vector2 rotationCenter)
+    private Vector2 TransformPuzzlePoint(
+		Vector2 point,
+		Vector2 rotationCenter,
+		FragmentLine line)
+	{
+		return ApplyRenderTransform(TransformPuzzlePointToVirtual(point, rotationCenter, line));
+	}
+
+	private Vector2 TransformPuzzlePointToVirtual(
+		Vector2 point,
+		Vector2 rotationCenter,
+		FragmentLine line)
     {
         Vector2 referenceSize = Puzzle.ReferenceSize;
         Vector2 rotated = rotationCenter +
@@ -813,8 +916,47 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
         Vector2 scaled = new(
             rotated.X * virtualCanvasSize.X / MathF.Max(referenceSize.X, 1f),
             rotated.Y * virtualCanvasSize.Y / MathF.Max(referenceSize.Y, 1f));
-		return ApplyRenderTransform(scaled);
+		foreach (RegionRotation regionRotation in _regionRotations)
+		{
+			if (!regionRotation.Lines.Contains(line) ||
+				MathF.Abs(regionRotation.Degrees) <= 0.0001f) continue;
+			Vector2 pivot = regionRotation.PivotNormalized * virtualCanvasSize;
+			scaled = pivot + (scaled - pivot).Rotated(Mathf.DegToRad(regionRotation.Degrees));
+		}
+		return scaled;
     }
+
+	private static bool SegmentIntersectsRect(Vector2 start, Vector2 end, Rect2 rectangle)
+	{
+		Vector2 delta = end - start;
+		float minimum = 0f;
+		float maximum = 1f;
+		return ClipRegionSegment(-delta.X, start.X - rectangle.Position.X, ref minimum, ref maximum) &&
+			ClipRegionSegment(delta.X, rectangle.End.X - start.X, ref minimum, ref maximum) &&
+			ClipRegionSegment(-delta.Y, start.Y - rectangle.Position.Y, ref minimum, ref maximum) &&
+			ClipRegionSegment(delta.Y, rectangle.End.Y - start.Y, ref minimum, ref maximum);
+	}
+
+	private static bool ClipRegionSegment(
+		float direction,
+		float distance,
+		ref float minimum,
+		ref float maximum)
+	{
+		if (Mathf.IsZeroApprox(direction)) return distance >= 0f;
+		float ratio = distance / direction;
+		if (direction < 0f)
+		{
+			if (ratio > maximum) return false;
+			if (ratio > minimum) minimum = ratio;
+		}
+		else
+		{
+			if (ratio < minimum) return false;
+			if (ratio < maximum) maximum = ratio;
+		}
+		return true;
+	}
 
 	private Vector2 ApplyRenderTransform(Vector2 point)
 	{

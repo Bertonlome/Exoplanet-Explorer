@@ -41,9 +41,9 @@ mode, state, observation, command, overlay, and override contracts.
 * Add `FragmentAutonomyMode` (`Off`, `Supporter`, `Performer`) and typed records for control state,
   visible scan primitives, features, regions, structures, metrics, history entries, orientation
   hypotheses, arrow candidates, and Rover action/status text.
-* Add `FragmentAnalysisRover` as the coordinator. It receives a sanitized observable scan snapshot,
-  a source-aware control adapter, and—per resolved decision F-02—a private immutable truth-oracle
-  snapshot. It is never passed the mutable `FragmentPuzzle` itself.
+* Add `FragmentAnalysisRover` as the coordinator. It receives a sanitized observable scan snapshot
+  and source-aware control adapter. It receives neither the mutable `FragmentPuzzle` nor a hidden
+  truth-oracle snapshot.
 * Add `FragmentRoverOverlay : Control` as a sibling drawn above `FragmentCanvas`. Annotations are
   therefore editable data and a separate visual layer, never pixels baked into the puzzle.
 * Add `FragmentRoverSettings : Resource` for thresholds, confidence cutoffs, navigation speed,
@@ -98,6 +98,11 @@ behave as though they were derived from observation. Each task has a tunable Yel
 default `0.5`; Green is reliable, Orange remains support/approval-dependent, and Red cannot perform.
 This decision supersedes later statements that prohibit all hidden-truth access, but not statements
 that prohibit exposing the answer or bypassing the normal puzzle controls.
+
+**Final-touch supersession:** F-02's truth snapshot was removed after it caused the hidden correct
+rotation to be injected systematically into H5. The production coordinator now follows option A:
+only sanitized observations, explicit player decisions, and command/history state are available.
+Yellow reliability remains configurable as originally selected.
 
 **Decision F-03 — automated-test approach:**
 
@@ -1953,14 +1958,14 @@ Rover structure detection must therefore use editable structure definitions rath
 **Capacity entry points:** `FragmentStructureDetector.DetectStructures(...)` builds a graph from
 active feature IDs and groups connected/coherent components without inspecting feature provenance or
 puzzle roles. `FragmentAnalysisRover.ApplyStructureEdit(...)` handles selection and lifecycle;
-`AddPlayerStructure(...)`, `ToggleSelectedStructureFeature(...)`, and `MergeStructures(...)` handle
-create, include/exclude, merge, and arbitrary redefine operations while keeping stable structure IDs
-and explicit feature membership. Disconnected memberships can be split/redefined by excluding them
-from one definition and adding them to a new one.
+`ToggleSelectedStructureFeature(...)`, `RemoveSelectedStructureFeature(...)`, and
+`AddPlayerStrokeToSelectedStructure(...)` handle inclusion, deliberate deletion, and custom drawn
+geometry while keeping stable structure/feature IDs and explicit membership.
 
 Draw structure boundaries/combined paths in magenta, visually separate from cyan/green raw-feature
-annotations. In `EDIT STRUCTURE` mode, clicking a visible feature toggles membership in the selected
-structure; editing the definition never edits the underlying scan or original feature geometry.
+annotations. In `EDIT STRUCTURE` mode, clicking a non-member adds it, clicking a member selects it
+for Delete, and dragging creates a player-defined stroke; editing the definition never edits the
+underlying scan geometry.
 Re-running detection may add proposals but cannot overwrite player-edited/accepted structures.
 
 **Automatic:** graph detector, editable structure model, overlay, selected-structure panel/actions,
@@ -1982,18 +1987,13 @@ dismissed, player-created, or membership-edited definitions are retained. Featur
 accepted/edited structure are retained across processing-view changes; explicitly dismissing a
 feature removes only that membership and does not edit scan geometry.
 
-**Implemented UI and editing:** the Rover panel has a collapsible `RECONSTRUCTED STRUCTURES` section
-with `SCAN STRUCTURES`, `OVERLAY`, selector, `NEW`, `EDIT`, `MERGE`, `ACCEPT`, `DISMISS`, and `RESTORE`.
-Structures render as thick magenta dashed/solid paths behind the existing raw-feature annotations,
-with `S#` labels; selected/editing state is brighter and labelled separately. `EDIT` changes the
-cursor and makes a click on a visible feature toggle only its membership in the selected structure;
-drag still pans, wheel still zooms, and Escape exits edit mode. Starting region drawing or entering
-side-by-side mode exits structure editing to avoid gesture conflicts.
-
-`NEW` creates an empty player definition and enters edit mode. `MERGE` is intentionally two-step:
-select the target, press `MERGE`, then choose the source from the same selector; membership is united
-into the target and the source becomes dismissed so `RESTORE` or general Undo can recover it. This
-avoids an additional wide checklist or ambiguous automatic nearest-structure choice.
+**Implemented UI and editing:** the Rover panel retains only `SCAN STRUCTURES`, `OVERLAY`, selector,
+`ACCEPT`, and `DISMISS`. Every visible region containing a structure has a compact on-canvas
+`EDIT STRUCTURE` header button. Structures render as thick magenta paths; edit mode highlights the
+selected member, Delete removes that membership, clicking a non-member includes it, dragging creates
+a persistent player stroke, wheel still zooms, and Escape exits. Starting region drawing or entering
+side-by-side mode exits structure editing to avoid gesture conflicts. General Undo/Redo recovers
+membership and custom-stroke edits.
 
 **Implementation verification:** `dotnet build --no-restore --no-incremental` passes with 0 errors;
 the same three unrelated pre-existing warnings remain. `git diff --check` and the structure-detector
@@ -2006,15 +2006,11 @@ editable scene nodes were restored and all eleven unique-name references were ve
 fail-fast message now identifies a missing/out-of-date 4.1 panel scene directly instead of allowing
 the later parent lookup to produce an ambiguous NullReferenceException.]`
 
-**Godot check:** enable Support or Perform and expand `RECONSTRUCTED STRUCTURES`. Scan after visible
-features exist and confirm magenta `S#` groups differ from cyan/orange/green feature marks. Select a
-structure, enable `EDIT`, then click one member and one non-member: only magenta membership changes;
-the feature disposition and scan line remain unchanged. Pan, zoom, and press Escape while editing.
-Create a `NEW` structure, add at least two features, accept it, rescan, and confirm its membership is
-not overwritten. Merge two proposals using `MERGE` then selecting the source; use `RESTORE` and
-general Undo/Redo. Change processing controls, close/reopen the same fragment, and confirm the
-accepted/edited definition remains aligned and selected. Dismiss a member feature and confirm it is
-removed from the structure without affecting other members.
+**Godot check:** enable Support or Perform and scan after visible features exist. Confirm magenta
+`S#` groups differ from raw features and each containing region shows `EDIT STRUCTURE`. Enter through
+that header button, click a non-member to include it, click a member and press Delete to exclude it,
+then drag empty space to create a custom stroke. Test wheel zoom and Escape, general Undo/Redo,
+rescan preservation, and close/reopen persistence. Confirm the right panel has no NEW/EDIT/MERGE row.
 
 **Decision 4.1-A — first-pass structure editing UI:**
 
@@ -2022,7 +2018,7 @@ removed from the structure without affecting other members.
   include/exclude; provide `NEW`, `MERGE`, `ACCEPT`, and `DISMISS` buttons.
 * **B:** feature-ID checklist in the Rover dock (precise but less spatially intuitive).
 * **C:** both canvas selection and checklist.
-* **Answer:** `[ 4.1-A: A]`
+* **Answer:** `[Superseded by FT-03: canvas header editing without NEW/MERGE panel controls.]`
 
 **Gate test 4.1 (fill after implementation)**
 
@@ -2504,6 +2500,10 @@ orientation proposal and accepted ID must clear until axes are estimated again.
 * **Orientation-region/exit retest result:** `[ ] PASS  [x] FAIL  [ ] BLOCKED REASON: The structures menu should be the same layout as the feature menu, when a structure has been dismissed, the orientation proposal should be done on features, not the dismissed structure.]`
 
 **5.1 structure-review and dismissed-source follow-up:**
+
+**Current-layout note:** The panel-control layout described in this historical follow-up is
+superseded by FT-03. Its sequential-review and dismissed-orientation-source behavior remains active,
+but RESTORE and the NEW/EDIT/MERGE row are no longer presented.
 
 * **Feature-style structure review:** `[x] RECONSTRUCTED STRUCTURES now follows the FEATURE SENSING
   primary layout: scan/overlay, selected summary, selector, then `ACCEPT / DISMISS / RESTORE`.
@@ -3026,7 +3026,7 @@ It can transform an accepted arrow orientation into the game's world/map referen
 
 The Rover has **green** capacity.
 
-It can independently calculate this transformation after an arrow and orientation have been established.
+It can independently calculate this transformation after an arrow has been established.
 
 ### Player support capacity
 
@@ -3041,28 +3041,27 @@ The player has **yellow** capacity.
 we should implement a way to make the relationship clear between:
 
 1. arrow orientation inside the fragment analyzer;
-2. oriented fragment reference frame;
+2. the explicit convention that analyzer up is world north;
 3. world/map direction.
 
 A possible implementation is on the world-map or on the minimap directional overlay derived from the interpreted arrow.
 
 #### Inline implementation plan — checkpoint 6.2
 
-**Implementation status:** Implemented; awaiting the final capability gate test. Accepted
-orientation and arrow state from 5.1/6.1 form the complete input boundary.
+**Implementation status:** Implemented; awaiting the final capability gate test. The accepted
+arrow state from 6.1 is the complete bearing input boundary; H# is used only by the optional
+orientation/rotation workflow.
 
 **Capacity entry points:**
 
-* `FragmentDirectionMapper.ToUprightDirection(acceptedArrow, acceptedOrientation)` rotates the
-  player-accepted arrow vector by the player-accepted upright correction.
-* `FragmentDirectionMapper.ToWorldGridDirection(...)` applies one explicit, tested conversion from
-  analyzer coordinates to Godot grid coordinates and returns a normalized bearing/vector.
+* `FragmentDirectionMapper.Map(acceptedArrow, sampleSize)` aspect-corrects the accepted tail-to-tip
+  vector and applies the explicit analyzer-up = world-north coordinate convention.
 * `FragmentDirectionOverlay.Show(...)` presents the resulting world compass/map bearing and names
-  the accepted A# + H# inputs used to produce it.
+  the accepted A# used to produce it.
 
 The mapper receives the fragment position only if a map ray needs an origin. It never receives the
 monolith position or `Puzzle.MonolithDirection`, and the ray is not snapped or extended to a known
-endpoint. If orientation or arrow acceptance changes, the bearing is marked stale until recomputed.
+endpoint. If arrow acceptance or displayed arrow geometry changes, the bearing is recomputed.
 
 The current analyzer is full-screen and disables world/minimap input, so an analyzer-side read-only
 compass/map inset is the lowest-coupling presentation. A persistent post-analysis minimap ray can be
@@ -3092,9 +3091,9 @@ then compare one reconstructed arrow with movement directions on the actual map.
 
 **Gate test 6.2 (fill after implementation)**
 
-* **Expected:** scan arrow, upright transform, and world bearing are visibly related; right/up/down/
-  diagonal test vectors map to the agreed Godot grid directions; changing accepted arrow or
-  orientation invalidates/recomputes the output; no monolith truth is read or endpoint revealed.
+* **Expected:** the accepted arrow and world bearing are visibly related; right/up/down/diagonal
+  test vectors map to the agreed Godot grid directions with screen up treated as north; changing
+  the accepted arrow invalidates/recomputes the output; no monolith truth is read or endpoint revealed.
 * **Result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED`
 * **Vectors/bearings and map comparison observed:** `[ fill after test ]`
 * **Build/scene/resolution:** `[ fill after test ]`
@@ -3103,25 +3102,25 @@ then compare one reconstructed arrow with movement directions on the actual map.
 **6.2 implementation follow-up:**
 
 * **Coordinate mapper:** `[x] FragmentDirectionMapper aspect-corrects the accepted A# vector into
-  analyzer pixel coordinates, applies the accepted H# upright correction when it has not already
-  been physically applied, and converts directly into Godot grid coordinates (+X right, +Y down).
+  analyzer pixel coordinates and converts directly into Godot grid coordinates (+X right, +Y down),
+  using the explicit convention that the top of the displayed analyzer is north.
   Bearing degrees are clockwise from grid north and formatted as compass label, degrees, and a
   normalized vector.]`
-* **No endpoint/truth access:** `[x] The mapper accepts only the player-accepted arrow, accepted
-  orientation, neutral sample dimensions, and calculated display correction. The minimap receives
+* **No endpoint/truth access:** `[x] The mapper accepts only the player-accepted arrow and neutral
+  sample dimensions. The minimap receives
   only fragment grid position plus normalized bearing. Neither component receives Puzzle,
   MonolithPosition, MonolithDirection, a known endpoint, or snapping data.]`
 * **Decision 6.2-A (A+B):** `[x] WORLD DIRECTION contains a read-only world/grid compass derived
-  from accepted A# + H#. Once mapped, the existing minimap draws a cyan ray from the fragment tile
+  from accepted A#. Once mapped, the existing minimap draws a cyan ray from the fragment tile
   to the map boundary. The ray remains after closing analysis and supports independent bearings
   from multiple fragments for the lifetime of the level.]`
 * **Decision 6.2-B (A):** `[x] The status and inset report values such as
   NE · 45.0° · (+0.71, -0.71). The minimap ray is labelled FRAGMENT · <compass> but deliberately
   stops at the map boundary rather than revealing a target location.]`
-* **Allocation/directability:** `[x] In PERFORMER, accepting both A# and H# maps automatically. In
-  SUPPORT, MAP TO WORLD is the explicit player action. Changing/rejecting the accepted A# or H#, or
-  rotating the live reconstruction, invalidates the prior bearing; Performer recomputes when valid
-  while Support waits for another player command.]`
+* **Allocation/directability:** `[x] Accepting A# maps immediately in every allocation because this
+  is accepted player geometry, not a hidden Rover conclusion. MAP TO WORLD remains available for
+  explicit recomputation. Changing/rejecting A# invalidates the old bearing; rotating the live
+  reconstruction transforms A# and recomputes its bearing. H# review does not gate or erase it.]`
 * **Persistence/reset:** `[x] The direction interpretation deep-copies in FragmentAutonomyState.
   Close/reopen republishes the same accepted minimap ray; Reload/new puzzle removes it. Allocation
   OFF does not erase already accepted player knowledge.]`
@@ -3132,11 +3131,11 @@ then compare one reconstructed arrow with movement directions on the actual map.
   persistence, invalidation, and coordinate guards are code-authored. Godot editor setup: none.]`
 * **Build verification:** `[x] dotnet build --no-restore succeeds (0 errors; 3 pre-existing warnings
   in BuildingComponent.cs and SaveManager.cs). git diff --check reports no whitespace errors.]`
-* **Focused test:** `[Accept one H# and A# in SUPPORT, expand WORLD DIRECTION, and press MAP TO
-  WORLD. Confirm the three arrows visibly connect scan → corrected/upright → grid, and compare the
+* **Focused test:** `[Draw or select and accept one A#, without accepting any H#. Expand WORLD
+  DIRECTION and compare the
   compass/degrees/vector with the arrow direction. Close analysis and confirm the cyan ray begins
   at the fragment tile and reaches only the minimap boundary. Reopen and confirm it persists.
-  Reject/change A# or H# and confirm the old ray disappears until remapped; repeat in PERFORMER and
+  Reject/change A# and confirm the old ray disappears until remapped; repeat in PERFORMER and
   confirm automatic recomputation. Rotate once and verify the mapped world direction remains
   consistent with the corrected arrow. Reload and confirm the ray clears. No ray may snap to or end
   at the actual monolith.]`
@@ -3153,12 +3152,13 @@ then compare one reconstructed arrow with movement directions on the actual map.
   invalidated H#, and thereby cascaded into clearing the accepted A#→world interpretation. A
   restored session with retained F# state now reuses its stable reviewed identities and snapshots;
   detector bootstrap runs only for a new/empty session.]`
-* **Persistent chain:** `[x] H#, A#, world interpretation, and minimap bearing now survive normal
-  close/reopen through the existing deep-copied FragmentAutonomyState. Reload remains the explicit
-  operation that clears them.]`
+* **Persistent chain:** `[x] H# rotation state and the independent A# world interpretation/minimap
+  bearing survive normal close/reopen through the existing deep-copied FragmentAutonomyState.
+  Reload remains the explicit operation that clears them.]`
 * **Simplified presentation:** `[x] The scan and intermediate upright mini-diagrams are removed.
   WORLD DIRECTION now shows one larger N/E/S/W world-grid compass, the compass/degrees/vector line,
-  its A# + H# source, and the explicit message MINIMAP: BEARING RAY ADDED AT FRAGMENT LOCATION.]`
+  its A# source and screen-up=north convention, and the explicit message
+  MINIMAP: BEARING RAY ADDED AT FRAGMENT LOCATION.]`
 * **Build verification:** `[x] dotnet build --no-restore succeeds (0 errors; 3 pre-existing warnings
   in BuildingComponent.cs and SaveManager.cs). git diff --check reports no whitespace errors.]`
 * **Focused retest:** `[Accept or dismiss several F# candidates that are already visible and confirm
@@ -3193,8 +3193,474 @@ then compare one reconstructed arrow with movement directions on the actual map.
   several F# candidates, including one restored from the former region, and verify the controls
   remain active while selection advances. Confirm features outside the replacement region remain
   excluded.]`
-* **Replacement-region retest result:** `[ ] PASS  [x] FAIL  [ ] BLOCKED REASON: The "draw arrow" does not work. In the SelectedRobotUI, remove the whole 1 sample in range + dropmenu, and simply push a message to the message Log from Rover saying "1 sample in range, not yet analysed" to reduce UI clutter.  When opening analysis for the first time there should be a popup dialog box with , MANUAL analysis, Rover SUPPORT, ROVER AUTONOMOUS radio button option, then in the sample analyzer UI, there is manual/support/rover autonomous instead of "ROVER: OFF / OFF which is to be removed. the ROVER<- toggle menu should be on the extreme right of this row and show "ROVER MENU<=", COMPARE should be within region menu not top of UI. rotation buttons should be within ORIENTATION menu, not top UI. On the ROVER autonomy side bar, these are the simplifications to be made because the UI is way too cluttered as such: 1. remove TARGET and IDLE from status. 1-bis remove all "RESTORE" buttons. 2. move the back and forward arrow to top just under "ROVER AUTONOMY" title. 3. Remove "TESTED CONFIGURATIONS" menu, it is useless. 4. Change "GROUP REGIONS" button to "GENERATE REGIONS", remove "RESTORE" option, 5. Remove "REGION SEQUENCE" menu it is useless. Merge FEATURE and STRUCTURES menu, structures should just be a single button at the end of that menu, "RECONSTRUCT STRUCTURE" which uses directly features, and structure should be selectable, editable, and deletable that's it. EDIT structure should be a double click on the structure and individual strokes should be deletable, and new stroke should be added by click and drag. The "editing structure" should be displayed in the region header, along with "DEL" to delete stroke, left-click and drag to addm, and a small save structure button so that the right-panel UI is not cluttered. 6. SCANNED FRAGMENT should not be a menu, the content of this menu should be put under the status section. 7. orientation should just have the arrow, H and "accept" then propose correction with the start rotation/reject and underneath the manual orientation buttons. 8. The directional arrow and world direction menu should be merged. The task allocation should be on the top bar of the sample analyser UI, the back, pause, skip, undo, accept, reject buttons should be removed ]`
+* **Replacement-region retest result:** `[ ] PASS  [x] FAIL  [ ] BLOCKED REASON: (see full text above)`
 
+**UI simplification follow-up applied:** `[x]`
+* Arrow-draw bug fixed: `FragmentRoverOverlay.SetState` brace error corrected; `SetArrowDrawingArmed(false)` no longer fires on every state update.
+* SelectedRobotUI: sample-status label and dropdown removed; `GameUI.PushMessage` called when nearby sample count changes.
+* Initial mode dialog: popup overlay shows MANUAL / ROVER SUPPORT / ROVER AUTONOMOUS on first analysis open.
+* Top bar: MANUAL / SUPPORT / AUTONOMOUS mode buttons added; compact status label removed; panel toggle renamed "ROVER MENU<="; COMPARE moved into candidate-regions section; rotation controls moved out of header.
+* Rover panel: history arrows moved to top under title; TARGET label and IDLE status removed; TESTED CONFIGURATIONS section removed; GROUP REGIONS renamed GENERATE REGIONS; REGION SEQUENCE section removed; all RESTORE buttons removed; SCANNED FRAGMENT inline thumbnail shown below status labels; ROTATION CORRECTION merged into ORIENTATION section; manual rotation row (CCW / rotation label / SpinBox / CW) added at bottom of ORIENTATION; ARROW & DIRECTION sections merged; bottom action row (BACK / PAUSE / SKIP / UNDO / ACCEPT / REJECT) removed.
+* `dotnet build --no-restore` passes with 0 errors; 3 pre-existing warnings unchanged.
+
+**Focused Godot check:** `[Open fragment analysis for the first time and confirm the MANUAL/SUPPORT/AUTONOMOUS popup appears. Select a mode and confirm the rover panel shows the simplified layout. Verify draw-arrow works. In SelectedRobotUI, drive a rover next to a fragment and confirm a log message appears rather than a dropdown. Check that rotation controls appear only inside the ORIENTATION section when expanded, and COMPARE appears next to GENERATE REGIONS.]`
+* **Result:** `[ ] PASS  [ ] FAIL  [x] BLOCKED REASON: buttons signal are not properly connected anymore. Also there is this error
+*
+*  E 0:00:09:0124   void FragmentAnalysisUI.RefreshArrowControls(): System.NullReferenceException: Object reference not set to an instance of an object.
+  <C# Error>     System.NullReferenceException
+  <C# Source>    FragmentAnalysisUI.Autonomy.cs:1649 @ void FragmentAnalysisUI.RefreshArrowControls()
+  <Stack Trace>  FragmentAnalysisUI.Autonomy.cs:1649 @ void FragmentAnalysisUI.RefreshArrowControls()
+                 FragmentAnalysisUI.Autonomy.cs:2645 @ void FragmentAnalysisUI.SetArrowSectionExpanded(bool)
+                 FragmentAnalysisUI.Autonomy.cs:2537 @ void FragmentAnalysisUI.InitializeWorkflowSections()
+                 FragmentAnalysisUI.Autonomy.cs:705 @ void FragmentAnalysisUI.InitializeAutonomy(FragmentAutonomyState)
+                 FragmentAnalysisUI.cs:105 @ void FragmentAnalysisUI.SetupUI(Godot.Vector2I, Godot.Vector2I, FragmentAnalysisState, FragmentAutonomyMode, bool, FragmentAnalysisActionOrigin)
+                 BaseLevel.cs:235 @ bool Game.BaseLevel.OpenFragmentAnalysis(Godot.Vector2I, Game.Component.BuildingComponent, FragmentAnalysisActionOrigin)
+                 BaseLevel.cs:184 @ void Game.BaseLevel.OnFragmentAnalysisRequested(Godot.Vector2I, Game.Component.BuildingComponent, int)
+                 Callable.generics.cs:95 @ void Godot.Callable.<From>g__Trampoline|4_0<T0, T1, T2>(object, Godot.NativeInterop.NativeVariantPtrArgs, Godot.NativeInterop.godot_variant&)
+                 DelegateUtils.cs:86 @ void Godot.DelegateUtils.InvokeWithVariantArgs(nint, System.Void*, Godot.NativeInterop.godot_variant**, int, Godot.NativeInterop.godot_variant*)
+`
+
+**6.2 simplified-UI wiring correction:**
+
+* **Root cause:** `[x] The simplified panel removed the RESTORE controls, but feature, structure,
+  and arrow refresh paths still dereferenced those fields. RefreshArrowControls failed first while
+  InitializeWorkflowSections was collapsing ARROW & DIRECTION. That aborted SetupUI before its
+  remaining input signals were connected, which made otherwise valid buttons appear inert.]`
+* **Optional-control boundary:** `[x] Every refresh path for a removed RESTORE control now treats it
+  as optional. The same correction covers features, structures, and arrows so advancing further in
+  the workflow cannot reveal the equivalent delayed null-reference error.]`
+* **Comparison replacement:** `[x] Code paths that formerly toggled the removed SIDE-BY-SIDE
+  CheckButton now enter or leave FragmentRegionSequenceView directly. COMPARE disables while the
+  comparison is open and re-enables after exit when two regions remain.]`
+* **Relocated controls:** `[x] MANUAL, SUPPORT, AUTONOMOUS, TASK ALLOC, ROVER MENU, COMPARE,
+  correction, and manual-rotation controls are all created before ConnectAutonomySignals and wired
+  there. Obsolete hidden processing-history buttons and the duplicate panel TASK ALLOCATION button
+  were removed from the scene.]`
+* **Build verification:** `[x] dotnet build --no-restore succeeds (0 errors; 3 pre-existing warnings
+  in BuildingComponent.cs and SaveManager.cs).]`
+* **Focused retest:** `[Open a fresh fragment analysis. Confirm the mode popup responds, then test
+  MANUAL / SUPPORT / AUTONOMOUS, ROVER MENU, TASK ALLOC, GENERATE REGIONS, and COMPARE. Expand each
+  workflow section through ARROW & DIRECTION and confirm there is no null-reference error. Test one
+  ACCEPT and DISMISS action for a feature, structure, and arrow, then exit COMPARE and confirm it can
+  be opened again.]`
+* **Simplified-UI retest result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: ____________________]`
+
+**6.2 density, overlay, and orientation-presentation follow-up:**
+
+* **Rotation cleanup:** `[x] Completing a Rover rotation or closing ORIENTATION now turns off the
+  orientation overlay and its retained ghost preview. Rotation-triggered feature refreshes do not
+  retain unmatched reviewed Rover geometry, and reconstructed structures drop member IDs that no
+  longer exist in the rotated observable scan.]`
+* **Regions of interest:** `[x] CANDIDATE REGIONS is renamed REGIONS OF INTEREST. Generation now
+  forms density cores from compact stroke-rich neighbourhoods, admits peripheral features only
+  when supported by the core, uses tighter separation for sparse features, ranks densest groups
+  first, and suppresses the lower-density tier when a very-high-density group exists. Internal
+  ranking values remain implementation-only and are not shown as confidence to the player.]`
+* **Overlay authority:** `[x] FEATURE and RECONSTRUCTED STRUCTURE overlay toggles now control all
+  annotations of that type, including accepted structures, accepted structure members, locked
+  references, normal view, and side-by-side view. Turning STRUCTURE off allows its members to be
+  shown by FEATURE rather than suppressing both representations.]`
+* **Presentation reduction:** `[x] All player-facing confidence values were removed from feature,
+  region, structure, orientation, and arrow labels/status. The orientation evidence/rationale row
+  was removed from the scene and controller; orientation presents only H#, axis, and disposition.]`
+* **Build verification:** `[x] dotnet build --no-restore succeeds (0 errors; 3 pre-existing warnings
+  in BuildingComponent.cs and SaveManager.cs). git diff --check reports no whitespace errors.]`
+* **Focused retest:** `[Use a fragment with one visibly dense glyph-like cluster plus isolated
+  veins. Press GENERATE REGIONS and confirm the first ROI tightly follows the dense cluster; when
+  it is clearly very dense, confirm sparse vein-only ROIs are not proposed. Lock an ROI and test
+  FEATURE and STRUCTURE overlays independently in normal and COMPARE views. Accept H#, execute the
+  proposed rotation, and confirm the previous orientation ghost/old unmatched annotations vanish.
+  Confirm the UI says REGIONS OF INTEREST and contains neither confidence values nor an orientation
+  rationale/evidence row.]`
+* **Density/overlay retest result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: ________________]`
+
+**6.2 orientation-ghost activation correction:**
+
+* **Root cause and correction:** `[x] Initializing the collapsed ORIENTATION section correctly
+  disabled its overlay, but expanding the section did not turn the preview back on. Expanding
+  ORIENTATION now enables the hypothesis overlay whenever that Rover capacity is active, and
+  changing H# restarts the current/proposed side-by-side preview.]`
+* **Lifecycle guard:** `[x] The player overlay toggle now controls both the main canvas and the
+  comparison view. Closing ORIENTATION or completing a rotation still removes the retained ghost,
+  so a preview cannot leak into a later orientation.]`
+* **Focused retest:** `[Expand ORIENTATION and select each available H# with the hypothesis arrows.
+  Confirm the proposed-orientation ghost is visible beside the current region and updates for every
+  selection. Turn the orientation overlay off/on and confirm both main and comparison previews obey
+  it. Collapse and reopen ORIENTATION, then execute a rotation and confirm the old ghost disappears.]`
+* **Orientation-preview retest result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: _____________]`
+
+## Final touches — consolidated UI and editing pass
+
+**Implementation status:** Implemented; awaiting the five focused Godot acceptance tests below.
+
+**Automation:** Codex implemented all code, scene structure, signal wiring, and default layout.
+Godot editor work is not required; the resulting hidden overlay and panel hierarchy will remain
+editable in the Godot scene inspector for later visual tuning.
+
+### FT-01 — startup and Rover-panel cleanup
+
+* Remove the entire `ROVER PROPOSAL WAITING FOR PLAYER` blocking prompt and its obsolete approval
+  path. Opening the analyser must proceed directly to its normal interaction state.
+* Move `InitialModeOverlay` from runtime-only construction into a named, hidden-by-default Godot UI
+  scene structure. Its controls remain editable in the Inspector, but normal play must not display
+  the removed proposal prompt.
+* Remove `RESULT` and `LOCKED` from the right-hand status summary. Give the summary container a fixed
+  minimum height so changing STATUS/CURRENT/NEXT/TARGET text cannot move the menus below it.
+* **Acceptance test:** `[Open the analyser in OFF, SUPPORT, and PERFORMER. Confirm no proposal-waiting
+  prompt appears. Inspect the scene tree and confirm InitialModeOverlay exists and is hidden. Change
+  modes/actions repeatedly and confirm the first Rover-panel section and menus below it do not jump.]`
+* **Result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: ______________________________]`
+
+### FT-02 — region resize affordance
+
+* Add `DOUBLE CLICK TO RESIZE REGION` to the selected-region header indicator.
+* Expand the corner/edge resize hit target while keeping the rendered handle compact. Locked region
+  views remain protected from resizing.
+* **Acceptance test:** `[Select an unlocked region and confirm the header notice is visible. Double
+  click near a region edge/corner, including slightly outside the drawn handle, then drag to resize.
+  Lock the region and confirm the same gesture cannot resize it.]`
+* **Result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: ______________________________]`
+
+### FT-03 — structure editing on the canvas
+
+* Remove the right-panel `NEW`, `EDIT`, and `MERGE` structure buttons.
+* For each displayed region containing a structure, add a compact `EDIT STRUCTURE` button in its
+  on-canvas header. It enters an explicit edit mode scoped to that region/structure.
+* In structure edit mode: click a feature to add it as a structure stroke; click an existing member
+  then press Delete to remove it; left-drag empty canvas space to create a custom stroke. Custom
+  strokes use ordinary observable/player feature records and therefore participate in overlays,
+  orientation, arrow analysis, persistence, and undoable review without hidden-solution access.
+* **Acceptance test:** `[Generate/accept a structure and confirm EDIT STRUCTURE appears in its region
+  header. Enter edit mode, add one detected feature, select and Delete one member, and drag an empty
+  area to draw a custom stroke. Confirm the magenta reconstruction and stored membership update, then
+  close/reopen analysis and confirm the edits persist.]`
+* **Result:** `[ ] PASS  [ ] FAIL  [x] BLOCKED REASON: After rotation the editing structure is impossible to disable, thus I cannot resize the region, or do anything else. by default the editing structure should be deactivated when conducting another action to avoid this being an active state at all time]`
+
+### FT-04 — menu focus and rotation-aware geometry
+
+* Expanding any right-panel workflow section automatically scrolls the panel until that section's
+  title and active controls are visible. Collapsing a section does not force-scroll the panel.
+* Rotate region bounds with retained feature/structure/arrow geometry, then expand the axis-aligned
+  stored box to contain the transformed content. This prevents a rotated accepted arrow from falling
+  outside its region while preserving the existing rectangular region model.
+* **Acceptance test:** `[Scroll to the top, expand each lower workflow section, and confirm it is
+  brought into view automatically. Accept a region and arrow near an edge, perform a non-trivial
+  rotation, and confirm the transformed arrow and retained member strokes remain inside the updated
+  region box.]`
+* **Result:** `[ ] PASS  [ ] FAIL  [x] BLOCKED REASON: if I unfold arrow & direction, the last (lowest) menu, it does not scroll automatically to the bottom as it should. The box after rotation was completely offset to the left outside of the glyph during the test.]`
+
+### FT-05 — player-arrow world bearing after rotation
+
+* Accepting a player-drawn arrow after rotation must run the same world-direction conversion and
+  publication path as an accepted Rover arrow. It must use the current accepted orientation/frame,
+  refresh the compass text, and publish/update the persistent minimap ray without requiring another
+  Rover detection pass.
+* **Acceptance test:** `[Perform an orientation correction, draw a player arrow, and accept it.
+  Confirm WORLD DIRECTION immediately shows a compass label/vector and the minimap receives the
+  bearing. Change or redraw the arrow and confirm the previous bearing is invalidated and replaced.]`
+* **Result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: It does not, I drew an arrow, accepted it and it still blocked on "Accept A# and H# to map direction]`
+
+### Final-touch correction pass
+
+**Implementation status:** Corrected; awaiting focused FT-03/FT-04/FT-05 retest.
+
+* **FT-03 edit-mode lifecycle:** `[x] Structure editing is now cancelled before another analysis
+  action starts, including scanning, region generation/review/locking/navigation, orientation,
+  rotation, arrow drawing/mapping, mode changes, and processing-control changes. Pressing the active
+  EDITING STRUCTURE header button again, right-clicking, Escape, or double-clicking a region to
+  resize also exits edit mode. This prevents the canvas from remaining gesture-locked after a
+  rotation or workflow change.]`
+* **FT-04 local rotation frame:** `[x] Retained annotations no longer rotate around the full virtual
+  canvas centre. Each region derives an observable local pivot from its overlapping reconstructed
+  structure (falling back to its contained features), transforms its members and arrows in that
+  frame, and rebuilds its axis-aligned bounds from the transformed corners and content. This targets
+  the screenshot failure where R1 was displaced left while the reconstructed glyph and arrow were
+  left outside on the right.]`
+* **FT-04 bottom-menu focus:** `[x] Section focus now waits for two deferred Godot layout passes,
+  finds the final visible control belonging to the expanded section, and scrolls far enough to show
+  its bottom. ARROW & DIRECTION therefore targets its actual bottom content rather than only its
+  already-visible title.]`
+* **FT-05 committed upright frame:** `[x] Direction mapping now accepts either the live accepted H#
+  or the accepted rotation correction that has already established the displayed upright frame.
+  Accepting a player arrow explicitly bypasses Rover allocation/pause gates, maps immediately, and
+  updates the compass/minimap publication. The manual MAP TO WORLD action uses the same player path.]`
+* **Verification:** `[x] dotnet build --no-restore succeeds with 0 errors; the same 3 unrelated
+  warnings remain in BuildingComponent.cs and SaveManager.cs. git diff --check passes.]`
+* **Focused correction retest:** `[After performing a rotation, enter EDIT STRUCTURE and then start
+  another action; confirm editing turns off and double-click resize works. Expand ARROW & DIRECTION
+  from the top of the sidebar and confirm the bottom of that section becomes visible. Reproduce the
+  FT-04 rotation from the screenshot and confirm the region contains its reconstructed glyph and
+  accepted arrow. Finally draw and accept a player arrow after rotation; confirm bearing text appears
+  immediately and the minimap ray is created or replaced.]`
+* **Correction retest result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: ______________________]`
+
+### Minor final-touch corrections — rotation identity, history, H# ordering, and bearing
+
+**Implementation status:** Implemented; awaiting the focused retest below.
+
+* **Rotation/structure identity:** `[x] Feature refresh no longer reuses an F# solely because a new
+  stroke has a nearby centre. Candidate identity must also have a compatible total length and axis,
+  preventing unrelated post-rotation geometry from inheriting a structure member ID. Dismissed F#
+  IDs are explicitly pruned from every structure. Live review state is authoritative over retained
+  locked snapshots, so an old snapshot cannot redraw a feature the player already dismissed.]`
+* **History navigation:** `[x] BACK/FORWARD history restoration suppresses workflow-section
+  auto-scroll for that operation. Expanding a menu directly still scrolls it into view.]`
+* **H# ordering:** `[x] The repeated correct H5 was not seed behavior: a hidden correct-rotation
+  fallback was replacing the last generated hypothesis. That injection and the entire Rover-facing
+  FragmentAutonomyTruth contract have been removed. H1–H5 now come only from observable reconstructed
+  geometry; no slot is guaranteed to be correct or privileged.]`
+* **A#-only bearing:** `[x] World bearing now uses the accepted A# tail-to-tip vector alone, with the
+  explicit convention that analyzer/screen up is north. Accepting any A# maps immediately regardless
+  of H# or allocation mode; H# review no longer gates, invalidates, or recomputes the bearing. Manual
+  MAP TO WORLD and rotation-triggered updates use the same A#-only path.]`
+* **Verification:** `[x] dotnet build --no-restore succeeds with 0 errors; the same 3 unrelated
+  warnings remain in BuildingComponent.cs and SaveManager.cs. git diff --check passes.]`
+* **Focused retest:** `[Dismiss one feature that previously belonged to S#, rotate, and confirm it
+  neither returns in magenta nor changes another member's geometry. Press history BACK/FORWARD and
+  confirm the sidebar scroll position does not move. Generate hypotheses over several seeds and
+  confirm there is no systematic hidden-correct H5. Finally draw and accept A# without accepting H#;
+  confirm the bearing and minimap ray appear immediately, with upward A# mapping to north.]`
+* **Minor-correction retest result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: ________________]`
+
+### Second minor correction — H# coverage, rotation controls, compact bearing, shared pivot
+
+**Implementation status:** Implemented; awaiting focused Godot retest.
+
+* **Observable H# coverage:** `[x] The estimator now retains up to four distinct geometry-derived
+  axes and always emits both directional polarities for each, up to eight H# candidates. This fixes
+  the missing reverse-polarity case in the former fifth/last axis without restoring hidden truth or
+  reserving a correct slot.]`
+* **Manual-rotation scroll stability:** `[x] CCW -10°, CW +10°, and the fine rotation SpinBox now
+  suppress workflow auto-scroll for the duration of their synchronous state refresh, and their
+  feature refresh does not request camera focus. Neither the sidebar nor canvas camera should jump;
+  directly expanding a section still performs the intended focus scroll.]`
+* **Compact bearing presentation:** `[x] The textual compass/degrees/vector and SOURCE A# line were
+  removed. Once mapped, the only text below the compass is MINIMAP: BEARING RAY ADDED AT FRAGMENT
+  LOCATION.]`
+* **Exact shared rotation pivot:** `[x] FragmentObservableScan now publishes the renderer's neutral
+  sample-normalized rotation pivot. Retained region bounds, strokes, and A# use that exact pivot
+  rather than a structure centroid estimate, so the accepted arrow rotates with the glyph instead
+  of orbiting out of its region. The contract exposes transform geometry only, not puzzle answers.]`
+* **Verification:** `[x] dotnet build --no-restore --no-incremental succeeds with 0 errors; the same
+  3 unrelated warnings remain. git diff --check passes.]`
+* **Focused retest:** `[Estimate H# and confirm the formerly missing upright polarity is available
+  among the expanded candidate set. While ORIENTATION is open, press CCW/CW repeatedly and edit the
+  fine value; confirm the sidebar position never jumps. Map A# and confirm only the minimap-added
+  text remains below the compass. Rotate through a large angle and confirm A#, the glyph, retained
+  strokes, and the enclosing region share one centre throughout.]`
+* **Second-minor retest result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: ________________]`
+
+### Side-by-side structure review visibility correction
+
+**Implementation status:** Implemented; awaiting focused Godot retest.
+
+* **Visible-page selection:** `[x] Entering side-by-side view or changing its two-region page now
+  retains the selected S# only when at least one of its non-dismissed member strokes is actually
+  rendered inside a displayed region. Otherwise selection advances to a proposed visible S#, then
+  an accepted visible S#, or None when that page contains no visible structure.]`
+* **Visible-page actions:** `[x] The structure selector is restricted to S# annotations visible on
+  the current carousel page. ACCEPT, DISMISS, and RESTORE are disabled for an off-page selection,
+  and the Rover command boundary rejects an off-page structure action as a second safety check.]`
+* **Locked views:** `[x] Visibility is evaluated from the locked region's retained feature snapshot
+  and bounds when present, matching the strokes that the carousel actually draws rather than merely
+  consulting current region membership.]`
+* **Verification:** `[x] dotnet build --no-restore --no-incremental succeeds with 0 errors; the same
+  3 unrelated warnings remain. git diff --check passes.]`
+* **Focused retest:** `[Create at least three retained regions spanning two carousel pages, with a
+  different structure visible on each page. Open side-by-side view and confirm the S# selector and
+  action buttons refer only to a structure drawn in the current pair. Change pages and confirm the
+  selection advances to that page's visible S# without accepting/dismissing the previous or next
+  page's structure. On a page with no visible structure, confirm the selection is None and all
+  structure action buttons are disabled. Repeat with one locked region.]`
+* **Side-by-side structure retest result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Performer rotation reference-release correction
+
+**Implementation status:** Implemented; awaiting focused Godot retest.
+
+* **Source lock lifecycle:** `[x] When an approved orientation starts the Performer rotation path,
+  its source region's comparison lock is removed before the rotation preview or tween is scheduled.
+  The accepted H# retains its internal geometry snapshot for the correction calculation, while
+  unrelated player-locked regions remain locked.]`
+* **Normal-view transition:** `[x] Rotation preview now exits side-by-side view immediately instead
+  of waiting for the first tween frame, ensuring the unlocked live canvas is displayed before any
+  rotation command is applied.]`
+* **Focused retest:** `[Lock the orientation source region while leaving a second unrelated region
+  locked. In Performer mode accept H#. Confirm side-by-side view closes during the preview, the H#
+  source region is no longer locked before the glyph begins rotating, the unrelated region remains
+  locked, and the proposed rotation completes normally.]`
+* **Performer reference-release result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Region-dependent orientation and arrow ownership correction
+
+**Implementation status:** Implemented; awaiting focused Godot workflow test.
+
+* **Local orientation execution:** `[x] Performer H# correction no longer changes the fragment-wide
+  display rotation. It creates or updates a persistent rotation transform owned by the source R#,
+  spatially captures the observable puzzle strokes intersecting that region, and rotates only that
+  set around the reconstructed structure's local pivot. Manual CCW/CW remains an explicitly global
+  player control.]`
+* **Scoped annotation mutation:** `[x] Rotation completion transforms only features, the region box,
+  reconstructed membership geometry, and arrows owned by the source R#. Other retained regions and
+  their annotations are copied unchanged through the post-rotation rescan.]`
+* **Arrow ownership:** `[x] Every newly detected or player-drawn A# records its owning R#. Arrow
+  review lists the selected region's A# records, acceptance replaces only another arrow from that
+  same region, and an R2 rotation cannot re-parent or orbit an accepted R1 arrow. Older saved A#
+  records without ownership are spatially assigned when restored.]`
+* **Persistence and solve path:** `[x] Region rotation angle, original selection bounds, and local
+  pivot are deep-copied with autonomy state and replayed when the same analysis is reopened. Existing
+  puzzle correctness remains authoritative and recognizes a correctly oriented region containing
+  the signal glyph without exposing that identity to the Rover.]`
+* **Cancellation safety:** `[x] Cancelling a partially executed local rotation restores that R# to
+  its pre-tween angle instead of leaving canvas geometry and annotations at different poses.]`
+* **Verification:** `[x] dotnet build --no-restore --no-incremental succeeds with 0 errors; the same
+  3 unrelated warnings remain. git diff --check passes.]`
+* **Focused workflow test:** `[Complete R1 through accepted structure, H#, A#, and world bearing.
+  Draw and accept R2 features and structure, estimate and accept an R2 H# in Performer mode. Confirm
+  only R2 rotates around its own reconstructed centre: R1's box, magenta structure, A#, and bearing
+  remain exactly where they were. Detect/draw and accept A# for R2 and confirm the Arrow menu concerns
+  R2 while the accepted R1 arrow remains rendered. Close and reopen analysis and confirm both local
+  region poses and arrow ownership are retained. During a third rotation, cancel midway and confirm
+  that region returns to its starting pose.]`
+* **Region-dependent workflow result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final interaction correction — history view, edit gestures, and region lock button
+
+**Implementation status:** Implemented; awaiting focused Godot retest.
+
+* **History workspace stability:** `[x] BACK/FORWARD restores analysis data without treating the
+  restored region-review event as a request to open side-by-side comparison. Normal view remains
+  normal, comparison remains comparison while at least two regions still exist, and history replay
+  does not initiate an extra region-focus/navigation request.]`
+* **Structure-edit gesture ownership:** `[x] While EDITING STRUCTURE is active, a double-click is
+  consumed by structure edit mode. It neither exits editing nor arms region resize; resizing becomes
+  available again after the player explicitly leaves edit mode.]`
+* **Direct region locking:** `[x] Every visible accepted region now carries a LOCK/UNLOCK button at
+  its lower-right corner. The expanded pointer target invokes the existing region snapshot lock,
+  cancels active structure editing, and updates its label without requiring the sidebar control.]`
+* **Verification:** `[x] dotnet build --no-restore --no-incremental succeeds with 0 errors; the same
+  3 unrelated warnings remain. git diff --check passes.]`
+* **Focused retest:** `[From normal view, make an undoable region/feature change and press BACK then
+  FORWARD; confirm comparison never opens and the canvas does not focus another region. Repeat while
+  already in comparison and confirm it stays there when two regions remain. Enter EDIT STRUCTURE,
+  double-click inside/at an edge of that region, then drag; confirm edit mode stays active and its
+  bounds do not change. Exit edit mode and confirm double-click resize works again. Finally click the
+  lower-right LOCK button, confirm it becomes UNLOCK and prevents resize, then click UNLOCK and
+  confirm resizing is restored.]`
+* **Interaction-correction result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous allocation pipeline — Rover-led analysis with human decision gates
+
+**Purpose:** Performer allocation becomes a resumable Rover-led workflow rather than a collection
+of individually automated buttons. The Rover may search, measure, navigate, reconstruct, rotate,
+detect, and calculate; the player still validates semantic regions, visible features, reconstructed
+structure, upright H#, and ambiguous arrow geometry.
+
+**Implementation status:** Implemented; awaiting the end-to-end Godot acceptance test below. The
+pipeline uses the existing observable detectors and reviewed-state models without consulting hidden
+glyph truth.
+
+#### AW-01 — persistent PLAY/PAUSE control and stage transparency
+
+* Add one full-width `PLAY ROVER` / `PAUSE` / `RESUME` button directly below the BACK/FORWARD
+  history row. It is enabled only for global Performer allocation.
+* PLAY starts or resumes the current pipeline stage; PAUSE cancels pending timed application while
+  retaining the current stage, best-so-far configuration, region index, and player annotations.
+* Human gates display `WAITING FOR PLAYER` and disable PLAY rather than accidentally treating a
+  validation prompt as a request to continue a search. CURRENT and NEXT name the active stage,
+  target R#, test count, and best observable score.
+* OFF or Supporter allocation stops the Performer pipeline without deleting reviewed analysis data.
+
+#### AW-02 — time-budgeted dense-region configuration graph search
+
+* Six binary processing/channel switches produce `2^6 = 64` possible ON/OFF configurations. Each
+  locked switch halves the reachable space (`2^(6 - locked switch count)`). Apply configurations
+  atomically so each tested bit state produces one observable rescan.
+* Traverse the reachable six-bit configuration graph with breadth-first search, beginning at the
+  current configuration and visiting its one-toggle neighbours without repetition. The test cap is
+  configurable and defaults to 64 so every reachable state is evaluated.
+* Fit the bounded search into `RegionSearchBudgetSeconds` (default 5 seconds) by dividing that budget
+  across the testable configurations. Run feature detection and the existing region generator only
+  for scoring during this interval; publish no intermediate R# proposals.
+* Score candidate sets first by the number of distinct sufficiently dense regions, capped at five,
+  then by compactness, feature density/count, and separation between dense region centres. Restore
+  the best observed configuration only after the configuration set has been exhausted.
+* Publish only the best/final set, retaining at most the five strongest qualified dense proposals
+  (or the single best fallback), then wait for the player to accept, dismiss, resize, or draw regions.
+  Region decisions remain one R# at a time and never bulk-accept contained F# records.
+
+#### AW-03 — side-by-side per-region feature maximization
+
+* Once region review contains no unresolved R# and at least one accepted region, open the existing
+  side-by-side view and process accepted regions in R# order.
+* For each R#, focus its carousel page and test up to
+  `MaximumFeatureSearchTestsPerRegion` configurations (default 144) within the independent
+  `FeatureSearchBudgetSeconds` time limit (default 5 seconds). Divide the time budget across the
+  actual generated sample count. Score only observable F# records intersecting that R#, retain the
+  best tested configuration, and stop after the bounded search.
+* Present the best R# result for feature-by-feature player validation/refinement. When no proposed F#
+  remains in that R#, retain its reviewed snapshot and automatically advance to the next accepted R#.
+  During this gate, feature selection and next-feature traversal are strictly scoped to the current
+  R#: no proposal from another visible carousel region can become selected or editable, and the next
+  region's search cannot begin until the current region has no unresolved proposal.
+* After the last region, show the scanned-fragment thumbnail and prompt the player to select the one
+  semantically meaningful R# and explicitly confirm `USE SELECTED REGION`.
+* Human-decision gates open a dedicated, non-exclusive popup window instead of placing prompts in
+  the scrolling sidebar. The popup remains prominent while allowing canvas/sidebar interaction and
+  can be reopened with `SHOW ROVER REQUEST`. The scanned monolith reference is embedded directly in
+  the region-choice and H# popups, with a glyph-type asset fallback when the live world fragment node
+  cannot provide its sprite texture. Autonomous search/execution stages never show this popup.
+
+#### AW-04 — chosen-region structure validation
+
+* Confirmation closes side-by-side view, focuses the chosen R#, runs existing structure detection,
+  and selects the strongest visible reconstructed S# for that region.
+* Show `EDIT STRUCTURE` on canvas as already implemented and add an explicit `VALIDATE & CONTINUE`
+  gate. The player may enter edit mode, add/delete/draw strokes, leave edit mode, and then validate;
+  continuing accepts the selected non-empty S# and records that the edited geometry was reviewed.
+
+#### AW-05 — thumbnail-assisted H# review and supervised rotation
+
+* Open the orientation view/menu, estimate observable H# candidates, select H1, and show the scanned
+  fragment thumbnail as the semantic reference. Rover does not choose the upright hypothesis.
+* Player steps through H# and presses the existing ACCEPT control. Performer then calculates and
+  executes the existing region-local correction. The pipeline waits for rotation completion before
+  advancing, and PAUSE/cancel retains a geometrically consistent starting pose.
+
+#### AW-06 — arrow detection, player fallback, and bearing completion
+
+* After rotation, open ARROW & DIRECTION and run existing A# detection for the chosen region.
+* If A# candidates exist, prompt the player to accept/reject one. If none exist, prompt and arm
+  `DRAW TAIL → TIP`; the player-drawn A# enters the same review path.
+* Accepting A# automatically computes the A#-only world bearing, updates the minimap ray, marks the
+  autonomous pipeline complete, and leaves all reviewed R#/F#/S#/H#/A# records editable/history-safe.
+
+**Automatic implementation:** stage coordinator, atomic configuration application, bounded timers,
+density/feature scoring, stage status, PLAY/PAUSE wiring, section/view transitions, prompt container,
+thumbnail visibility, and calls into existing review/detection/rotation/direction APIs.
+
+**Godot acceptance test:** `[Select PERFORMER and press PLAY ROVER. With all six switches unlocked,
+confirm the status reports 64 reachable combinations, the BFS search takes about five seconds total,
+and PAUSE/RESUME retains progress. Confirm no R# is proposed during the search and only the best final
+set (up to five dense regions) appears afterward. Refine and resolve every R#, then confirm
+side-by-side opens and each accepted region tests up to 144 samples in approximately five seconds
+before its F# review. Resolve F# for every R#, select one R#
+at the thumbnail prompt, validate/edit S#, choose H# with the thumbnail visible, allow local rotation,
+and accept or draw A#. Confirm a world bearing/minimap ray is produced and the workflow reports
+COMPLETE. During each search, verify other retained regions and annotations are not destroyed.]`
+* **Autonomous-pipeline result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+**Implementation verification:** `[x] The initial region search uses BFS across up to 64 distinct
+observable ON/OFF configurations within a parameterized five-second default total budget. Its score
+prioritizes as many as five qualified dense, compact, spatially separated regions; intermediate
+region sets remain private and only the best final set is proposed for player review.]`
+
+
+**Final-touch implementation verification:** `[x] FT-01 through FT-05 are wired in code and scenes.
+dotnet build --no-restore succeeds with 0 errors and the same 3 pre-existing warnings in
+BuildingComponent.cs and SaveManager.cs. git diff --check reports no whitespace errors. Runtime,
+visual, pointer-hitbox, and minimap behavior remain gated by the user tests because a Godot executable
+is not installed in this workspace environment.]`
 ---
 
 # Rover autonomy architecture
@@ -3240,11 +3706,11 @@ answer. Implement this narrow boundary:
 
 ```text
 FragmentPuzzleGenerator -> FragmentPuzzle -> FragmentCanvas renderer
-                              |                     |
-                    immutable truth       IFragmentObservationSource
-                         snapshot                  |
-                              |                     |
-                              +----> FragmentAnalysisRover
+                                                    |
+                                          IFragmentObservationSource
+                                                    |
+                                                    v
+                                      FragmentAnalysisRover
                                              |              |
                                       overlay state    proposed commands
                                              v              v
@@ -3257,11 +3723,9 @@ FragmentPuzzleGenerator -> FragmentPuzzle -> FragmentCanvas renderer
                                                        FragmentCanvas
 ```
 
-The Rover is constructed with `IFragmentObservationSource`, `IFragmentCommandSink`, and the private
-immutable `FragmentAutonomyTruth` selected in F-02—not a mutable `FragmentPuzzle` or unrestricted
-`FragmentCanvas`. Renderer observations still strip source roles and correct-answer fields. Direct
-Puzzle mutation and accidental answer exposure remain prohibited even though the deliberate oracle
-exists.
+The Rover is constructed with `IFragmentObservationSource` and `IFragmentCommandSink`, not a mutable
+`FragmentPuzzle`, unrestricted `FragmentCanvas`, or truth snapshot. Renderer observations strip
+source roles and correct-answer fields. Direct Puzzle mutation and answer exposure are prohibited.
 
 **Planned files (all automatic):**
 

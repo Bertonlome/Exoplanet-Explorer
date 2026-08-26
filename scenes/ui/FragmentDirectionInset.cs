@@ -22,7 +22,7 @@ public partial class FragmentDirectionInset : Control
 		if (direction == null)
 		{
 			DrawString(ThemeDB.FallbackFont, new Vector2(12f, 28f),
-				"ACCEPT A# + H# TO MAP DIRECTION", HorizontalAlignment.Left, -1, 13,
+				"ACCEPT A# TO MAP · SCREEN UP = NORTH", HorizontalAlignment.Left, -1, 13,
 				new Color(0.7f, 0.78f, 0.84f));
 			return;
 		}
@@ -47,16 +47,6 @@ public partial class FragmentDirectionInset : Control
 		DrawLine(center, tip, Colors.Black, 9f, true);
 		DrawLine(center, tip, color, 4.5f, true);
 		DrawArrowHead(tip, vector, color);
-		string bearing = FragmentDirectionMapper.FormatBearing(direction);
-		Vector2 bearingSize = ThemeDB.FallbackFont.GetStringSize(
-			bearing, HorizontalAlignment.Left, -1, 14);
-		DrawString(ThemeDB.FallbackFont,
-			new Vector2((Size.X - bearingSize.X) * 0.5f, Size.Y - 40f), bearing,
-			HorizontalAlignment.Left, -1, 14, Colors.White);
-		DrawString(ThemeDB.FallbackFont, new Vector2(12f, Size.Y - 16f),
-			"MINIMAP RAY ADDED AT FRAGMENT LOCATION",
-			HorizontalAlignment.Left, -1, 12, new Color(0.15f, 0.95f, 1f));
-
 		void DrawCompassLabel(string label, Vector2 position, bool centered)
 		{
 			Vector2 textSize = ThemeDB.FallbackFont.GetStringSize(

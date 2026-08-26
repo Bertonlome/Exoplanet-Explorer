@@ -9,7 +9,7 @@ using Godot;
 public static class FragmentOrientationEstimator
 {
 	private const int BinCount = 18;
-	private const float MinimumAlternativeSeparationDegrees = 25f;
+	private const float MinimumAlternativeSeparationDegrees = 12f;
 
 	private readonly struct WeightedSegment
 	{
@@ -44,7 +44,7 @@ public static class FragmentOrientationEstimator
 		IReadOnlyList<FragmentDetectedFeature> features,
 		Vector2 sampleSize,
 		float confidenceScale = 1f,
-		int maximumHypotheses = 5)
+		int maximumHypotheses = 8)
 	{
 		List<FragmentOrientationHypothesis> results = new();
 		if (structure == null || features == null || maximumHypotheses <= 0) return results;
@@ -67,35 +67,16 @@ public static class FragmentOrientationEstimator
 		ulong signature = ComputeGeometrySignature(structure, features);
 		float principal = CalculatePrincipalGeometryAxis(structure, features, sampleSize);
 		AddAxisPair(principal, "PRINCIPAL GEOMETRY AXIS");
-		float dominant = axes[0];
-		if (results.Count < maximumHypotheses)
+		foreach (float axis in axes)
 		{
-			float lineAxis = AxisDistanceDegrees(principal, dominant) >= 12f
-				? dominant
-				: axes.Count > 1 ? axes[1] : NormalizeSignedDegrees(dominant + 90f);
-			AddAxisPair(lineAxis, lineAxis == dominant
-				? "DOMINANT LINE AXIS"
-				: axes.Count > 1 ? "SECONDARY LINE AXIS" : "PERPENDICULAR FALLBACK AXIS");
+			if (results.Count >= maximumHypotheses) break;
+			if (results.Exists(result =>
+				AxisDistanceDegrees(result.AxisDegrees, axis) < 5f)) continue;
+			AddAxisPair(axis, "OBSERVED LINE AXIS");
 		}
 		if (results.Count < maximumHypotheses)
-		{
-			float tertiary = axes.Find(axis =>
-				AxisDistanceDegrees(axis, principal) >= 12f &&
-				!results.Exists(result => AxisDistanceDegrees(result.AxisDegrees, axis) < 12f));
-			if (MathF.Abs(tertiary) <= 0.0001f && results.Exists(result =>
-				AxisDistanceDegrees(result.AxisDegrees, 0f) < 12f))
-				tertiary = NormalizeSignedDegrees(principal + 90f);
-			float support = CalculateSupport(segments, tertiary, totalWeight);
-			results.Add(CreateHypothesis(
-				results.Count + 1,
-				structure.Id,
-				signature,
-				tertiary,
-				ScaleConfidence(support, reliability) * 0.8f,
-				support,
-				axes.Count > 2 ? "TERTIARY LINE AXIS" : "DIAGONAL FALLBACK AXIS",
-				true));
-		}
+			AddAxisPair(NormalizeSignedDegrees(principal + 90f),
+				"PERPENDICULAR GEOMETRY AXIS");
 		return results;
 
 		void AddAxisPair(float axis, string evidence)
@@ -251,7 +232,7 @@ public static class FragmentOrientationEstimator
 					distinct = false;
 			if (!distinct) continue;
 			axes.Add(NormalizeSignedAxisDegrees(refined));
-				if (axes.Count == 3) break;
+				if (axes.Count == 4) break;
 		}
 		if (axes.Count == 0) axes.Add(0f);
 		return axes;

@@ -61,7 +61,24 @@ public enum FragmentAnalysisParameter
     ResonanceEnabled,
     XRayEnabled,
     Rotation,
-    View
+    View,
+	Configuration
+}
+
+public enum FragmentAutonomousWorkflowStage
+{
+	Inactive,
+	SearchingRegions,
+	AwaitingRegionReview,
+	SearchingRegionFeatures,
+	AwaitingFeatureReview,
+	AwaitingRegionChoice,
+	AwaitingStructureReview,
+	AwaitingOrientationReview,
+	WaitingForRotation,
+	AwaitingArrowReview,
+	AwaitingPlayerArrow,
+	Complete
 }
 
 public enum FragmentRoverActivity
@@ -268,6 +285,9 @@ public sealed class FragmentAnalysisCommand
     public bool BoolValue { get; init; }
     public int IntValue { get; init; }
     public float FloatValue { get; init; }
+	public int? RegionId { get; init; }
+	public Rect2 RegionBounds { get; init; }
+	public Vector2 RotationPivotNormalized { get; init; } = new(0.5f, 0.5f);
 
     public static FragmentAnalysisCommand Toggle(
         FragmentAnalysisParameter parameter,
@@ -297,6 +317,21 @@ public sealed class FragmentAnalysisCommand
             FloatValue = value,
             Origin = origin
         };
+
+	public static FragmentAnalysisCommand RegionRotation(
+		int regionId,
+		Rect2 regionBounds,
+		Vector2 pivotNormalized,
+		float value,
+		FragmentAnalysisActionOrigin origin) => new()
+		{
+			Parameter = FragmentAnalysisParameter.Rotation,
+			FloatValue = value,
+			Origin = origin,
+			RegionId = regionId,
+			RegionBounds = regionBounds,
+			RotationPivotNormalized = pivotNormalized
+		};
 }
 
 public sealed class FragmentAnalysisChange
@@ -305,13 +340,18 @@ public sealed class FragmentAnalysisChange
     public FragmentAnalysisControlState Current { get; init; }
     public FragmentAnalysisParameter Parameter { get; init; }
     public FragmentAnalysisActionOrigin Origin { get; init; }
+	public int? RegionId { get; init; }
 }
 
 public interface IFragmentAnalysisCommandSink
 {
     event Action<FragmentAnalysisChange> AnalysisChanged;
     FragmentAnalysisControlState CaptureControlState();
+	float CaptureRegionRotationDegrees(int regionId);
     void DispatchAnalysisCommand(FragmentAnalysisCommand command);
+	void DispatchAnalysisConfiguration(
+		FragmentAnalysisControlState configuration,
+		FragmentAnalysisActionOrigin origin);
 }
 
 public interface IFragmentObservationSource
@@ -333,6 +373,8 @@ public sealed class FragmentObservableScan
 {
     public ulong Revision { get; init; }
     public Vector2 SampleSize { get; init; }
+	/// <summary>Neutral renderer transform pivot in sample-normalized coordinates.</summary>
+	public Vector2 RotationPivotNormalized { get; init; } = new(0.5f, 0.5f);
     public IReadOnlyList<FragmentObservablePrimitive> Primitives { get; init; } =
         Array.Empty<FragmentObservablePrimitive>();
 }
@@ -458,6 +500,7 @@ public sealed class FragmentOrientationHypothesis
 
 public sealed class FragmentRotationCorrection
 {
+	public int RegionId { get; set; } = -1;
 	public int SourceOrientationId { get; init; }
 	public float SourceRotationDegrees { get; init; }
 	public float RoverDegrees { get; init; }
@@ -479,10 +522,12 @@ public sealed class FragmentArrowCandidate
 		FragmentAnnotationProvenance.Rover;
 	public bool IsPlayerDefined { get; init; }
 	public string Evidence { get; init; } = "Geometric shaft/head candidate";
+	public int RegionId { get; set; } = -1;
 }
 
 public sealed class FragmentDirectionInterpretation
 {
+	public int RegionId { get; init; } = -1;
 	public int SourceArrowId { get; init; }
 	public int SourceOrientationId { get; init; }
 	public Vector2 ScanDirection { get; init; }
@@ -491,6 +536,14 @@ public sealed class FragmentDirectionInterpretation
 	public float UprightCorrectionDegrees { get; init; }
 	public float BearingDegrees { get; init; }
 	public string CompassLabel { get; init; } = "—";
+}
+
+public sealed class FragmentRegionRotationState
+{
+	public int RegionId { get; init; }
+	public Rect2 RegionBounds { get; set; }
+	public Vector2 PivotNormalized { get; set; }
+	public float Degrees { get; set; }
 }
 
 public sealed class FragmentRoverActionStatus
@@ -528,6 +581,7 @@ public sealed class FragmentAutonomyState
 	public FragmentLockedRegionView OrientationSourceView { get; set; }
 	public FragmentDetectedStructure OrientationSourceStructure { get; set; }
 	public FragmentRotationCorrection RotationCorrection { get; set; }
+	public List<FragmentRegionRotationState> RegionRotations { get; } = new();
     public List<FragmentArrowCandidate> ArrowCandidates { get; } = new();
 	public int? SelectedArrowId { get; set; }
     public int? AcceptedArrowId { get; set; }
@@ -563,6 +617,7 @@ public sealed class FragmentAutonomyState
 			AcceptedOrientationId = AcceptedOrientationId,
 			RotationCorrection = RotationCorrection == null ? null : new FragmentRotationCorrection
 			{
+				RegionId = RotationCorrection.RegionId,
 				SourceOrientationId = RotationCorrection.SourceOrientationId,
 				SourceRotationDegrees = RotationCorrection.SourceRotationDegrees,
 				RoverDegrees = RotationCorrection.RoverDegrees,
@@ -577,6 +632,7 @@ public sealed class FragmentAutonomyState
 				? null
 				: new FragmentDirectionInterpretation
 				{
+					RegionId = DirectionInterpretation.RegionId,
 					SourceArrowId = DirectionInterpretation.SourceArrowId,
 					SourceOrientationId = DirectionInterpretation.SourceOrientationId,
 					ScanDirection = DirectionInterpretation.ScanDirection,
@@ -587,6 +643,14 @@ public sealed class FragmentAutonomyState
 					CompassLabel = DirectionInterpretation.CompassLabel
 				}
         };
+		foreach (FragmentRegionRotationState rotation in RegionRotations)
+			clone.RegionRotations.Add(new FragmentRegionRotationState
+			{
+				RegionId = rotation.RegionId,
+				RegionBounds = rotation.RegionBounds,
+				PivotNormalized = rotation.PivotNormalized,
+				Degrees = rotation.Degrees
+			});
 
         foreach ((FragmentAutonomyCapability capability, FragmentAutonomyMode mode) in CapabilityOverrides)
             clone.CapabilityOverrides[capability] = mode;
@@ -635,6 +699,7 @@ public sealed class FragmentAutonomyState
 				{
 					Revision = lockedView.Scan.Revision,
 					SampleSize = lockedView.Scan.SampleSize,
+					RotationPivotNormalized = lockedView.Scan.RotationPivotNormalized,
 					Primitives = CloneObservablePrimitives(lockedView.Scan.Primitives)
 				}
 			};
@@ -712,6 +777,7 @@ public sealed class FragmentAutonomyState
 				{
 					Revision = OrientationSourceView.Scan.Revision,
 					SampleSize = OrientationSourceView.Scan.SampleSize,
+					RotationPivotNormalized = OrientationSourceView.Scan.RotationPivotNormalized,
 					Primitives = CloneObservablePrimitives(OrientationSourceView.Scan.Primitives)
 				}
 			};
@@ -742,7 +808,8 @@ public sealed class FragmentAutonomyState
 				FeatureIds = new List<int>(candidate.FeatureIds),
 				Provenance = candidate.Provenance,
 				IsPlayerDefined = candidate.IsPlayerDefined,
-				Evidence = candidate.Evidence
+				Evidence = candidate.Evidence,
+				RegionId = candidate.RegionId
             });
         }
 
@@ -783,65 +850,4 @@ public sealed class FragmentAutonomyState
 		Provenance = feature.Provenance,
 		Disposition = feature.Disposition
 	};
-}
-
-public sealed class FragmentAutonomyTruthLine
-{
-    public Vector2 Start { get; init; }
-    public Vector2 End { get; init; }
-    public FragmentScanChannel Channel { get; init; }
-    public bool IsImportant { get; init; }
-}
-
-public sealed class FragmentAutonomyTruth
-{
-    public FragmentGlyphType GlyphType { get; init; }
-    public float CorrectRotationDegrees { get; init; }
-    public bool CorrectPolarizationEnabled { get; init; }
-    public int CorrectPolarizationLevel { get; init; }
-    public bool CorrectSpectralEnabled { get; init; }
-    public int CorrectSpectralLevel { get; init; }
-    public bool CorrectSurfaceEnabled { get; init; }
-    public int CorrectSurfaceLevel { get; init; }
-    public bool CorrectElectromagneticEnabled { get; init; }
-    public bool CorrectResonanceEnabled { get; init; }
-    public bool CorrectXRayEnabled { get; init; }
-    public Vector2 MonolithDirection { get; init; }
-    public IReadOnlyList<FragmentAutonomyTruthLine> SignalLines { get; init; } =
-        Array.Empty<FragmentAutonomyTruthLine>();
-
-    public static FragmentAutonomyTruth FromPuzzle(FragmentPuzzle puzzle)
-    {
-        if (puzzle == null) return null;
-
-        List<FragmentAutonomyTruthLine> signalLines = new();
-        foreach (FragmentLine line in puzzle.Lines)
-        {
-            if (line.Role != FragmentLineRole.Signal) continue;
-            signalLines.Add(new FragmentAutonomyTruthLine
-            {
-                Start = line.Start,
-                End = line.End,
-                Channel = line.Channel,
-                IsImportant = line.IsImportant
-            });
-        }
-
-        return new FragmentAutonomyTruth
-        {
-            GlyphType = puzzle.GlyphType,
-            CorrectRotationDegrees = puzzle.CorrectRotationDegrees,
-            CorrectPolarizationEnabled = puzzle.CorrectPolarizationEnabled,
-            CorrectPolarizationLevel = puzzle.CorrectPolarizationLevel,
-            CorrectSpectralEnabled = puzzle.CorrectSpectralEnabled,
-            CorrectSpectralLevel = puzzle.CorrectSpectralLevel,
-            CorrectSurfaceEnabled = puzzle.CorrectSurfaceEnabled,
-            CorrectSurfaceLevel = puzzle.CorrectSurfaceLevel,
-            CorrectElectromagneticEnabled = puzzle.CorrectElectromagneticEnabled,
-            CorrectResonanceEnabled = puzzle.CorrectResonanceEnabled,
-            CorrectXRayEnabled = puzzle.CorrectXRayEnabled,
-            MonolithDirection = puzzle.MonolithDirection,
-            SignalLines = signalLines
-        };
-    }
 }

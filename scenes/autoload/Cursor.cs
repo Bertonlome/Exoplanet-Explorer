@@ -36,4 +36,27 @@ public partial class Cursor : CanvasLayer
             _ => DefaultTexture
         };
     }
+
+	/// <summary>
+	/// Uses a native cursor while a separate Window is visible. CanvasLayer cursors cannot render
+	/// above embedded/native window viewports, whereas an OS cursor always remains on top.
+	/// </summary>
+	public void SetPopupCursorOverride(bool enabled)
+	{
+		if (sprite2D == null) return;
+		sprite2D.Visible = !enabled;
+		if (enabled)
+		{
+			Input.SetCustomMouseCursor(
+				DefaultTexture,
+				Input.CursorShape.Arrow,
+				new Vector2(24f, 19f));
+			Input.MouseMode = Input.MouseModeEnum.Visible;
+		}
+		else
+		{
+			Input.SetCustomMouseCursor(null);
+			Input.MouseMode = Input.MouseModeEnum.Hidden;
+		}
+	}
 }

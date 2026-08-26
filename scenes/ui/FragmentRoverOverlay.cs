@@ -22,8 +22,16 @@ public partial class FragmentRoverOverlay : Control
 	private bool showArrows = true;
 	private bool orientationIsolation;
 	private const float OrientationAnimationDuration = 1.2f;
+	private const float RegionInteractionPadding = 14f;
+	private const float StructureStrokeDragThreshold = 10f;
 	private float orientationAnimationElapsed = OrientationAnimationDuration;
 	private bool structureEditing;
+	private int editingStructureId = -1;
+	private int editingRegionId = -1;
+	private int selectedStructureStrokeId = -1;
+	private bool isStructureDrawGesture;
+	private Vector2 structureDrawStart;
+	private Vector2 structureDrawCurrent;
 	private Color structureColor = new(1f, 0.2f, 0.85f, 0.9f);
 	private Color orientationColor = new(0.15f, 0.95f, 1f, 0.95f);
 	private Color orientationReferenceColor = new(1f, 1f, 1f, 0.72f);
@@ -51,9 +59,17 @@ public partial class FragmentRoverOverlay : Control
 	public event Action<int> RegionSelected;
 	public event Action<Rect2> RegionDrawn;
 	public event Action<int, Rect2> RegionResized;
+	public event Action<int> RegionLockRequested;
+	public event Action<int, int> StructureEditRequested;
 	public event Action<int> StructureFeatureToggled;
+	public event Action<int> StructureFeatureRemoved;
+	public event Action<Vector2, Vector2> StructureStrokeDrawn;
 	public event Action StructureEditingCancelled;
-	public event Action<Vector2, Vector2> ArrowDrawn;
+    public event Action<Vector2, Vector2> ArrowDrawn;
+
+	public bool IsStructureEditing => structureEditing;
+	public bool IsEditingStructure(int regionId, int structureId) =>
+		structureEditing && editingRegionId == regionId && editingStructureId == structureId;
 
     public override void _Ready()
     {
@@ -67,8 +83,10 @@ public partial class FragmentRoverOverlay : Control
         this.state = state;
 		if (resizeRegionId >= 0 &&
 			state?.LockedRegionViews.Exists(view => view.RegionId == resizeRegionId) == true)
+		{
 			CancelRegionResize();
 			SetArrowDrawingArmed(false);
+		}
         QueueRedraw();
     }
 
@@ -158,10 +176,21 @@ public partial class FragmentRoverOverlay : Control
 		QueueRedraw();
 	}
 
-	public void SetStructureEditing(bool editing)
+	public void SetStructureEditing(bool editing, int structureId = -1, int regionId = -1)
 	{
 		structureEditing = editing;
-		if (editing) arrowDrawingArmed = false;
+		editingStructureId = editing ? structureId : -1;
+		editingRegionId = editing ? regionId : -1;
+		selectedStructureStrokeId = -1;
+		isStructureDrawGesture = false;
+		if (editing)
+		{
+			arrowDrawingArmed = false;
+			regionDrawingArmed = false;
+			resizeRegionId = -1;
+			GrabFocus();
+		}
+		else ReleaseFocus();
 		isPointerDown = false;
 		isPanGesture = false;
 		MouseDefaultCursorShape = editing || regionDrawingArmed || arrowDrawingArmed
@@ -253,6 +282,10 @@ public partial class FragmentRoverOverlay : Control
 		regionDrawingArmed = false;
 		arrowDrawingArmed = false;
 		structureEditing = false;
+		editingStructureId = -1;
+		editingRegionId = -1;
+		selectedStructureStrokeId = -1;
+		isStructureDrawGesture = false;
 		resizeRegionId = -1;
 		navigationTarget = null;
 		navigationTargetRegionId = null;
@@ -274,19 +307,40 @@ public partial class FragmentRoverOverlay : Control
 
     public override void _GuiInput(InputEvent inputEvent)
     {
-		if (inputEvent is InputEventKey key && key.Pressed && key.Keycode == Key.Escape)
+		if (inputEvent is InputEventKey key && key.Pressed && !key.Echo)
 		{
-			if (structureEditing)
+			if (key.Keycode == Key.Escape)
 			{
-				SetStructureEditing(false);
-				StructureEditingCancelled?.Invoke();
+				if (structureEditing)
+				{
+					SetStructureEditing(false);
+					StructureEditingCancelled?.Invoke();
+				}
+				CancelRegionResize();
+				AcceptEvent();
+				return;
 			}
-			CancelRegionResize();
-			AcceptEvent();
-			return;
+			if (structureEditing &&
+				(key.Keycode == Key.Delete || key.Keycode == Key.Backspace) &&
+				selectedStructureStrokeId >= 0)
+			{
+				int featureId = selectedStructureStrokeId;
+				selectedStructureStrokeId = -1;
+				StructureFeatureRemoved?.Invoke(featureId);
+				QueueRedraw();
+				AcceptEvent();
+				return;
+			}
 		}
         if (inputEvent is InputEventMouseButton button)
         {
+			if (button.Pressed && button.ButtonIndex == MouseButton.Right && structureEditing)
+			{
+				SetStructureEditing(false);
+				StructureEditingCancelled?.Invoke();
+				AcceptEvent();
+				return;
+			}
 			if (button.Pressed && button.ButtonIndex == MouseButton.Right && resizeRegionId >= 0)
 			{
 				CancelRegionResize();
@@ -307,10 +361,31 @@ public partial class FragmentRoverOverlay : Control
             }
             if (button.ButtonIndex == MouseButton.Left)
             {
-				if (button.Pressed && button.DoubleClick && !regionDrawingArmed &&
-					!structureEditing && !arrowDrawingArmed)
+				if (button.Pressed && !button.DoubleClick && !regionDrawingArmed &&
+					!arrowDrawingArmed && TryFindRegionLockButton(
+						button.Position, out int lockRegionId))
 				{
-					int regionId = FindRegionAt(button.Position);
+					RegionLockRequested?.Invoke(lockRegionId);
+					AcceptEvent();
+					return;
+				}
+				if (button.Pressed && !button.DoubleClick && !regionDrawingArmed &&
+					!arrowDrawingArmed && TryFindStructureEditButton(
+						button.Position, out int editRegionId, out int editStructureId))
+				{
+					StructureEditRequested?.Invoke(editRegionId, editStructureId);
+					AcceptEvent();
+					return;
+				}
+				if (button.Pressed && button.DoubleClick && !regionDrawingArmed &&
+					!arrowDrawingArmed)
+				{
+					if (structureEditing)
+					{
+						AcceptEvent();
+						return;
+					}
+					int regionId = FindRegionAt(button.Position, RegionInteractionPadding);
 					if (regionId >= 0)
 					{
 						bool locked = state?.LockedRegionViews.Exists(view =>
@@ -348,6 +423,12 @@ public partial class FragmentRoverOverlay : Control
 						arrowDrawStart = button.Position;
 						arrowDrawCurrent = button.Position;
 					}
+					if (structureEditing)
+					{
+						structureDrawStart = button.Position;
+						structureDrawCurrent = button.Position;
+						isStructureDrawGesture = false;
+					}
                 }
                 else if (isPointerDown)
                 {
@@ -374,12 +455,31 @@ public partial class FragmentRoverOverlay : Control
 						MouseDefaultCursorShape = CursorShape.PointingHand;
 						RegionDrawn?.Invoke(normalizedBounds);
 					}
+					else if (structureEditing)
+					{
+						if (isStructureDrawGesture &&
+							structureDrawStart.DistanceTo(button.Position) >=
+								StructureStrokeDragThreshold)
+						{
+							StructureStrokeDrawn?.Invoke(
+								ViewportToNormalized(structureDrawStart),
+								ViewportToNormalized(button.Position));
+							selectedStructureStrokeId = -1;
+						}
+						else
+						{
+							int featureId = FindNearestFeature(button.Position, 16f);
+							selectedStructureStrokeId = featureId;
+							if (featureId >= 0 && !IsEditingStructureMember(featureId))
+								StructureFeatureToggled?.Invoke(featureId);
+						}
+						isStructureDrawGesture = false;
+						QueueRedraw();
+					}
 					else if (!isPanGesture)
                     {
                         int featureId = FindNearestFeature(button.Position, 12f);
-						if (featureId >= 0 && structureEditing)
-							StructureFeatureToggled?.Invoke(featureId);
-						else if (featureId >= 0) FeatureSelected?.Invoke(featureId);
+						if (featureId >= 0) FeatureSelected?.Invoke(featureId);
 						else
 						{
 							int regionId = FindRegionAt(button.Position);
@@ -417,6 +517,16 @@ public partial class FragmentRoverOverlay : Control
 				AcceptEvent();
 				return;
 			}
+			if (structureEditing)
+			{
+				structureDrawCurrent = motion.Position;
+				if (!isStructureDrawGesture &&
+					structureDrawStart.DistanceTo(motion.Position) >= StructureStrokeDragThreshold)
+					isStructureDrawGesture = true;
+				QueueRedraw();
+				AcceptEvent();
+				return;
+			}
             if (!isPanGesture && pointerDownPosition.DistanceTo(motion.Position) >= 5f)
                 isPanGesture = true;
             if (isPanGesture) PanRequested?.Invoke(motion.Relative);
@@ -441,7 +551,7 @@ public partial class FragmentRoverOverlay : Control
 	        foreach (FragmentDetectedFeature feature in state.DetectedFeatures)
 	        {
 			if (!IsFeatureVisible(feature) || IsFeatureInsideLockedReference(feature) ||
-				IsAcceptedStructureMember(feature.Id)) continue;
+				(showStructures && IsAcceptedStructureMember(feature.Id))) continue;
             bool selected = state.SelectedFeatureId == feature.Id;
 			bool pending = selected &&
 				feature.Disposition == FragmentAnnotationDisposition.Proposed;
@@ -480,6 +590,8 @@ public partial class FragmentRoverOverlay : Control
 		}
 		DrawStructureLabels();
 		DrawArrows();
+		DrawStructureEditButtons();
+		DrawRegionLockButtons();
 		if (regionDrawingArmed && isPointerDown)
 		{
 			Rect2 preview = OrderedRect(regionDrawStart, regionDrawCurrent);
@@ -493,6 +605,11 @@ public partial class FragmentRoverOverlay : Control
 			DrawLine(arrowDrawStart, arrowDrawCurrent, Colors.White, 4f, true);
 			if (direction.LengthSquared() > 1f)
 				DrawArrowHead(arrowDrawCurrent, direction.Normalized(), Colors.White);
+		}
+		if (structureEditing && isPointerDown && isStructureDrawGesture)
+		{
+			DrawLine(structureDrawStart, structureDrawCurrent, Colors.Black, 9f, true);
+			DrawLine(structureDrawStart, structureDrawCurrent, playerFeatureColor, 5f, true);
 		}
 		if (resizeRegionId >= 0 && isPointerDown)
 		{
@@ -528,8 +645,8 @@ public partial class FragmentRoverOverlay : Control
 			DrawLine(tail, tip, color, width, true);
 			DrawArrowHead(tip, direction.Normalized(), color);
 			DrawCircle(tail, selected ? 6f : 4f, color, false, 2f);
-			string label = $"A{candidate.Id}" + (candidate.IsPlayerDefined ? " · PLAYER" :
-				$" · {candidate.Confidence:0.00}");
+			string label = $"A{candidate.Id}" +
+				(candidate.IsPlayerDefined ? " · PLAYER" : string.Empty);
 			Font font = ThemeDB.FallbackFont;
 			const int fontSize = 13;
 			Vector2 textSize = font.GetStringSize(label, HorizontalAlignment.Left, -1, fontSize);
@@ -586,7 +703,7 @@ public partial class FragmentRoverOverlay : Control
 			previewDegrees,
 			axisColor);
 
-		string label = $"H{hypothesis.Id} · UPRIGHT? · {hypothesis.Confidence:0.00}";
+		string label = $"H{hypothesis.Id} · UPRIGHT?";
 		Font font = ThemeDB.FallbackFont;
 		const int fontSize = 14;
 		Vector2 textSize = font.GetStringSize(label, HorizontalAlignment.Left, -1, fontSize);
@@ -817,11 +934,10 @@ public partial class FragmentRoverOverlay : Control
 
 	private void DrawStructures()
 	{
+		if (!showStructures) return;
 		foreach (FragmentDetectedStructure structure in state.DetectedStructures)
 		{
 			if (structure.Disposition == FragmentAnnotationDisposition.Dismissed ||
-				(!showStructures &&
-				 structure.Disposition != FragmentAnnotationDisposition.Accepted) ||
 				(!showRoverStructures &&
 				 structure.Provenance == FragmentAnnotationProvenance.Rover &&
 				 structure.Disposition != FragmentAnnotationDisposition.Accepted)) continue;
@@ -836,24 +952,30 @@ public partial class FragmentRoverOverlay : Control
 			{
 				FragmentDetectedFeature feature = FindStructureFeature(featureId);
 				if (feature == null) continue;
+				bool strokeSelected = structureEditing && structure.Id == editingStructureId &&
+					featureId == selectedStructureStrokeId;
 				if (feature.Segments.Count == 0)
-					DrawStructureSegment(feature.Start, feature.End, color, selected,
+					DrawStructureSegment(feature.Start, feature.End, color, selected || strokeSelected,
 						structure.Disposition == FragmentAnnotationDisposition.Accepted);
 				else
 					foreach (FragmentFeatureSegment segment in feature.Segments)
-						DrawStructureSegment(segment.Start, segment.End, color, selected,
+						DrawStructureSegment(segment.Start, segment.End, color, selected || strokeSelected,
 							structure.Disposition == FragmentAnnotationDisposition.Accepted);
+				if (strokeSelected)
+				{
+					Vector2 marker = NormalizedToViewport(GetFeatureCenter(feature));
+					DrawCircle(marker, 9f, Colors.White, false, 3f);
+				}
 			}
 		}
 	}
 
 	private void DrawStructureLabels()
 	{
+		if (!showStructures) return;
 		foreach (FragmentDetectedStructure structure in state.DetectedStructures)
 		{
 			if (structure.Disposition == FragmentAnnotationDisposition.Dismissed ||
-				(!showStructures &&
-				 structure.Disposition != FragmentAnnotationDisposition.Accepted) ||
 				(!showRoverStructures &&
 				 structure.Provenance == FragmentAnnotationProvenance.Rover &&
 				 structure.Disposition != FragmentAnnotationDisposition.Accepted)) continue;
@@ -899,6 +1021,11 @@ public partial class FragmentRoverOverlay : Control
 
 	private FragmentDetectedFeature FindStructureFeature(int featureId)
 	{
+		FragmentDetectedFeature live = state.DetectedFeatures.Find(feature => feature.Id == featureId);
+		// A current review decision is authoritative. In particular, do not resurrect an old
+		// locked-view copy after the player dismissed this ID or after rotation refreshed it.
+		if (live != null)
+			return live.Disposition == FragmentAnnotationDisposition.Dismissed ? null : live;
 		foreach (FragmentLockedRegionView lockedView in state.LockedRegionViews)
 		{
 			FragmentDetectedFeature locked = lockedView.Features.Find(feature =>
@@ -957,12 +1084,16 @@ public partial class FragmentRoverOverlay : Control
 
 	private void DrawLockedReferenceFeatures()
 	{
+		if (!showFeatures) return;
 		foreach (FragmentLockedRegionView lockedView in state.LockedRegionViews)
 		{
 			foreach (FragmentDetectedFeature feature in lockedView.Features)
 			{
+				FragmentDetectedFeature current = state.DetectedFeatures.Find(candidate =>
+					candidate.Id == feature.Id);
 				if (feature.Disposition == FragmentAnnotationDisposition.Dismissed ||
-					IsAcceptedStructureMember(feature.Id)) continue;
+					current?.Disposition == FragmentAnnotationDisposition.Dismissed ||
+					(showStructures && IsAcceptedStructureMember(feature.Id))) continue;
 				Color color = feature.Provenance == FragmentAnnotationProvenance.Player
 					? playerFeatureColor
 					: feature.Disposition == FragmentAnnotationDisposition.Accepted
@@ -1064,7 +1195,7 @@ public partial class FragmentRoverOverlay : Control
 			Color border = new(color.R, color.G, color.B, 0.95f);
 			DrawRect(rectangle, Colors.Black, false, selected ? 5f : 4f);
 			DrawRect(rectangle, border, false, selected ? 3f : 2f);
-			DrawRegionNumber(region, rectangle, border);
+			DrawRegionHeader(region, rectangle, border, selected, locked);
 			if (resizeRegionId == region.Id) DrawResizeHandles(rectangle);
 		}
 	}
@@ -1073,9 +1204,9 @@ public partial class FragmentRoverOverlay : Control
 	{
 		foreach (Vector2 corner in GetCorners(rectangle))
 		{
-			Rect2 handle = new(corner - new Vector2(5f, 5f), new Vector2(10f, 10f));
+			Rect2 handle = new(corner - new Vector2(7f, 7f), new Vector2(14f, 14f));
 			DrawRect(handle, Colors.Black, true);
-			DrawRect(handle.Grow(-2f), Colors.White, true);
+			DrawRect(handle.Grow(-3f), Colors.White, true);
 		}
 	}
 
@@ -1118,9 +1249,16 @@ public partial class FragmentRoverOverlay : Control
 		QueueRedraw();
 	}
 
-	private void DrawRegionNumber(FragmentCandidateRegion region, Rect2 rectangle, Color color)
+	private void DrawRegionHeader(
+		FragmentCandidateRegion region,
+		Rect2 rectangle,
+		Color color,
+		bool selected,
+		bool locked)
 	{
 		string label = $"R{region.Id}";
+		if (selected)
+			label += locked ? " · REGION LOCKED" : " · DOUBLE CLICK TO RESIZE REGION";
 		Font font = ThemeDB.FallbackFont;
 		const int fontSize = 14;
 		Vector2 size = font.GetStringSize(label, HorizontalAlignment.Left, -1, fontSize);
@@ -1130,7 +1268,184 @@ public partial class FragmentRoverOverlay : Control
 			HorizontalAlignment.Left, -1, fontSize, color);
 	}
 
-	private int FindRegionAt(Vector2 point)
+	private void DrawStructureEditButton(
+		FragmentCandidateRegion region,
+		FragmentDetectedStructure structure,
+		Rect2 regionRectangle)
+	{
+		Rect2 button = GetStructureEditButtonRect(regionRectangle);
+		bool active = structureEditing && editingRegionId == region.Id &&
+			editingStructureId == structure.Id;
+		Color color = active ? playerFeatureColor : structureColor;
+		DrawRect(button, new Color(0f, 0f, 0f, 0.94f), true);
+		DrawRect(button, color, false, active ? 3f : 2f);
+		string label = active ? "EDITING STRUCTURE" : "EDIT STRUCTURE";
+		Font font = ThemeDB.FallbackFont;
+		const int fontSize = 12;
+		Vector2 size = font.GetStringSize(label, HorizontalAlignment.Left, -1, fontSize);
+		DrawString(font,
+			button.Position + new Vector2((button.Size.X - size.X) * 0.5f, 16f),
+			label, HorizontalAlignment.Left, -1, fontSize, color);
+	}
+
+	private void DrawStructureEditButtons()
+	{
+		if (state == null || !showRegions || !showStructures) return;
+		foreach (FragmentCandidateRegion region in state.CandidateRegions)
+		{
+			if (region.Disposition == FragmentAnnotationDisposition.Dismissed ||
+				(!showRoverRegions && region.Provenance == FragmentAnnotationProvenance.Rover))
+				continue;
+			FragmentDetectedStructure structure = FindStructureInRegion(region);
+			if (structure != null)
+				DrawStructureEditButton(
+					region,
+					structure,
+					NormalizedRectToViewport(region.NormalizedBounds));
+		}
+	}
+
+	private static Rect2 GetStructureEditButtonRect(Rect2 regionRectangle)
+	{
+		const float width = 132f;
+		const float height = 23f;
+		float x = MathF.Max(regionRectangle.Position.X + 3f, regionRectangle.End.X - width - 3f);
+		return new Rect2(new Vector2(x, regionRectangle.Position.Y + 3f),
+			new Vector2(width, height));
+	}
+
+	private bool TryFindStructureEditButton(
+		Vector2 point,
+		out int regionId,
+		out int structureId)
+	{
+		regionId = -1;
+		structureId = -1;
+		if (state == null || !showRegions || !showStructures) return false;
+		for (int index = state.CandidateRegions.Count - 1; index >= 0; index--)
+		{
+			FragmentCandidateRegion region = state.CandidateRegions[index];
+			if (region.Disposition == FragmentAnnotationDisposition.Dismissed ||
+				(!showRoverRegions && region.Provenance == FragmentAnnotationProvenance.Rover))
+				continue;
+			FragmentDetectedStructure structure = FindStructureInRegion(region);
+			if (structure == null) continue;
+			Rect2 rectangle = NormalizedRectToViewport(region.NormalizedBounds);
+			if (!GetStructureEditButtonRect(rectangle).Grow(6f).HasPoint(point)) continue;
+			regionId = region.Id;
+			structureId = structure.Id;
+			return true;
+		}
+		return false;
+	}
+
+	private void DrawRegionLockButtons()
+	{
+		if (state == null || !showRegions) return;
+		foreach (FragmentCandidateRegion region in state.CandidateRegions)
+		{
+			if (!CanShowRegionLockButton(region)) continue;
+			bool locked = state.LockedRegionViews.Exists(view => view.RegionId == region.Id);
+			DrawRegionLockButton(
+				GetRegionLockButtonRect(NormalizedRectToViewport(region.NormalizedBounds)),
+				locked);
+		}
+	}
+
+	private void DrawRegionLockButton(Rect2 button, bool locked)
+	{
+		Color color = locked ? orientationColor : Colors.White;
+		DrawRect(button, new Color(0f, 0f, 0f, 0.94f), true);
+		DrawRect(button, color, false, 2f);
+		string label = locked ? "UNLOCK" : "LOCK";
+		Font font = ThemeDB.FallbackFont;
+		const int fontSize = 12;
+		Vector2 size = font.GetStringSize(label, HorizontalAlignment.Left, -1, fontSize);
+		DrawString(font,
+			button.Position + new Vector2((button.Size.X - size.X) * 0.5f, 16f),
+			label, HorizontalAlignment.Left, -1, fontSize, color);
+	}
+
+	private static Rect2 GetRegionLockButtonRect(Rect2 regionRectangle)
+	{
+		const float width = 72f;
+		const float height = 23f;
+		return new Rect2(
+			regionRectangle.End - new Vector2(width + 3f, height + 3f),
+			new Vector2(width, height));
+	}
+
+	private bool TryFindRegionLockButton(Vector2 point, out int regionId)
+	{
+		regionId = -1;
+		if (state == null || !showRegions) return false;
+		for (int index = state.CandidateRegions.Count - 1; index >= 0; index--)
+		{
+			FragmentCandidateRegion region = state.CandidateRegions[index];
+			if (!CanShowRegionLockButton(region)) continue;
+			Rect2 rectangle = NormalizedRectToViewport(region.NormalizedBounds);
+			if (!GetRegionLockButtonRect(rectangle).Grow(6f).HasPoint(point)) continue;
+			regionId = region.Id;
+			return true;
+		}
+		return false;
+	}
+
+	private bool CanShowRegionLockButton(FragmentCandidateRegion region) =>
+		region != null &&
+		region.Disposition == FragmentAnnotationDisposition.Accepted &&
+		(showRoverRegions || region.Provenance != FragmentAnnotationProvenance.Rover);
+
+	private FragmentDetectedStructure FindStructureInRegion(FragmentCandidateRegion region)
+	{
+		if (structureEditing && region.Id == editingRegionId)
+		{
+			FragmentDetectedStructure editing = state.DetectedStructures.Find(structure =>
+				structure.Id == editingStructureId &&
+				structure.Disposition != FragmentAnnotationDisposition.Dismissed);
+			if (editing != null) return editing;
+		}
+		FragmentDetectedStructure best = null;
+		foreach (FragmentDetectedStructure structure in state.DetectedStructures)
+		{
+			if (structure.Disposition == FragmentAnnotationDisposition.Dismissed ||
+				(!showRoverStructures && structure.Provenance == FragmentAnnotationProvenance.Rover &&
+				 structure.Disposition != FragmentAnnotationDisposition.Accepted)) continue;
+			bool overlaps = false;
+			foreach (int featureId in structure.FeatureIds)
+			{
+				FragmentDetectedFeature feature = FindStructureFeature(featureId);
+				if (feature != null && region.NormalizedBounds.HasPoint(GetFeatureCenter(feature)))
+				{
+					overlaps = true;
+					break;
+				}
+			}
+			if (!overlaps) continue;
+			if (structure.Id == state.SelectedStructureId) return structure;
+			if (best == null ||
+				(structure.Disposition == FragmentAnnotationDisposition.Accepted &&
+				 best.Disposition != FragmentAnnotationDisposition.Accepted))
+				best = structure;
+		}
+		return best;
+	}
+
+	private bool IsEditingStructureMember(int featureId) =>
+		state?.DetectedStructures.Exists(structure =>
+			structure.Id == editingStructureId && structure.FeatureIds.Contains(featureId)) == true;
+
+	private static Vector2 GetFeatureCenter(FragmentDetectedFeature feature)
+	{
+		if (feature.Segments == null || feature.Segments.Count == 0)
+			return (feature.Start + feature.End) * 0.5f;
+		Vector2 sum = Vector2.Zero;
+		foreach (FragmentFeatureSegment segment in feature.Segments)
+			sum += (segment.Start + segment.End) * 0.5f;
+		return sum / feature.Segments.Count;
+	}
+
+	private int FindRegionAt(Vector2 point, float padding = 0f)
 	{
 		if (state == null || !showRegions) return -1;
 		for (int index = state.CandidateRegions.Count - 1; index >= 0; index--)
@@ -1138,7 +1453,8 @@ public partial class FragmentRoverOverlay : Control
 			FragmentCandidateRegion region = state.CandidateRegions[index];
 			if (region.Disposition == FragmentAnnotationDisposition.Dismissed ||
 				(!showRoverRegions && region.Provenance == FragmentAnnotationProvenance.Rover)) continue;
-			if (NormalizedRectToViewport(region.NormalizedBounds).HasPoint(point)) return region.Id;
+			if (NormalizedRectToViewport(region.NormalizedBounds).Grow(padding).HasPoint(point))
+				return region.Id;
 		}
 		return -1;
 	}

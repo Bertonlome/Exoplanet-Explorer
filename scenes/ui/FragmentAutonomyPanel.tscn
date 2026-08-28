@@ -520,14 +520,14 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Transform accepted A# geometry through accepted H# into a Godot grid bearing."
+tooltip_text = "Transform the accepted Arrow geometry into a Godot grid bearing."
 text = "MAP TO WORLD"
 
 [node name="DirectionStatusLabel" type="Label" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-text = "BEARING: Accept A# and H#"
+text = "BEARING: Accept an Arrow"
 autowrap_mode = 2
 
 [node name="DirectionInset" type="Control" parent="Margin/PanelScroll/Content"]

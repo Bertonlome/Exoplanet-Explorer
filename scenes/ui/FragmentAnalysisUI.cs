@@ -284,6 +284,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 			ViewPan = fragmentCanvas.ViewPan,
 			WasSolved = fragmentCanvas.IsPuzzleSolved(),
 			WasEverSolved = wasEverSolved || fragmentCanvas.IsPuzzleSolved(),
+			WasCompleted = fragmentAnalysisRover?.State?.IsAnalysisCompleted == true,
 			InitiationOrigin = initiationOrigin,
 			RoverState = fragmentAnalysisRover?.CaptureState()
 		};

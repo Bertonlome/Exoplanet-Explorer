@@ -542,6 +542,7 @@ public partial class FragmentRoverOverlay : Control
 			DrawRect(new Rect2(Vector2.Zero, Size), Colors.Black, true);
 			DrawIsolatedOrientationStructure();
 			DrawOrientationCues();
+			DrawArrows(true);
 			return;
 		}
 		DrawLockedReferenceBackgrounds();
@@ -555,8 +556,10 @@ public partial class FragmentRoverOverlay : Control
             bool selected = state.SelectedFeatureId == feature.Id;
 			bool pending = selected &&
 				feature.Disposition == FragmentAnnotationDisposition.Proposed;
-            Color color = feature.Provenance == FragmentAnnotationProvenance.Player
+			Color color = feature.Provenance == FragmentAnnotationProvenance.Player
                 ? playerFeatureColor
+				: feature.IsInferred
+					? new Color(1f, 0.45f, 0.85f, 0.92f)
                 : feature.Disposition == FragmentAnnotationDisposition.Accepted
                     ? acceptedRoverFeatureColor
                     : roverFeatureColor;
@@ -621,16 +624,25 @@ public partial class FragmentRoverOverlay : Control
 		DrawLockedReferenceIndicators();
     }
 
-	private void DrawArrows()
+	private void DrawArrows(bool orientationSpace = false)
 	{
 		if (!showArrows || state == null) return;
 		foreach (FragmentArrowCandidate candidate in state.ArrowCandidates)
 		{
+			if (orientationSpace && state.OrientationSourceView?.RegionId is int sourceRegionId &&
+				candidate.RegionId >= 0 && candidate.RegionId != sourceRegionId) continue;
 			bool selected = state.SelectedArrowId == candidate.Id;
 			if (candidate.Disposition == FragmentAnnotationDisposition.Dismissed && !selected)
 				continue;
-			Vector2 tail = NormalizedToViewport(candidate.Tail);
-			Vector2 tip = NormalizedToViewport(candidate.Tip);
+			FragmentDetectedStructure orientationSource = orientationSpace
+				? GetOrientationSourceStructure()
+				: null;
+			Vector2 tail = orientationSource == null
+				? NormalizedToViewport(candidate.Tail)
+				: OrientationPointToViewport(candidate.Tail, orientationSource);
+			Vector2 tip = orientationSource == null
+				? NormalizedToViewport(candidate.Tip)
+				: OrientationPointToViewport(candidate.Tip, orientationSource);
 			Vector2 direction = tip - tail;
 			if (direction.LengthSquared() < 1f) continue;
 			Color color = candidate.Disposition switch
@@ -1185,8 +1197,10 @@ public partial class FragmentRoverOverlay : Control
 			Rect2 rectangle = NormalizedRectToViewport(region.NormalizedBounds);
 			bool selected = state.SelectedRegionId == region.Id;
 			bool locked = state.LockedRegionViews.Exists(view => view.RegionId == region.Id);
-			Color color = region.Provenance == FragmentAnnotationProvenance.Player
-				? new Color(0.25f, 1f, 0.45f, 0.32f)
+			Color color = region.Disposition == FragmentAnnotationDisposition.Proposed
+				? candidateRegionColor
+				: region.Provenance == FragmentAnnotationProvenance.Player
+					? new Color(0.25f, 1f, 0.45f, 0.32f)
 				: region.Disposition == FragmentAnnotationDisposition.Accepted
 					? new Color(0.2f, 1f, 0.35f, 0.3f)
 					: candidateRegionColor;

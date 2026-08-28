@@ -284,9 +284,11 @@ public partial class BaseLevel : Node
 		return new FragmentSampleAvailability
 		{
 			Position = fragmentPosition,
-			Status = state.WasEverSolved || state.WasSolved
-				? FragmentSampleAnalysisStatus.Solved
-				: FragmentSampleAnalysisStatus.PreviouslyAnalysed
+			Status = state.WasCompleted || state.RoverState?.IsAnalysisCompleted == true
+				? FragmentSampleAnalysisStatus.Completed
+				: state.WasEverSolved || state.WasSolved
+					? FragmentSampleAnalysisStatus.Solved
+					: FragmentSampleAnalysisStatus.PreviouslyAnalysed
 		};
 	}
 

@@ -81,6 +81,18 @@ public partial class FragmentAutonomySettings : Resource
 	[Export(PropertyHint.Range, "32,512,16")]
 	public int MaximumStructureFeatureCount { get; set; } = 256;
 
+	[Export]
+	public bool EnableStructureGapCompletion { get; set; } = true;
+
+	[Export(PropertyHint.Range, "0.01,0.15,0.005")]
+	public float MaximumStructureCompletionGap { get; set; } = 0.12f;
+
+	[Export(PropertyHint.Range, "0,1,0.05")]
+	public float MinimumStructureCompletionAlignment { get; set; } = 0.35f;
+
+	[Export(PropertyHint.Range, "0,8,1")]
+	public int MaximumInferredStructureFeatures { get; set; } = 4;
+
     [ExportGroup("Overlay Colours")]
     [Export]
 	public Color RoverFeatureColor { get; set; } = new(1f, 0.15f, 0.75f, 0.95f);

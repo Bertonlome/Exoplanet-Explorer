@@ -22,7 +22,7 @@ public partial class FragmentDirectionInset : Control
 		if (direction == null)
 		{
 			DrawString(ThemeDB.FallbackFont, new Vector2(12f, 28f),
-				"ACCEPT A# TO MAP · SCREEN UP = NORTH", HorizontalAlignment.Left, -1, 13,
+				"ACCEPT AN ARROW TO MAP · SCREEN UP = NORTH", HorizontalAlignment.Left, -1, 13,
 				new Color(0.7f, 0.78f, 0.84f));
 			return;
 		}

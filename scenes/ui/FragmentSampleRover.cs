@@ -12,6 +12,8 @@ public static class FragmentSampleRover
         string reason = sample.Status switch
         {
             FragmentSampleAnalysisStatus.Available => "Unanalysed sample is in range.",
+			FragmentSampleAnalysisStatus.Completed =>
+				"Completed fragment analysis is available for review.",
             FragmentSampleAnalysisStatus.Solved => "Solved sample is available for review.",
             _ => "Previously analysed sample is available for review."
         };

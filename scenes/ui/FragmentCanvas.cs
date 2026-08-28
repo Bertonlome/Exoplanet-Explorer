@@ -60,6 +60,9 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
 		public readonly HashSet<FragmentLine> Lines = new();
 	}
 	private readonly List<RegionRotation> _regionRotations = new();
+	// Geometry/observation coordinates must not inherit later Control aspect-ratio changes from
+	// opening or folding analysis panels. Captured when a fragment is generated.
+	private Vector2 _virtualCanvasSize;
 
     public FragmentPuzzle Puzzle { get; private set; }
     public float ViewZoom => _viewZoom;
@@ -108,7 +111,7 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
 	{
 		if (what == NotificationResized)
 		{
-			_observationRevision++;
+			ClampViewPan();
 			if (_isViewNavigationActive)
 				CalculateFocusedView(
 					_navigationTargetBounds,
@@ -403,6 +406,7 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
 
     public void GenerateFragmentFromSeed(ulong sampleSeed)
     {
+		_virtualCanvasSize = GetLiveVirtualCanvasSize();
         Puzzle = FragmentPuzzleGenerator.Generate(
             generationSettings,
             rockSettings,
@@ -1219,8 +1223,14 @@ public partial class FragmentCanvas : Control, IFragmentObservationSource
     private float GetCanvasSizeMultiplier() =>
         MathF.Max(generationSettings.CanvasSizeMultiplier, 1f);
 
-    private Vector2 GetVirtualCanvasSize() =>
-        Size * GetCanvasSizeMultiplier();
+	private Vector2 GetVirtualCanvasSize() =>
+		_virtualCanvasSize.X > 1f && _virtualCanvasSize.Y > 1f
+			? _virtualCanvasSize
+			: GetLiveVirtualCanvasSize();
+
+	private Vector2 GetLiveVirtualCanvasSize() => new(
+		MathF.Max(Size.X, 1f) * GetCanvasSizeMultiplier(),
+		MathF.Max(Size.Y, 1f) * GetCanvasSizeMultiplier());
 
     private float GetMinimumViewZoom()
     {

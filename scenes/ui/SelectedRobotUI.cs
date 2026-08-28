@@ -323,6 +323,7 @@ public partial class SelectedRobotUI : CanvasLayer
 		{
 			FragmentSampleAnalysisStatus.Analysing => "ANALYSING",
 			FragmentSampleAnalysisStatus.PreviouslyAnalysed => "PREVIOUSLY ANALYSED",
+			FragmentSampleAnalysisStatus.Completed => "COMPLETED",
 			FragmentSampleAnalysisStatus.Solved => "SOLVED",
 			_ => "NOT YET ANALYSED"
 		};

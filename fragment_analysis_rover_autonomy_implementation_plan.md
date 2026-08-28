@@ -3570,6 +3570,8 @@ glyph truth.
   validation prompt as a request to continue a search. CURRENT and NEXT name the active stage,
   target R#, test count, and best observable score.
 * OFF or Supporter allocation stops the Performer pipeline without deleting reviewed analysis data.
+* Selecting Performer immediately exits comparison if necessary, restores the minimum whole-sample
+  zoom with centred pan, and starts `PLAY ROVER` without requiring a second button press.
 
 #### AW-02 — time-budgeted dense-region configuration graph search
 
@@ -3616,13 +3618,17 @@ glyph truth.
 * Confirmation closes side-by-side view, focuses the chosen R#, runs existing structure detection,
   and selects the strongest visible reconstructed S# for that region.
 * Show `EDIT STRUCTURE` on canvas as already implemented and add an explicit `VALIDATE & CONTINUE`
-  gate. The player may enter edit mode, add/delete/draw strokes, leave edit mode, and then validate;
-  continuing accepts the selected non-empty S# and records that the edited geometry was reviewed.
+  gate in the unfolded RECONSTRUCTED STRUCTURE menu. The popup is informational and carries no
+  validation button. The player may enter edit mode, add/delete/draw strokes without changing zoom
+  or pan, leave edit mode, and then validate; accepting the selected non-empty S# continues the
+  workflow and records that the edited geometry was reviewed. All other analysis sections remain
+  folded during this gate.
 
 #### AW-05 — thumbnail-assisted H# review and supervised rotation
 
 * Open the orientation view/menu, estimate observable H# candidates, select H1, and show the scanned
-  fragment thumbnail as the semantic reference. Rover does not choose the upright hypothesis.
+  fragment thumbnail directly inside the expanded Orientation submenu as the semantic reference.
+  Rover does not choose the upright hypothesis.
 * Player steps through H# and presses the existing ACCEPT control. Performer then calculates and
   executes the existing region-local correction. The pipeline waits for rotation completion before
   advancing, and PAUSE/cancel retains a geometrically consistent starting pose.
@@ -3661,6 +3667,260 @@ dotnet build --no-restore succeeds with 0 errors and the same 3 pre-existing war
 BuildingComponent.cs and SaveManager.cs. git diff --check reports no whitespace errors. Runtime,
 visual, pointer-hitbox, and minimap behavior remain gated by the user tests because a Godot executable
 is not installed in this workspace environment.]`
+
+### Autonomous rover adjustments — region-review request
+
+**Implementation status:** Corrected after the first focused test; awaiting retest.
+
+* The `Validate or refine every proposed region of interest` popup includes `REVIEW FIRST REGION`.
+  It selects the lowest unresolved Region, immediately fits that region in the canvas view, and closes
+  the request popup so the region is unobstructed for review.
+* The popup includes `ADD REGION`. It closes the popup, restores the normal cursor, unfolds Regions
+  of Interest, enables the region overlay, and arms the existing player region-drawing gesture.
+* The request text includes `Tip: double-click a region to resize it.` These contextual buttons are
+  visible only during the region-review human gate and never appear in other Rover requests.
+* **Focused test:** `[Reach the Rover region-review request. Confirm REVIEW FIRST REGION selects and
+  zooms to the lowest proposed R#. Reopen the request, press ADD REGION, confirm the popup closes and
+  one drag draws a player region. Reopen it again and confirm the resize instruction is present;
+  double-click and resize a region. Confirm later feature/structure/orientation/arrow requests do not
+  contain either region button.]`
+* **Region-request adjustment result:** `[ ] PASS  [x] FAIL  [ ] BLOCKED REASON: upon clicking review first region it should hide the menu]`
+* **Region-request correction retest:** `[ ] PASS  [x] FAIL  [ ] BLOCKED REASON: if the player selected draw region the region drawn should appear orange so that the player can accept/dismiss it and thus upon accepting it, it will continue to other pending region, right now it is by default acccepted as drawn and it is not continuing with other regions. SCAN FEATURES button in features should launch the rover autonomy search if the rover is in autonomous mode]`
+
+**Follow-up correction implemented:**
+
+* A Region drawn from the autonomous region-review request is now `Proposed`, not silently
+  `Accepted`. It uses the same orange proposal styling and Accept/Dismiss controls as Rover Regions.
+* Pending-region traversal now includes both Rover- and player-authored proposals. Accepting or
+  dismissing the drawn Region therefore focuses the next unresolved Region; only exhausting the
+  complete queue advances to autonomous per-Region Feature searches.
+* `SCAN FEATURES` now starts the autonomous Feature-configuration search when allocation is
+  `PERFORMER`. In other allocation modes it retains its original one-shot scan behavior. If Region
+  proposals remain unresolved, the Rover explains that Feature search is waiting for their review.
+* **Correction retest:** `[Draw a Region from the region-review request. Confirm it is orange and
+  proposed. Accept or dismiss it and confirm the next pending Region is selected. Exhaust all Region
+  proposals and confirm autonomous Feature search begins. Separately, with an accepted Region and
+  PERFORMER selected, press SCAN FEATURES and confirm the timed autonomous Feature search starts.]`
+* **Correction retest result:** `[x] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous rover adjustments — feature-review request
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* The feature-review request includes `CONTINUE`. It closes only the popup and restores the normal
+  cursor, leaving the Rover in `AwaitingFeatureReview` and keeping the current region strictly scoped.
+  It does not accept/dismiss a Feature, skip unresolved proposals, or start the next Region's search.
+* **Focused test:** `[Reach Feature review for an accepted Region, press CONTINUE, and confirm the popup
+  closes while the same Region and Feature remain selected. Resolve its proposals and confirm only then does
+  the Rover search/focus the next accepted region.]`
+* **Feature-request adjustment result:** `[x] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous rover adjustments — player-facing terminology
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Human-gate prompts, status guidance, bearing guidance, and tooltips now say `Region`, `Feature`,
+  `Arrow`, `Structure`, or `orientation hypothesis` instead of requiring the player to decode generic
+  `R#`, `F#`, `A#`, `S#`, or `H#` shorthand. Compact numbered annotation labels remain identifiers
+  on the drawing itself (for example, `R1`) so the player can distinguish multiple objects.
+* **Terminology test:** `[Exercise the Region, Feature, Structure, orientation, and Arrow gates.
+  Confirm instructions use proper nouns and no generic # shorthand, while numbered canvas labels
+  remain available for object identification.]`
+* **Terminology result:** `[x] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous rover adjustments — find another Region
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* The scanned-fragment comparison request now includes `FIND ANOTHER REGION` alongside
+  `USE SELECTED REGION`.
+* Selecting it dismisses the previous Region set, clears its view locks and crop selection, and
+  loops back to the initial timed ON/OFF Region search. Previous Region bounds are excluded from the
+  score, causing the search to favor a materially different dense Region set rather than immediately
+  returning the same candidates.
+* **Find-another test:** `[Reach scanned-fragment comparison, press FIND ANOTHER REGION, and confirm
+  the popup closes, initial ON/OFF search restarts, old Regions stay dismissed, and a different
+  proposed Region set is returned for review.]`
+* **Find-another result:** `[x] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+
+### Autonomous rover adjustments — Structure through bearing handoff
+
+**Implementation status:** Corrected; awaiting focused Godot test.
+
+* After the accepted orientation rotation finishes, autonomous mode closes side-by-side view and
+  folds Regions of Interest, Feature Sensing, Reconstructed Structure, Orientation, and Task
+  Allocation. It then unfolds only `ARROW & DIRECTION` and forces its Arrow overlay visible.
+* Arrow detection starts automatically after rotation. A detected Arrow becomes a human-gated
+  Accept/Reject proposal; if detection finds none, the same gate asks the player to draw tail-to-tip.
+* Bearing is no longer evaluated prematurely at rotation completion. It is calculated from the
+  accepted Arrow only, after the player accepts the proposed or player-drawn geometry.
+* The isolated Orientation renderer now draws retained/proposed Arrows as well as the Structure and
+  orientation cues. The Arrow therefore remains visible in both normal and Orientation views.
+* **Handoff test:** `[In PERFORMER mode, accept a Structure and orientation hypothesis and allow the
+  rotation to complete. Confirm all unrelated menus fold, ARROW & DIRECTION unfolds, Arrow detection
+  runs automatically, its popup requests Accept/Reject (or drawing when none is detected), and the
+  Arrow is visible in normal view. Reopen Orientation and confirm the Arrow is also visible there.
+  Accept the Arrow and confirm world bearing is calculated only then.]`
+* **Handoff result:** `[ ] PASS  [ ] FAIL  [x] BLOCKED REASON: After rotation is executed, the rover should unfold the arrow & direction automatically and launch a detect arrow function, then show a popup asking for review or if none was found asking for user to draw an arrow with a draw arrow button on the popup UI]`
+
+**Blocked-test correction implemented:**
+
+* Post-rotation Arrow handoff no longer depends on the workflow still having the exact transient
+  `WaitingForRotation` value after rotation-driven observation refreshes. In Performer mode it
+  reliably runs detection for the selected autonomous Region and enters the appropriate Arrow gate.
+* The detected-Arrow popup now provides `REVIEW ARROW`, which closes the popup and exposes the
+  selected proposal in the already-unfolded `ARROW & DIRECTION` menu.
+* The no-Arrow popup now provides `DRAW ARROW`. It closes the popup, keeps `ARROW & DIRECTION`
+  unfolded, forces the Arrow overlay on, and immediately arms the tail-to-tip drawing tool.
+* **Blocked-test retest:** `[Complete autonomous rotation with detectable Arrow geometry. Confirm
+  ARROW & DIRECTION unfolds and the popup offers REVIEW ARROW. Repeat without detectable geometry;
+  confirm the popup offers DRAW ARROW and pressing it immediately permits a tail-to-tip draw.]`
+* **Blocked-test retest result:** `[ ] PASS  [x] FAIL  [ ] BLOCKED REASON: validate and continue under reconstructed structures still does not allow the rover to automatically move on to orientation mode as it should. Another problem during the popup with the prompt about selecting a region (with the fragment reference), I chose to focus on R2 but upon accepting the popup, it focused the camera in normal mode on R1 instead, like if it was R1 that had been selected]`
+
+**Structure/Region selection correction implemented:**
+
+* `VALIDATE & CONTINUE` now retains the just-accepted Structure as the selected Structure while the
+  autonomous gate validates it. Previously the generic Structure-review traversal selected the next
+  proposal first, so continuation validated the wrong Structure (or no Structure) and never entered
+  Orientation.
+* Entering scanned-fragment Region choice now preserves the currently selected reviewed Region when
+  it is valid. It falls back to the first Region only when there is no valid player selection, so
+  selecting Region 2 remains Region 2 when `USE SELECTED REGION` returns to normal view.
+* **Selection correction retest:** `[Choose Region 2 in the scanned-fragment comparison and press
+  USE SELECTED REGION; confirm normal view focuses Region 2. In its reconstruction gate, press
+  VALIDATE & CONTINUE and confirm the accepted Structure remains selected and Orientation opens
+  automatically for Region 2.]`
+* **Selection correction result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — rotation geometry fidelity
+
+**Implementation status:** Corrected; awaiting focused Godot test.
+
+* Rover tween frames continue to update only rendered sample geometry for smooth animation. Retained
+  Features, Structures, and Arrows are reconciled exactly once at completion around the exact
+  Region-local pivot, then Rover-detected Feature geometry is refreshed from the rotated scan.
+* Region bounds are re-fitted from transformed Feature and Arrow geometry. The previous code rotated
+  the preceding axis-aligned bounding-box corners on every tween step, accumulating artificial size
+  and aspect-ratio changes.
+* All point rotations remain in sample-pixel space before conversion back to normalized coordinates,
+  preventing non-square canvas dimensions from introducing horizontal or vertical scaling.
+* After the Orientation/comparison UI folds, a deferred one-frame reconciliation re-detects Rover
+  geometry using the canvas's final size and aspect ratio. This prevents overlays calculated against
+  the wider pre-fold layout from being stretched when the normal analyzer returns.
+* **Second distortion correction:** the fragment's virtual geometry frame is now captured once when
+  that fragment is generated. Opening, folding, or resizing Rover UI changes only the viewport onto
+  that stable frame; it no longer changes the sample coordinate system or re-generates Features
+  against a new aspect ratio. This removes the remaining cumulative horizontal shrink visible after
+  rotation and panel-layout changes.
+* **Rotation-fidelity test:** `[Use a clearly rectangular or hexagonal reconstruction on a non-square
+  display. Accept an orientation requiring a large rotation. Confirm the visible sample lines,
+  reconstructed Structure, detected/drawn Arrow, and Region bounds remain mutually aligned throughout
+  and after the tween, with no horizontal shrinkage or cumulative drift.]`
+* **Rotation-fidelity result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous rover adjustments — reconstruction popup actions
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* The reconstruction human gate now exposes `EDIT STRUCTURE` and `VALIDATE & CONTINUE` directly in
+  its popup instead of requiring the player to discover the corresponding right-panel controls.
+* `EDIT STRUCTURE` closes the popup and enters the existing in-canvas editor for the selected Region
+  and Structure. `VALIDATE & CONTINUE` closes the popup, accepts the selected non-empty Structure,
+  and immediately advances the autonomous workflow into Orientation.
+* Both popup actions are disabled when no usable non-empty Structure is selected.
+* **Reconstruction-popup test:** `[Reach the autonomous reconstruction request. Press EDIT STRUCTURE
+  and confirm the popup closes and stroke editing starts on the selected reconstruction. Reopen the
+  request, press VALIDATE & CONTINUE, and confirm the selected Structure is accepted and Orientation
+  opens automatically.]`
+* **Reconstruction-popup result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous rover adjustments — completed analysis state
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Publishing the accepted Arrow's world bearing and minimap ray now marks the Rover analysis state
+  durably completed and opens a final `ANALYSIS COMPLETED` popup stating that the bearing was added
+  to the minimap. `ACKNOWLEDGE` closes this notification without restarting the workflow.
+* The analyzer header changes from `SAMPLE: ACTIVE` to `SAMPLE: COMPLETED`. Completion is captured in
+  both the analysis save state and cloned Rover state, so reopening the sample retains that status.
+* Later sample references use the dedicated `COMPLETED` availability status and Rover review copy,
+  rather than reducing a bearing-complete analysis to `PREVIOUSLY ANALYSED`.
+* **Completion-state test:** `[Accept the final Arrow and confirm the minimap ray appears, followed by
+  the ANALYSIS COMPLETED popup. Confirm the header reads SAMPLE: COMPLETED. Acknowledge and quit;
+  verify the nearby-sample UI reports COMPLETED, then reopen and confirm completion remains saved.]`
+* **Completion-state result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous rover adjustments — immediate Orientation presentation
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* `VALIDATE & CONTINUE` now completes the equivalent of `ESTIMATE AXES` before changing to the
+  Orientation-review human gate. The request popup therefore cannot appear ahead of hypothesis data.
+* Entering the gate closes side-by-side view, enables the Orientation overlay, unfolds Orientation,
+  selects the first generated hypothesis, and restarts its cue animation so H1 is already displayed
+  behind the request.
+* **Immediate-Orientation test:** `[Validate a reconstruction in Performer mode. Confirm Orientation
+  opens automatically, axes are estimated without pressing ESTIMATE AXES, H1 is selected and visibly
+  displayed, and only then the compare-with-fragment-reference request appears.]`
+* **Immediate-Orientation result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous rover adjustments — single-Region Feature-search focus
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* When initial Region review leaves exactly one accepted Region, starting autonomous `SCAN FEATURES`
+  now immediately fits and centers that Region in the normal analyzer view. With two or more Regions,
+  the existing side-by-side carousel behavior remains unchanged.
+* **Single-Region focus test:** `[Accept exactly one Region during the first autonomous stage and
+  exhaust Region review. Confirm SCAN FEATURES starts with the normal camera centered and fitted on
+  that Region. Repeat with two Regions and confirm side-by-side view still opens.]`
+* **Single-Region focus result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Reconstructed Structure — conservative gap completion
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Structure reconstruction now examines dangling stroke endpoints and can add short inferred Rover
+  Features where both endpoint directions support the same bridge. This allows interrupted hexagon
+  sides and other locally missing glyph connections to be completed before graph grouping.
+* Extrapolation is deliberately bounded: maximum gap, minimum directional alignment, and maximum
+  inferred strokes are exported in `FragmentAutonomySettings` (defaults: `0.12`, `0.35`, and `4`).
+  Each endpoint can participate in only one inferred bridge, preventing dense all-to-all completion.
+* Inferred strokes are explicit low-confidence `IsInferred` proposed Features, use a distinct pink
+  tint, receive stable IDs, participate in Structure membership, history/state cloning and rotation,
+  and remain available for player review/editing. They are not hidden modifications to raw detection.
+* **Gap-completion test:** `[Use a glyph whose otherwise coherent hexagon or internal symbol has one
+  or two short missing connections. Run reconstructed Structure detection and confirm conservative
+  pink inferred strokes close/connect the gaps and belong to the proposed Structure. Confirm it does
+  not bridge distant veins or add more than the configured maximum; rotate and confirm inferred
+  strokes remain aligned.]`
+* **Gap-completion result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Autonomous rover adjustment — player-drawn Arrow handoff
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Completing a tail-to-tip Arrow drawn by the player no longer opens a redundant `REVIEW ARROW`
+  popup. The Arrow remains selected in the already-unfolded `ARROW & DIRECTION` menu, where the
+  player can accept, reject, or redraw it directly. Rover-detected Arrow proposals still use their
+  attention-catching review popup.
+* **Player-Arrow test:** `[Reach the no-Arrow request, press DRAW ARROW, and complete a tail-to-tip
+  gesture. Confirm no second popup appears, the drawn Arrow stays selected, and Accept/Reject remain
+  available in ARROW & DIRECTION. Separately confirm a Rover-detected Arrow still opens REVIEW ARROW.]`
+* **Player-Arrow result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Support mode — persistent SCAN FEATURES action
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* In Support mode, `SCAN FEATURES` is now always enabled. As an explicit player request it can run
+  while Rover automation is paused and is not disabled by a temporary Feature-sensing allocation
+  override. Performer/Off modes retain their existing allocation and pause gating.
+* **Support scan test:** `[Select Support mode and confirm SCAN FEATURES remains enabled before and
+  after scans, while paused, after selecting/dismissing Features, and with a sensing override. Press
+  it in each state and confirm a fresh manual Feature scan occurs.]`
+* **Support scan result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
 ---
 
 # Rover autonomy architecture

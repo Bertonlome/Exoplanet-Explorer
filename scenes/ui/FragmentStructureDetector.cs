@@ -8,6 +8,103 @@ using Godot;
 /// </summary>
 public static class FragmentStructureDetector
 {
+	/// <summary>
+	/// Conservatively bridges short gaps between outward-facing dangling endpoints. Returned
+	/// Features have no IDs; the Rover assigns stable annotation IDs before structure grouping.
+	/// </summary>
+	public static IReadOnlyList<FragmentDetectedFeature> InferCompletionFeatures(
+		IReadOnlyList<FragmentDetectedFeature> features,
+		float connectionDistance,
+		float maximumGap,
+		float minimumAlignment,
+		int maximumFeatures)
+	{
+		List<Endpoint> endpoints = new();
+		if (features != null)
+			foreach (FragmentDetectedFeature feature in features)
+			{
+				if (feature == null || feature.IsInferred ||
+					feature.Disposition == FragmentAnnotationDisposition.Dismissed) continue;
+				foreach ((Vector2 Start, Vector2 End) segment in GetSegments(feature))
+				{
+					Vector2 direction = segment.End - segment.Start;
+					if (direction.LengthSquared() < 0.000001f) continue;
+					direction = direction.Normalized();
+					endpoints.Add(new Endpoint(feature.Id, segment.Start, -direction));
+					endpoints.Add(new Endpoint(feature.Id, segment.End, direction));
+				}
+			}
+
+		float connectionSquared = MathF.Pow(MathF.Max(connectionDistance, 0.001f), 2f);
+		List<Endpoint> dangling = new();
+		for (int index = 0; index < endpoints.Count; index++)
+		{
+			bool connected = false;
+			for (int other = 0; other < endpoints.Count && !connected; other++)
+				if (index != other && endpoints[index].FeatureId != endpoints[other].FeatureId &&
+					endpoints[index].Point.DistanceSquaredTo(endpoints[other].Point) <= connectionSquared)
+					connected = true;
+			if (!connected) dangling.Add(endpoints[index]);
+		}
+
+		List<(Endpoint First, Endpoint Second, float Distance)> candidates = new();
+		float minimumGap = MathF.Max(connectionDistance * 1.05f, 0.004f);
+		for (int first = 0; first < dangling.Count; first++)
+			for (int second = first + 1; second < dangling.Count; second++)
+			{
+				Endpoint a = dangling[first];
+				Endpoint b = dangling[second];
+				if (a.FeatureId == b.FeatureId) continue;
+				Vector2 delta = b.Point - a.Point;
+				float distance = delta.Length();
+				if (distance < minimumGap || distance > MathF.Max(maximumGap, minimumGap)) continue;
+				Vector2 direction = delta / distance;
+				if (a.Outward.Dot(direction) < minimumAlignment ||
+					b.Outward.Dot(-direction) < minimumAlignment) continue;
+				candidates.Add((a, b, distance));
+			}
+		candidates.Sort((first, second) => first.Distance.CompareTo(second.Distance));
+
+		HashSet<int> usedEndpointIndices = new();
+		List<FragmentDetectedFeature> inferred = new();
+		foreach ((Endpoint first, Endpoint second, float _) in candidates)
+		{
+			if (inferred.Count >= Math.Max(maximumFeatures, 0)) break;
+			int firstIndex = dangling.IndexOf(first);
+			int secondIndex = dangling.IndexOf(second);
+			if (usedEndpointIndices.Contains(firstIndex) || usedEndpointIndices.Contains(secondIndex))
+				continue;
+			usedEndpointIndices.Add(firstIndex);
+			usedEndpointIndices.Add(secondIndex);
+			inferred.Add(new FragmentDetectedFeature
+			{
+				Start = first.Point,
+				End = second.Point,
+				Confidence = 0.45f,
+				Provenance = FragmentAnnotationProvenance.Rover,
+				Disposition = FragmentAnnotationDisposition.Proposed,
+				IsInferred = true
+			});
+		}
+		return inferred;
+	}
+
+	private readonly struct Endpoint : IEquatable<Endpoint>
+	{
+		public readonly int FeatureId;
+		public readonly Vector2 Point;
+		public readonly Vector2 Outward;
+		public Endpoint(int featureId, Vector2 point, Vector2 outward)
+		{
+			FeatureId = featureId;
+			Point = point;
+			Outward = outward;
+		}
+		public bool Equals(Endpoint other) => FeatureId == other.FeatureId && Point == other.Point;
+		public override bool Equals(object obj) => obj is Endpoint other && Equals(other);
+		public override int GetHashCode() => HashCode.Combine(FeatureId, Point);
+	}
+
 	public static IReadOnlyList<FragmentDetectedStructure> DetectStructures(
 		IReadOnlyList<FragmentDetectedFeature> features,
 		float connectionDistance = 0.025f,

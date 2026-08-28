@@ -21,6 +21,7 @@ public sealed class FragmentAnalysisState
     public Vector2 ViewPan { get; init; }
     public bool WasSolved { get; init; }
     public bool WasEverSolved { get; init; }
+	public bool WasCompleted { get; init; }
     public FragmentAnalysisActionOrigin InitiationOrigin { get; init; }
     public FragmentAutonomyState RoverState { get; init; }
 }

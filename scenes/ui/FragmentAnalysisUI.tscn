@@ -285,10 +285,10 @@ alignment = 1
 
 [node name="PolarizationButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/PolarizationToggle/Buttons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 64)
+custom_minimum_size = Vector2(130, 84)
 layout_mode = 2
 tooltip_text = "Reconstruct missing sections without identifying their source."
-theme_override_constants/icon_max_width = 84
+theme_override_constants/icon_max_width = 150
 theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
 icon = ExtResource("9_polarization")
@@ -322,10 +322,10 @@ alignment = 1
 
 [node name="SpectralButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SpectralToggle/Buttons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 64)
+custom_minimum_size = Vector2(130, 84)
 layout_mode = 2
 tooltip_text = "Enhance important signal geometry."
-theme_override_constants/icon_max_width = 84
+theme_override_constants/icon_max_width = 150
 theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
 icon = ExtResource("10_spectral")
@@ -359,10 +359,10 @@ alignment = 1
 
 [node name="SurfaceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/SurfaceToggle/Buttons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 64)
+custom_minimum_size = Vector2(130, 84)
 layout_mode = 2
 tooltip_text = "Increase signal contrast and suppress mineral noise."
-theme_override_constants/icon_max_width = 84
+theme_override_constants/icon_max_width = 150
 theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
 icon = ExtResource("11_surface")
@@ -396,10 +396,10 @@ alignment = 1
 
 [node name="ElectromagneticButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ElectromagneticToggle/Buttons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 64)
+custom_minimum_size = Vector2(130, 84)
 layout_mode = 2
 tooltip_text = "Reveal the electromagnetic scan channel."
-theme_override_constants/icon_max_width = 84
+theme_override_constants/icon_max_width = 150
 theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
 icon = ExtResource("12_electromagnetic")
@@ -434,10 +434,10 @@ alignment = 1
 
 [node name="ResonanceButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/ResonanceToggle/Buttons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 64)
+custom_minimum_size = Vector2(130, 84)
 layout_mode = 2
 tooltip_text = "Reveal the resonance scan channel."
-theme_override_constants/icon_max_width = 84
+theme_override_constants/icon_max_width = 150
 theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
 icon = ExtResource("13_resonance")
@@ -471,10 +471,10 @@ alignment = 1
 
 [node name="XRayButton" type="CheckButton" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer/PanelContainer/MarginContainer/VBoxContainer/ProcessingToggles/XRayToggle/Buttons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 64)
+custom_minimum_size = Vector2(130, 84)
 layout_mode = 2
 tooltip_text = "Reveal the X-Ray scan channel."
-theme_override_constants/icon_max_width = 84
+theme_override_constants/icon_max_width = 150
 theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_processing_on")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_processing_on")
 icon = ExtResource("14_xray")

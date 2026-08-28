@@ -88,6 +88,7 @@ public enum FragmentRoverActivity
     Planning,
     AwaitingApproval,
     Executing,
+	Completed,
     Paused,
     Overridden,
     WaitingForPlayer
@@ -157,6 +158,7 @@ public enum FragmentSampleAnalysisStatus
     Available,
     Analysing,
     PreviouslyAnalysed,
+    Completed,
     Solved
 }
 
@@ -388,6 +390,7 @@ public sealed class FragmentDetectedFeature
     public float Confidence { get; init; }
     public FragmentAnnotationProvenance Provenance { get; init; }
     public FragmentAnnotationDisposition Disposition { get; set; }
+	public bool IsInferred { get; init; }
 }
 
 public sealed class FragmentFeatureSegment
@@ -560,6 +563,7 @@ public sealed class FragmentAutonomyState
 {
     public FragmentAutonomyMode GlobalMode { get; set; } = FragmentAutonomyMode.Off;
     public bool IsPaused { get; set; }
+	public bool IsAnalysisCompleted { get; set; }
     public Dictionary<FragmentAutonomyCapability, FragmentAutonomyMode> CapabilityOverrides { get; } = new();
     public Dictionary<FragmentAutonomyCapability, float> YellowReliability { get; } = new();
     public List<FragmentDetectedFeature> DetectedFeatures { get; } = new();
@@ -608,6 +612,7 @@ public sealed class FragmentAutonomyState
         {
             GlobalMode = GlobalMode,
             IsPaused = IsPaused,
+			IsAnalysisCompleted = IsAnalysisCompleted,
             SelectedFeatureId = SelectedFeatureId,
 			SelectedRegionId = SelectedRegionId,
 			SelectedStructureId = SelectedStructureId,
@@ -673,7 +678,8 @@ public sealed class FragmentAutonomyState
 				}),
                 Confidence = feature.Confidence,
                 Provenance = feature.Provenance,
-                Disposition = feature.Disposition
+                Disposition = feature.Disposition,
+				IsInferred = feature.IsInferred
             });
         }
         foreach (FragmentCandidateRegion region in CandidateRegions)
@@ -848,6 +854,7 @@ public sealed class FragmentAutonomyState
 		}),
 		Confidence = feature.Confidence,
 		Provenance = feature.Provenance,
-		Disposition = feature.Disposition
+		Disposition = feature.Disposition,
+		IsInferred = feature.IsInferred
 	};
 }

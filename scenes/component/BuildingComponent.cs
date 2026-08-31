@@ -1526,11 +1526,11 @@ public partial class BuildingComponent : Node2D
 						break;
 					}
 
-					CanMove = buildingManager.MoveInDirectionAutomated(this, move);
+					bool moveSucceeded = buildingManager.MoveInDirectionAutomated(this, move);
 					
-					if (!CanMove)
+					if (!moveSucceeded)
 					{
-						// Hit an obstacle, break and recalculate
+						// The move was blocked; recalculate or stop as appropriate.
 						break;
 					}
 

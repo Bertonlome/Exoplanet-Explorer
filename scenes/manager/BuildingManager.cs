@@ -199,7 +199,6 @@ public partial class BuildingManager : Node
 					}
 					else if (SelectBuildingAtHoveredCellPosition() == selectedBuildingComponent) //Clicked on the same robot
 					{
-						gridManager.HighlightBuildableTiles();
 						GetViewport().SetInputAsHandled();
 						return;
 					}
@@ -1298,7 +1297,8 @@ public partial class BuildingManager : Node
 		Vector2I destinationPosition = new Vector2I((int)((buildingNode.Position.X + (directionVector.X * 64)) / 64), (int)((buildingNode.Position.Y + (directionVector.Y * 64)) / 64));
 		Rect2I destinationArea = liftedRobot.GetAreaOccupiedAfterMovingFromPos(destinationPosition);
 
-		if (!gridManager.CanMoveBuilding(liftedRobot, destinationArea))
+		liftedRobot.CanMove = gridManager.CanMoveBuilding(liftedRobot, destinationArea);
+		if (!liftedRobot.CanMove)
 		{
 			//FloatingTextManager.ShowMessageAtBuildingPosition("liftedRobot out of antenna coverage", liftedRobot);
 			Game.UI.GameUI.PushMessage("liftedRobot out of antenna coverage", "red", true, liftedRobot);
@@ -1343,7 +1343,8 @@ public partial class BuildingManager : Node
 		Vector2I destinationPosition = new Vector2I((int)((buildingNode.Position.X + (directionVector.X * 64)) / 64), (int)((buildingNode.Position.Y + (directionVector.Y * 64)) / 64));
 		Rect2I destinationArea = robot.GetAreaOccupiedAfterMovingFromPos(destinationPosition);
 
-		if (!gridManager.CanMoveBuilding(robot, destinationArea))
+		robot.CanMove = gridManager.CanMoveBuilding(robot, destinationArea);
+		if (!robot.CanMove)
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
 			Game.UI.GameUI.PushMessage("Robot out of antenna coverage", "red", true);
@@ -1430,9 +1431,9 @@ public partial class BuildingManager : Node
 
 			using (Telemetry.Scope("BuildingManager.MoveInDirectionAutomated.NetworkCheck"))
 			{
-				if (!gridManager.CanMoveBuilding(robot, destinationArea))
+				robot.CanMove = gridManager.CanMoveBuilding(robot, destinationArea);
+				if (!robot.CanMove)
 				{
-					robot.CanMove = false;
 					FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
 					Game.UI.GameUI.PushMessage("Robot out of antenna coverage", "red", true);
 					return false;
@@ -1893,8 +1894,6 @@ public partial class BuildingManager : Node
 			var highlightZone = buildingComponent.GetNode<ColorRect>("%HighlightZone");
 			highlightZone.Visible = true;
 			highlightZone.Color = Colors.Green;
-			gridManager.HighlightBuildableTiles();
-			gridManager.HighlightExpandedBuildableTiles(buildingComponent.GetTileArea(), buildingComponent.BuildingResource.BuildableRadius);
 		}
 	}
 

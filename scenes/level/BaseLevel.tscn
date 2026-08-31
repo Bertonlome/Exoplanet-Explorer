@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://bipxsk1snp5nq"]
+[gd_scene load_steps=27 format=3 uid="uid://bipxsk1snp5nq"]
 
 [ext_resource type="Script" path="res://scenes/level/BaseLevel.cs" id="1_oetcv"]
 [ext_resource type="TileSet" uid="uid://be2deub8k3gjr" path="res://resources/highlight_tileset.tres" id="2_8gl76"]
@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" uid="uid://csdd0kuql8hph" path="res://scenes/building/TileGhost.tscn" id="8_1ds3q"]
 [ext_resource type="PackedScene" uid="uid://bh0jxs1odudla" path="res://scenes/building/BuildingGhost.tscn" id="8_c56o1"]
 [ext_resource type="Script" path="res://scenes/level/GravitationalAnomalyMap.cs" id="8_ufxub"]
+[ext_resource type="Script" path="res://scenes/manager/AntennaCoverageOverlay.cs" id="9_antenna_coverage"]
 [ext_resource type="PackedScene" uid="uid://d1gijlndx3v7i" path="res://scenes/building/PaintedTile.tscn" id="9_2uvma"]
 [ext_resource type="PackedScene" uid="uid://bky5c7di5gcc0" path="res://scenes/building/Monolith.tscn" id="9_87w6t"]
 [ext_resource type="Resource" uid="uid://c6ijwfjsh0ejg" path="res://resources/building/base.tres" id="9_y4a1x"]
@@ -78,6 +79,12 @@ visible = false
 [node name="DiscoveredElementsManager" parent="YSortRoot" node_paths=PackedStringArray("gridManager") instance=ExtResource("16_6uy6k")]
 gridManager = NodePath("../../GridManager")
 mudScene = ExtResource("19_30ydk")
+
+[node name="AntennaCoverageOverlay" type="Node2D" parent="YSortRoot" node_paths=PackedStringArray("gridManager")]
+z_index = 2
+z_as_relative = false
+script = ExtResource("9_antenna_coverage")
+gridManager = NodePath("../../GridManager")
 
 [node name="HighlightTileMapLayer" type="TileMapLayer" parent="YSortRoot"]
 modulate = Color(1, 1, 1, 0.705882)

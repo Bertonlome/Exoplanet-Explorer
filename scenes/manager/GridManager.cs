@@ -12,6 +12,24 @@ namespace Game.Manager;
 
 public partial class GridManager : Node
 {
+	public sealed class AntennaCoverageVisualLayer
+	{
+		public BuildingComponent Building { get; }
+		public HashSet<Vector2I> Coverage { get; }
+		public HashSet<Vector2I> UpstreamCoverage { get; }
+		public bool IsBase => Building.BuildingResource.IsBase;
+
+		internal AntennaCoverageVisualLayer(
+			BuildingComponent building,
+			HashSet<Vector2I> coverage,
+			HashSet<Vector2I> upstreamCoverage)
+		{
+			Building = building;
+			Coverage = coverage;
+			UpstreamCoverage = upstreamCoverage;
+		}
+	}
+
 	public enum ResourceType
 	{
 		Wood,
@@ -67,8 +85,6 @@ public partial class GridManager : Node
 	private HashSet<Vector2I> monolithTiles = new();
 	private HashSet<Vector2I> monolithFragmentTiles = new();
 	private bool buildableTileCacheDirty = true;
-	private HashSet<Vector2I> connectedNetworkCoverageTiles = new();
-	private HashSet<BuildingComponent> connectedNetworkBuildings = new();
 	private bool movementCoverageCacheInitialized = false;
 
 	public Rect2I baseArea = new();
@@ -96,6 +112,7 @@ public partial class GridManager : Node
 	private List<TileMapLayer> allTilemapLayers = new();
 	private Dictionary<TileMapLayer, ElevationLayer> tileMapLayerToElevationLayer = new();
 	private Dictionary<BuildingComponent, HashSet<Vector2I>> buildingToBuildableTiles = new();
+	private Dictionary<BuildingComponent, HashSet<Vector2I>> buildingToAntennaCoveredTiles = new();
 	private Dictionary<Vector2I, BuildingComponent> TileToBuilding = new();
 	private Dictionary<BuildingComponent, HashSet<Vector2I>> buildingStuckToTiles = new();
 
@@ -578,27 +595,12 @@ public partial class GridManager : Node
 			destinationArea = toMoveBuildingComponent.GetAreaOccupied(ConvertWorldPositionToTilePosition(toMoveBuildingComponent.GlobalPosition));
 		}
 		
-		var tilesInRadiusofRobotArrival = GetValidTilesInRadius(destinationArea, toMoveBuildingComponent.BuildingResource.BuildableRadius);
-
-		if(toMoveBuildingComponent.BuildingResource.BuildableRadius > 0)
+		if (toMoveBuildingComponent.BuildingResource.BuildableRadius <= 0)
 		{
-			buildingToBuildableTiles.TryGetValue(toMoveBuildingComponent, out var currentCoverage);
-			foreach (var tilePosition in tilesInRadiusofRobotArrival)
-			{
-				if (baseAntennaCoveredTiles.Contains(tilePosition))
-				{
-					return true;
-				}
-
-				if (connectedNetworkCoverageTiles.Contains(tilePosition) && (currentCoverage == null || !currentCoverage.Contains(tilePosition)))
-				{
-					return true;
-				}
-			}
-
 			return false;
 		}
-		return false;
+
+		return IsRobotNetworkConnected(toMoveBuildingComponent, destinationArea);
 	}
 
 	public bool CanDestroyBuilding(BuildingComponent toDestroyBuildingComponent)
@@ -679,45 +681,69 @@ public partial class GridManager : Node
 		return totalBuildingsToVisit == visitedBuildings.Count;
 	}
 
-	private bool IsRobotNetworkConnected(BuildingComponent toMoveBuildingComponent, List<Vector2I> robotCoverageAtDestination)
+	private bool IsRobotNetworkConnected(BuildingComponent toMoveBuildingComponent, Rect2I destinationArea)
 	{
-		var baseBuilding = BuildingComponent.GetValidBuildingComponents(this)
-			.First((buildingComponent) => buildingComponent.BuildingResource.IsBase);
-
-		var visitedBuildings = new HashSet<BuildingComponent>();
-		VisitAllConnectedRobots(baseBuilding, toMoveBuildingComponent, robotCoverageAtDestination, visitedBuildings);
-
-		if(visitedBuildings.Contains(baseBuilding))
-		{
-			return true;
-		}
-		else
-		{
-			return false;
-		}
+		var destinationTiles = destinationArea.ToTiles();
+		return BuildConnectedAntennaNetwork(toMoveBuildingComponent)
+			.Any(layer => destinationTiles.Any(layer.Coverage.Contains));
 	}
 
-	private void VisitAllConnectedRobots(BuildingComponent rootBuilding, BuildingComponent toMoveRobot ,List<Vector2I> robotCoverageAtDestination, HashSet<BuildingComponent> visitedBuildings)
+	public List<AntennaCoverageVisualLayer> GetConnectedAntennaCoverageLayers()
 	{
-		var connectedRobots = BuildingComponent.GetValidBuildingComponents(this)
-			.Where((buildingComponent) =>
-			{
-				if (buildingComponent.BuildingResource.BuildableRadius == 0) return false;
-				if (visitedBuildings.Contains(buildingComponent)) return false;
+		EnsureMovementCoverageCache();
+		return BuildConnectedAntennaNetwork();
+	}
 
-				var anyTilesInRadius = GetValidTilesInRadius(buildingComponent.GetTileArea(), buildingComponent.BuildingResource.BuildableRadius)
-					.Any((tilePosition) => robotCoverageAtDestination.Contains(tilePosition));
-				return buildingComponent != toMoveRobot && anyTilesInRadius;
-			}).ToList();
+	private List<AntennaCoverageVisualLayer> BuildConnectedAntennaNetwork(BuildingComponent excludedBuilding = null)
+	{
+		var result = new List<AntennaCoverageVisualLayer>();
+		var networkBuildings = buildingToAntennaCoveredTiles.Keys
+			.Where(buildingComponent =>
+				buildingComponent != excludedBuilding &&
+				buildingComponent.BuildingResource.BuildableRadius > 0)
+			.OrderBy(buildingComponent => buildingComponent.GetInstanceId())
+			.ToList();
 
-
-		visitedBuildings.UnionWith(connectedRobots);
-		if (visitedBuildings.Contains(rootBuilding)) return;
-
-		foreach (var connectedRobot in connectedRobots)
+		var baseBuilding = networkBuildings.FirstOrDefault(buildingComponent => buildingComponent.BuildingResource.IsBase);
+		if (baseBuilding == null)
 		{
-			VisitAllConnectedRobots(rootBuilding, connectedRobot, GetValidTilesInRadius(connectedRobot.GetTileArea(), connectedRobot.BuildingResource.BuildableRadius), visitedBuildings);
+			return result;
 		}
+
+		var visitedBuildings = new HashSet<BuildingComponent> { baseBuilding };
+		var pendingBuildings = new Queue<BuildingComponent>();
+		pendingBuildings.Enqueue(baseBuilding);
+		result.Add(new AntennaCoverageVisualLayer(
+			baseBuilding,
+			buildingToAntennaCoveredTiles[baseBuilding],
+			new HashSet<Vector2I>()));
+
+		while (pendingBuildings.Count > 0)
+		{
+			var connectedBuilding = pendingBuildings.Dequeue();
+			if (!buildingToAntennaCoveredTiles.TryGetValue(connectedBuilding, out var connectedCoverage))
+			{
+				continue;
+			}
+
+			foreach (var candidate in networkBuildings)
+			{
+				if (visitedBuildings.Contains(candidate) ||
+					!candidate.GetTileArea().ToTiles().Any(connectedCoverage.Contains))
+				{
+					continue;
+				}
+
+				visitedBuildings.Add(candidate);
+				pendingBuildings.Enqueue(candidate);
+				result.Add(new AntennaCoverageVisualLayer(
+					candidate,
+					buildingToAntennaCoveredTiles[candidate],
+					connectedCoverage));
+			}
+		}
+
+		return result;
 	}
 
 	private void VisitAllConnectedBuildings(BuildingComponent rootBuilding,	BuildingComponent excludeBuilding, HashSet<BuildingComponent> visitedBuildings
@@ -1269,7 +1295,6 @@ public partial class GridManager : Node
 		if (movementCoverageCacheInitialized)
 		{
 			UpdateMovementCoverageForBuilding(buildingComponent);
-			RebuildConnectedNetworkCache();
 		}
 		CallDeferred("RecalculateGrid");
 		//HighlightBuildableTiles();
@@ -1315,15 +1340,13 @@ public partial class GridManager : Node
 		}
 
 		buildingToBuildableTiles.Clear();
-		connectedNetworkCoverageTiles.Clear();
-		connectedNetworkBuildings.Clear();
+		buildingToAntennaCoveredTiles.Clear();
 
 		foreach (var buildingComponent in BuildingComponent.GetValidBuildingComponents(this))
 		{
 			UpdateMovementCoverageForBuilding(buildingComponent);
 		}
 
-		RebuildConnectedNetworkCache();
 		movementCoverageCacheInitialized = true;
 	}
 
@@ -1332,12 +1355,17 @@ public partial class GridManager : Node
 		if (buildingComponent.BuildingResource.BuildableRadius <= 0)
 		{
 			buildingToBuildableTiles.Remove(buildingComponent);
+			buildingToAntennaCoveredTiles.Remove(buildingComponent);
 			return;
 		}
 
 		buildingToBuildableTiles[buildingComponent] = GetValidTilesInRadius(
 			buildingComponent.GetTileArea(),
 			buildingComponent.BuildingResource.BuildableRadius).ToHashSet();
+		buildingToAntennaCoveredTiles[buildingComponent] = GetTilesInRadiusFiltered(
+			buildingComponent.GetTileArea(),
+			buildingComponent.BuildingResource.BuildableRadius,
+			(_) => true).ToHashSet();
 	}
 
 	private void EnsureBuildableTileCache()
@@ -1367,59 +1395,6 @@ public partial class GridManager : Node
 		}
 	}
 
-	private void RebuildConnectedNetworkCache()
-	{
-		var networkBuildings = buildingToBuildableTiles.Keys
-			.Where(buildingComponent => buildingComponent.BuildingResource.BuildableRadius > 0)
-			.ToList();
-
-		var baseBuilding = networkBuildings.FirstOrDefault(buildingComponent => buildingComponent.BuildingResource.IsBase);
-		if (baseBuilding == null)
-		{
-			return;
-		}
-
-		var pendingBuildings = new Queue<BuildingComponent>();
-		pendingBuildings.Enqueue(baseBuilding);
-		connectedNetworkBuildings.Add(baseBuilding);
-
-		if (buildingToBuildableTiles.TryGetValue(baseBuilding, out var baseCoverage))
-		{
-			connectedNetworkCoverageTiles.UnionWith(baseCoverage);
-		}
-
-		while (pendingBuildings.Count > 0)
-		{
-			var currentBuilding = pendingBuildings.Dequeue();
-			if (!buildingToBuildableTiles.TryGetValue(currentBuilding, out var currentCoverage))
-			{
-				continue;
-			}
-
-			connectedNetworkCoverageTiles.UnionWith(currentCoverage);
-
-			foreach (var candidate in networkBuildings)
-			{
-				if (connectedNetworkBuildings.Contains(candidate))
-				{
-					continue;
-				}
-
-				if (!buildingToBuildableTiles.TryGetValue(candidate, out var candidateCoverage))
-				{
-					continue;
-				}
-
-				if (!candidateCoverage.Any(tilePosition => connectedNetworkCoverageTiles.Contains(tilePosition)))
-				{
-					continue;
-				}
-
-				connectedNetworkBuildings.Add(candidate);
-				pendingBuildings.Enqueue(candidate);
-			}
-		}
-	}
 	private void ClearAll()
 	{
     allTilesBuildableOnTheMap.Clear();
@@ -1436,9 +1411,8 @@ public partial class GridManager : Node
     monolithTiles.Clear();
     TileToBuilding.Clear();
     buildingToBuildableTiles.Clear();
+	buildingToAntennaCoveredTiles.Clear();
     buildingStuckToTiles.Clear();
-	    connectedNetworkCoverageTiles.Clear();
-	    connectedNetworkBuildings.Clear();
 	    movementCoverageCacheInitialized = false;
 	    buildableTileCacheDirty = true;
     // Reset other state as needed

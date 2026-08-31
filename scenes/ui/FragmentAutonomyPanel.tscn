@@ -140,7 +140,7 @@ text = "ACCEPT"
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
-text = "DISMISS"
+text = "REJECT"
 
 [node name="AddRegionButton" type="Button" parent="Margin/PanelScroll/Content/RegionEdits"]
 unique_name_in_owner = true
@@ -158,11 +158,13 @@ text = "LOCK"
 
 [node name="NavigationIntentLabel" type="Label" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 text = "NAVIGATION: Select a region"
 autowrap_mode = 2
 
 [node name="NavigationActions" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
+visible = false
 layout_mode = 2
 alignment = 1
 
@@ -211,6 +213,13 @@ tooltip_text = "Show or hide feature annotations without changing the scan."
 button_pressed = true
 text = "OVERLAY"
 
+[node name="ViewRegionsSideBySideButton" type="Button" parent="Margin/PanelScroll/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Open retained regions in the side-by-side Feature review carousel."
+text = "COMPARE REGIONS"
+
 [node name="SelectedFeatureLabel" type="Label" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
 visible = false
@@ -241,7 +250,7 @@ text = "ACCEPT"
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
-text = "DISMISS"
+text = "REJECT"
 
 [node name="StructureSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
 layout_mode = 2
@@ -303,7 +312,7 @@ text = "ACCEPT"
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
-text = "DISMISS"
+text = "REJECT"
 
 [node name="OrientationSeparator" type="HSeparator" parent="Margin/PanelScroll/Content"]
 layout_mode = 2
@@ -311,7 +320,7 @@ layout_mode = 2
 [node name="OrientationTitle" type="Button" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "▶ ORIENTATION"
+text = "▶ ROTATION"
 flat = true
 alignment = 0
 
@@ -324,7 +333,7 @@ alignment = 1
 [node name="PreviousOrientationRegionButton" type="Button" parent="Margin/PanelScroll/Content/OrientationRegionControls"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Select the previous retained region for upright-orientation analysis."
+tooltip_text = "Select the previous retained region for rotation analysis."
 disabled = true
 text = "←"
 
@@ -340,7 +349,7 @@ vertical_alignment = 1
 [node name="NextOrientationRegionButton" type="Button" parent="Margin/PanelScroll/Content/OrientationRegionControls"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Select the next retained region for upright-orientation analysis."
+tooltip_text = "Select the next retained region for rotation analysis."
 disabled = true
 text = "→"
 
@@ -352,8 +361,8 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Estimate five upright-axis hypotheses from the selected region's visible structure geometry."
-text = "ESTIMATE AXES"
+tooltip_text = "Estimate five possible upright rotations from the selected region's visible structure geometry."
+text = "ESTIMATE ROTATIONS"
 
 [node name="ShowOrientationOverlayButton" type="CheckButton" parent="Margin/PanelScroll/Content/OrientationActions"]
 unique_name_in_owner = true
@@ -368,20 +377,20 @@ visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Close orientation isolation and side-by-side comparison, returning to the normal fragment view."
-text = "QUIT ORIENTATION VIEW"
+text = "QUIT ROTATION VIEW"
 
 [node name="SelectedOrientationLabel" type="Label" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-text = "ORIENTATION: Select a candidate structure"
+text = "ROTATION: Select a candidate structure"
 autowrap_mode = 2
 
 [node name="OrientationSelector" type="OptionButton" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-tooltip_text = "Select a geometric upright-axis alternative for player review."
+tooltip_text = "Select a possible upright rotation for player review."
 fit_to_longest_item = false
 
 [node name="OrientationEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
@@ -392,7 +401,7 @@ alignment = 1
 [node name="PreviousOrientationButton" type="Button" parent="Margin/PanelScroll/Content/OrientationEdits"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Show the previous geometric orientation hypothesis."
+tooltip_text = "Show the previous possible rotation."
 disabled = true
 text = "←"
 
@@ -400,21 +409,21 @@ text = "←"
 unique_name_in_owner = true
 custom_minimum_size = Vector2(38, 0)
 layout_mode = 2
-text = "H—"
+text = "ROT—"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="AcceptOrientationButton" type="Button" parent="Margin/PanelScroll/Content/OrientationEdits"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Accept this hypothesis. In Performer mode the Rover automatically previews and executes its correction."
+tooltip_text = "Accept this rotation. In Performer mode the Rover automatically previews and executes it."
 disabled = true
 text = "ACCEPT"
 
 [node name="NextOrientationButton" type="Button" parent="Margin/PanelScroll/Content/OrientationEdits"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Show the next geometric orientation hypothesis."
+tooltip_text = "Show the next possible rotation."
 disabled = true
 text = "→"
 
@@ -437,7 +446,7 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Find arrow-shaped candidates from observable shaft and converging-head geometry only."
+tooltip_text = "Find arrow-shaped candidates from the visible geometry."
 text = "DETECT ARROWS"
 
 [node name="ShowArrowOverlayButton" type="CheckButton" parent="Margin/PanelScroll/Content/ArrowActions"]
@@ -487,12 +496,13 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="DrawArrowButton" type="CheckButton" parent="Margin/PanelScroll/Content/ArrowManual"]
+[node name="DrawArrowButton" type="Button" parent="Margin/PanelScroll/Content/ArrowManual"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Drag once from the arrow tail to its tip. This creates a player-defined candidate."
-text = "DRAW TAIL → TIP"
+toggle_mode = true
+text = "MANUAL ARROW DRAWING"
 
 [node name="ArrowEdits" type="HBoxContainer" parent="Margin/PanelScroll/Content"]
 unique_name_in_owner = true

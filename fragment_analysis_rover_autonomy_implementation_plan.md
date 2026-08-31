@@ -3921,6 +3921,321 @@ is not installed in this workspace environment.]`
   after scans, while paused, after selecting/dismissing Features, and with a sensing override. Press
   it in each state and confirm a fresh manual Feature scan occurs.]`
 * **Support scan result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Support mode — Feature Sensing side-by-side entry
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Feature Sensing now contains a visible `VIEW REGIONS SIDE-BY-SIDE` button. It is enabled whenever
+  at least two retained Regions are available and disabled while comparison is already open or fewer
+  than two Regions exist.
+* In Support mode, unfolding Feature Sensing automatically opens the same side-by-side Region
+  carousel when it is available. Off and Performer modes retain their existing navigation behavior.
+* **Support comparison test:** `[In Support mode retain two Regions and unfold Feature Sensing;
+  confirm side-by-side view opens automatically. Quit it and use VIEW REGIONS SIDE-BY-SIDE to reopen
+  it. Repeat with one Region and confirm the button remains visible but disabled.]`
+* **Support comparison result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — edited structure continuity into Orientation
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Orientation now merges current Region Features over any retained locked snapshot, ensuring that
+  player-added strokes and other post-validation edits appear in the complete orientation preview.
+* The current selected structure is used when it belongs to the Region; otherwise the Region's
+  accepted/player-edited structure is preferred over a fresh automatic reconstruction.
+* Editing an accepted structure returns it to `PROPOSED`, allowing the updated geometry to be
+  explicitly validated again before orientation review. This behavior is independent of the
+  Off/Support/Performer task allocation that owns the individual actions.
+* **Structure continuity test:** `[In each allocation configuration: accept a structure, edit it by
+  adding and removing strokes, confirm its state becomes PROPOSED, validate it again, then open
+  Orientation. Confirm the full updated structure—without removed strokes and including every new
+  stroke—is visible in both the current and hypothesis views.]`
+* **Structure continuity result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — precise rotation arrow hitboxes
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* The precise and signed angular `SpinBox` controls now have a 48-pixel minimum height, enlarging
+  the upper and lower arrow hit areas while preserving their one-degree step and value range.
+* **Rotation arrow test:** `[Open Orientation and repeatedly click the upper and lower arrows of the
+  precise rotation field, including near the edges of each half. Confirm each click reliably changes
+  the angle by exactly one degree and the row still fits at laptop and QHD resolutions.]`
+* **Rotation arrow result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — explicit Support-mode Orientation view
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Expanding `ORIENTATION` in Support mode now reveals its controls and may prepare hypotheses, but
+  does not activate the isolated Orientation view or its overlay.
+* The view control reflects the actual presentation state: `VIEW ORIENTATION` while normal view is
+  active and `QUIT ORIENTATION VIEW` only while isolation is active. Quitting the view keeps the
+  Orientation submenu open.
+* Entering Support mode also clears an Orientation presentation inherited from another mode.
+  Performer workflow gates retain their automatic Orientation presentation.
+* **Orientation state test:** `[Enter Support mode, unfold ORIENTATION, and confirm the normal view
+  remains. Press VIEW ORIENTATION and confirm isolation opens and the button becomes QUIT
+  ORIENTATION VIEW. Press it again and confirm normal view returns while the submenu stays open.
+  Switch from Performer Orientation review to Support and confirm the stale view is cleared.]`
+* **Orientation state result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — human-initiated Support Feature sensing
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Support mode no longer runs Feature detection implicitly during initialization, mode/allocation
+  changes, processing changes, or resume. Non-player Feature scans are reserved for Performer mode.
+* `SCAN FEATURES` remains the explicit Support-mode trigger. With no retained Region it scans the
+  entire sample; once one or more Regions exist, new detections are restricted to those Regions of
+  interest and the Rover status reports the scoped target.
+* **Support sensing test:** `[Open a fresh analysis directly in Support mode and confirm no F# is
+  proposed. Press SCAN FEATURES and confirm the whole sample is scanned. Draw/retain one or more
+  Regions, change processing settings without pressing scan, and confirm no automatic rescan occurs.
+  Press SCAN FEATURES and confirm new proposals occur only inside the retained Regions.]`
+* **Support sensing result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — always-available Estimate Axes action
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* `ESTIMATE AXES` is always enabled as a human action. A direct press can request estimation while
+  the Rover is paused or Orientation estimation is not currently allocated to it; automatic Rover
+  estimation continues to respect pause and task-allocation guards.
+* **Estimate Axes test:** `[In Support mode open ORIENTATION before and after pausing the Rover and
+  under each Orientation task allocation. Confirm ESTIMATE AXES remains enabled and, once a Region
+  with a non-empty structure is selected, pressing it produces the H# hypotheses.]`
+* **Estimate Axes result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — Region generation without a prior Feature scan
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* `GENERATE REGIONS` now detects when no usable Rover Feature scan exists and performs its own
+  whole-sample prerequisite scan before grouping Regions. The resulting F# annotations remain
+  available for subsequent review, exactly as if `SCAN FEATURES` had been pressed first.
+* This bootstrap is tied to the explicit Region-generation button and therefore does not restore
+  automatic sensing when Support mode opens.
+* **Direct Region test:** `[Open a fresh analysis in Support mode and do not press SCAN FEATURES.
+  Press GENERATE REGIONS and confirm F# detections and Region proposals are produced in the same
+  click. Repeat the normal SCAN FEATURES → GENERATE REGIONS sequence and compare the Regions.]`
+* **Direct Region result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — execute accepted Support orientation on view exit
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* In Support mode, accepting an H# records the decision without rotating immediately. Pressing
+  `QUIT ORIENTATION VIEW` then calculates that accepted hypothesis's Region correction and executes
+  it once, including when Rover automation is paused or Rotate is not Performer-allocated.
+* Performer mode retains its existing automatic post-acceptance rotation workflow.
+* **Deferred Support rotation test:** `[In Support mode enter Orientation view, accept an H#, and
+  confirm no immediate rotation occurs. Press QUIT ORIENTATION VIEW and confirm the selected Region
+  rotates around its reconstruction pivot by the accepted correction exactly once. Repeat while
+  Rover pause is active.]`
+* **Deferred Support rotation result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — mode-specific menu identity and Support structure scan
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* The autonomous workflow control (`PLAY/PAUSE/SHOW ROVER REQUEST`) is only present in Autonomous
+  mode. The shared right panel is identified as `ROVER AUTONOMY` only there; Support calls it
+  `ROVER SUPPORT`, and Manual calls it `ANALYSIS TOOLS`. The header menu label follows the mode.
+* `SCAN STRUCTURES` is always enabled in Support and is treated as a direct human request, bypassing
+  Rover pause and structure-sensing allocation guards. Automatic structure scans retain those
+  guards.
+* **Mode/menu test:** `[Switch among Manual, Support, and Autonomous. Confirm autonomous workflow
+  controls and the ROVER AUTONOMY title appear only in Autonomous, while shared analysis tools remain
+  accessible. In Support, confirm SCAN STRUCTURES remains enabled while paused and under every task
+  allocation, and that pressing it reconstructs from the currently available Features.]`
+* **Mode/menu result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — always-available Support arrow detection
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* `DETECT ARROWS` remains enabled in Support mode regardless of Rover pause or the directional-arrow
+  sensing allocation. Pressing it is a direct human request and bypasses those autonomous guards;
+  automatic Performer detection continues to respect them.
+* **Support arrow test:** `[In Support mode open ARROW & DIRECTION, pause the Rover, and test every
+  directional-arrow task allocation. Confirm DETECT ARROWS remains enabled and pressing it refreshes
+  candidates for the selected Region each time.]`
+* **Support arrow result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — Manual layout and bottom rotation controls
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* The coarse rotation buttons are relabeled `ROTATE -10°` and `ROTATE +10°`.
+* The obsolete visible `ROVER SEARCH PLAN` row and its search controls are removed from the bottom
+  presentation. In Manual mode that space instead contains the coarse buttons, current angle, and
+  precise one-degree rotation field.
+* Manual mode hides both the complete right-hand Rover panel and its menu toggle. Switching to
+  Support or Autonomous restores the right panel, removes the bottom rotation row, and returns those
+  controls to the Orientation submenu.
+* **Manual layout test:** `[Switch to Manual and confirm no right-hand panel or Rover-menu toggle is
+  visible, no ROVER SEARCH PLAN copy remains, and both ±10° and precise rotation work from the bottom
+  bar. Switch to Support and Autonomous and confirm the panel returns and rotation controls appear
+  only inside the expanded Orientation submenu.]`
+* **Manual layout result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — simplified structure rendering
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Every visible reconstructed structure now uses the configured magenta Structure color regardless
+  of Rover/player provenance, selection, or edit state. Proposed/pending structures are dashed and
+  accepted structures are solid; dismissed structures remain hidden.
+* Feature-color annotations belonging to a visible structure are suppressed so cyan, green, yellow,
+  or inferred-stroke colors do not compete with its magenta rendering. Edit buttons, the selected
+  stroke marker, and the custom-stroke preview also stay magenta.
+* Pressing `EDIT STRUCTURE` explicitly reopens the complete structure as a dashed draft. Existing
+  and newly drawn strokes remain dashed until validation; deleting a selected stroke removes its
+  underlying Feature from every view immediately. Validation exits editing and renders only the
+  retained draft strokes as solid magenta.
+* The in-Region editing header provides the instructions `CLICK + DEL: DELETE STROKE` and
+  `CLICK + DRAG: ADD STROKE`, plus a `VALIDATE STRUCTURE` button immediately to the right of the
+  edit button. The validation button remains visible outside edit mode, can directly accept a
+  pending reconstruction, and validates an active draft through the same path as the right-panel
+  action.
+* **Structure color test:** `[Scan a structure, edit its membership, draw a custom stroke, accept it,
+  and inspect it in normal and side-by-side views. Confirm entering Edit makes every existing stroke
+  dashed, new strokes are dashed, deleted strokes disappear, validation makes every retained stroke
+  solid, and selection/editing introduces no other structure color.]`
+* **Structure color result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — double-click Region deletion
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Double-clicking a Region targets it for resizing or deletion and changes its header hint to
+  `DELETE TO REMOVE`. Pressing Delete/Backspace then removes that Region from the analysis.
+* Deletion clears the Region's lock, navigation, orientation, direction, arrow, and autonomous-review
+  references. It deliberately preserves detected Features and reconstructed Structures, including
+  work shared with other Regions.
+* Structure-edit mode keeps input priority: double-click cannot arm Region resizing/deletion there,
+  and Delete/Backspace continues to remove only the selected Structure stroke.
+* **Region deletion test:** `[Create two overlapping Regions, accept or edit Features/Structures in
+  both, double-click one Region, confirm its header says DELETE TO REMOVE, then press Delete. Confirm
+  only that Region and its Region-specific overlays disappear, the other Region and shared analysis
+  remain intact, and Undo restores the deletion. Repeat during Structure editing and confirm Delete
+  removes only the selected stroke.]`
+* **Region deletion result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — prevent overlapping generated Regions
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* `GENERATE REGIONS` rejects a new detector candidate when its intersection with any existing
+  non-dismissed Region covers more than 50% of the new candidate's area. Locked and unlocked
+  Regions use the same rule.
+* Accepted Rover and player Regions are retained without detector-driven bound changes. Only an
+  existing proposed Rover Region may be refreshed as its matching proposal, and it cannot bypass
+  overlap checks against any other retained Region.
+* **Region-overlap test:** `[Create and retain a Region over a dense cluster, test once while it is
+  unlocked and once while locked, then press GENERATE REGIONS. Confirm no new Region covering more
+  than half of its own area with that Region appears, while a separate cluster can still produce a
+  Region.]`
+* **Region-overlap result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — strict sequential autonomous Feature review
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* During both the Feature-search and human-review stages, the active Feature selection is strictly
+  constrained to the current autonomous target Region. It cannot fall back to a whole-sample
+  proposal while the next Region's scan is still being assembled.
+* Overlapping Features no longer change the selected Region or carousel focus: R1 remains selected
+  until all of R1's proposals are reviewed, then the Rover searches and reviews R2, followed by R3
+  and later Regions in ID order. The Feature selector also lists only the current Region's Features
+  during this workflow.
+* **Sequential Feature-review test:** `[Accept at least three Regions and start autonomous Feature
+  sensing. In R1, dismiss at least the first three proposals and continue accepting/dismissing until
+  none remain. Confirm every active proposal and carousel focus stays on R1; only then confirm a new
+  scan starts for R2 and remains there until exhausted, followed by R3.]`
+* **Sequential Feature-review result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — reliable Region-to-Feature autonomous handoff
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Completing Region acceptance is an explicit autonomous resume boundary: stale pause state from
+  human-gated Region review is cleared before R1's Feature search begins.
+* Each Feature-search step arms its progress timer before synchronously applying the processing
+  configuration, preventing UI/model callbacks from observing a searching stage with no scheduled
+  work. `SCAN FEATURES` remains available during the autonomous Feature stage as a safe restart
+  action instead of becoming disabled with a stale pause flag.
+* **Feature-search handoff test:** `[In autonomous allocation, accept all proposed Regions after
+  interacting with the Region review controls. Confirm the UI opens Feature Sensing, immediately
+  reports and visibly runs the R1 configuration search, SCAN FEATURES remains available, and the
+  workflow reaches R1 Feature review without requiring PAUSE/RESUME or a mode change.]`
+* **Feature-search handoff result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — simplified Feature, Rotation, and Arrow terminology
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Feature Sensing and reconstructed Structure actions use `REJECT` instead of `DISMISS`.
+* The player-facing Orientation vocabulary is replaced by `ROTATION`, with alternatives labelled
+  `ROT1`, `ROT2`, and so on rather than H#/hypotheses. The redundant orientation-error/applying
+  status and signed-degree correction editor are hidden; the precise manual controls remain under
+  a new `MANUAL ROTATION` heading.
+* Arrow candidates no longer show Evidence/convergence wording. The drawing toggle is a regular
+  `MANUAL ARROW DRAWING` button, and the manual map/recompute-bearing button is hidden because
+  accepting an Arrow already computes and publishes its bearing automatically.
+* **Terminology/UI test:** `[Open Feature Sensing and Structure and confirm both show REJECT. Open
+  Rotation and confirm ROT1/ROT2 naming, no hypothesis/H# wording, no orientation-error or signed
+  correction row, and MANUAL ROTATION above the controls. Open Arrow & Direction and confirm the
+  regular MANUAL ARROW DRAWING button, no Evidence/convergence line, and no map/recompute button;
+  accept an Arrow and confirm its minimap bearing still appears automatically.]`
+* **Terminology/UI result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — stronger Television orientation leg
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* The Television glyph's bottom-right stand is 10% more pronounced than its previous asymmetric
+  form: its leg length, foot span, and stroke weight increase together while the attachment point
+  stays fixed. All other Television stands remain unchanged.
+* The shared Television geometry helper applies the same silhouette to the true glyph and its real
+  decoy counterparts.
+* **Television-leg test:** `[Generate a Television fragment and confirm its bottom-right stand is
+  visibly larger than the other three without detaching from or distorting the screen body. Rotate
+  the glyph through several angles and confirm the asymmetric stand remains easy to identify.]`
+* **Television-leg result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — independent manual-rotation pivots per Region
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Manual rotation still applies the requested angular delta to the visible sample, but synchronizes
+  each Region's retained Features, Structure, Arrow, and bounds around that Region's own pivot.
+  A Region reuses its committed orientation pivot when it has one; otherwise it uses the center of
+  its own bounds.
+* The accepted Rotation source pivot is used only for the explicitly targeted Region. It is never
+  reused as the pivot for another Region, preventing unrelated glyphs and Arrows from orbiting the
+  selected glyph.
+* **Independent-pivot test:** `[In Support mode, retain two Regions with accepted Structures and
+  Arrows. Accept a Rotation for one Region and quit Rotation view so it is applied. Press ROTATE
+  +10 and ROTATE -10 several times. Confirm both Regions rotate in place around their respective
+  centers, their Structures/Arrows remain aligned, and neither Region orbits the other.]`
+* **Independent-pivot result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — compact manual rotation controls
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* The `MANUAL ROTATION` block and its button row now use their minimum required width and remain
+  centered instead of stretching across the bottom bar or Rotation submenu.
+* The obsolete processing-search `APPLY` action is permanently hidden and cannot be restored by a
+  later UI refresh. Rotation changes remain immediate through `ROTATE -10°`, `ROTATE +10°`, and the
+  precise one-degree control.
+* **Compact-rotation test:** `[Open Manual mode and the Support Rotation submenu. Confirm the manual
+  rotation controls form a compact centered group in both layouts, no APPLY button is visible, and
+  both ±10° buttons plus the precise step arrows still rotate immediately.]`
+* **Compact-rotation result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
 ---
 
 # Rover autonomy architecture

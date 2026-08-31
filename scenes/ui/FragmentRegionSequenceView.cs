@@ -379,7 +379,7 @@ public partial class FragmentRegionSequenceView : Control
 		DrawDashedLine(center - Vector2.Up * axisLength, center + Vector2.Up * axisLength,
 			new Color(0.65f, 0.8f, 1f, 0.72f), 2f);
 		DrawString(ThemeDB.FallbackFont, pane.Position + new Vector2(12f, 46f),
-			$"H{orientationHypothesis.Id} · PROPOSED UPRIGHT",
+			$"ROT{orientationHypothesis.Id} · PROPOSED UPRIGHT",
 			HorizontalAlignment.Left, -1, 14, ghostColor);
 
 		void DrawGhostSegment(Vector2 normalizedStart, Vector2 normalizedEnd)
@@ -501,7 +501,7 @@ public partial class FragmentRegionSequenceView : Control
 	{
 		foreach (FragmentDetectedFeature feature in renderedFeatures)
 		{
-			if (showStructures && IsAcceptedStructureMember(feature.Id)) continue;
+			if (showStructures && IsVisibleStructureMember(feature.Id)) continue;
 			bool isPending = selectedFeatureId == feature.Id &&
 				feature.Disposition == FragmentAnnotationDisposition.Proposed;
 			Color color = feature.Provenance == FragmentAnnotationProvenance.Player
@@ -530,8 +530,8 @@ public partial class FragmentRegionSequenceView : Control
 		}
 	}
 
-	private bool IsAcceptedStructureMember(int featureId) => structures.Exists(structure =>
-		structure.Disposition == FragmentAnnotationDisposition.Accepted &&
+	private bool IsVisibleStructureMember(int featureId) => structures.Exists(structure =>
+		structure.Disposition != FragmentAnnotationDisposition.Dismissed &&
 		structure.FeatureIds.Contains(featureId));
 
 	private void DrawStructures(

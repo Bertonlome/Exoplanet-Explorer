@@ -869,6 +869,7 @@ public static class FragmentPuzzleGenerator
         float standLength = radius * 0.2f;
         float legOffset = bodyHalfWidth * 0.58f;
         float footHalfWidth = radius * 0.09f;
+        const float bottomRightEmphasis = 1.1f;
 
         AddTelevisionStand(
             segments,
@@ -892,9 +893,9 @@ public static class FragmentPuzzleGenerator
             segments,
             bodyCenter + new Vector2(legOffset, bodyHalfHeight),
             Vector2.Down,
-            standLength * 1.28f,
-            footHalfWidth * 1.2f,
-            1.8f);
+            standLength * 1.28f * bottomRightEmphasis,
+            footHalfWidth * 1.2f * bottomRightEmphasis,
+            1.8f * bottomRightEmphasis);
     }
 
     private static void AddTelevisionStand(

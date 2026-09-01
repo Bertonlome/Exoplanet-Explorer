@@ -414,7 +414,7 @@ public partial class FragmentAnalysisUI
     private void CreateRoverPanel(HBoxContainer analysisWorkspace)
     {
 		PackedScene panelScene = GD.Load<PackedScene>(
-			"res://scenes/ui/FragmentAutonomyPanel.tscn");
+			"res://scenes/fragment/FragmentAutonomyPanel.tscn");
 		roverPanel = panelScene.Instantiate<PanelContainer>();
 		analysisWorkspace.AddChild(roverPanel);
 		roverPanelTitle = roverPanel.GetNode<Label>("Margin/PanelScroll/Content/Title");

@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3 uid="uid://btvyw41qnsuet"]
 
-[ext_resource type="Script" path="res://scenes/building/MonolithFragment.cs" id="1_jpvvb"]
+[ext_resource type="Script" path="res://scenes/fragment/MonolithFragment.cs" id="1_jpvvb"]
 [ext_resource type="Texture2D" uid="uid://cd7c4rir6q1b0" path="res://assets/monolith_fragment_v1.png" id="2_kdnbv"]
 [ext_resource type="Texture2D" uid="uid://w7qpa3spj1f1" path="res://assets/monolith_fragment_v2.png" id="3_ewf4i"]
 [ext_resource type="Texture2D" uid="uid://d2dmq0xethe2k" path="res://assets/monolith_fragment_v3.png" id="4_jtcxa"]

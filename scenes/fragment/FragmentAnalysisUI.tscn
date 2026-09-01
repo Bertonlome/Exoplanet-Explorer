@@ -1,9 +1,9 @@
 [gd_scene load_steps=18 format=3 uid="uid://cb8e7vaji1v7h"]
 
-[ext_resource type="Script" path="res://scenes/ui/FragmentAnalysisUI.cs" id="1_0ks4x"]
-[ext_resource type="Script" path="res://scenes/ui/FragmentCanvas.cs" id="2_wqr11"]
-[ext_resource type="Script" path="res://scenes/ui/FragmentGenerationSettings.cs" id="4_ip4le"]
-[ext_resource type="Script" path="res://scenes/ui/FragmentRockSettings.cs" id="5_mcumt"]
+[ext_resource type="Script" path="res://scenes/fragment/FragmentAnalysisUI.cs" id="1_0ks4x"]
+[ext_resource type="Script" path="res://scenes/fragment/FragmentCanvas.cs" id="2_wqr11"]
+[ext_resource type="Script" path="res://scenes/fragment/FragmentGenerationSettings.cs" id="4_ip4le"]
+[ext_resource type="Script" path="res://scenes/fragment/FragmentRockSettings.cs" id="5_mcumt"]
 [ext_resource type="Theme" uid="uid://lrxwuh3o4l5k" path="res://resources/sci-fi-theme.tres" id="6_37kou"]
 [ext_resource type="Texture2D" uid="uid://d1vo7wkt5gtc7" path="res://assets/ui/locked_opened.png" id="7_lock_open"]
 [ext_resource type="Texture2D" uid="uid://je0dbm3ehein" path="res://assets/ui/locked_closed.png" id="8_lock_closed"]

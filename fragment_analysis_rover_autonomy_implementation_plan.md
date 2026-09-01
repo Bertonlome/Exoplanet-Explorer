@@ -868,7 +868,7 @@ dismiss a region and verify it leaves the sequence.
   editable-panel follow-up handled below.]`
 * **Fourth follow-up applied:** `[x] Moved the complete right-side Rover panel hierarchy, layout,
   labels, buttons, tooltips, initial visibility, sizing, and separators into the editable
-  scenes/ui/FragmentAutonomyPanel.tscn scene. FragmentAnalysisUI.Autonomy.cs now instantiates that
+  scenes/fragment/FragmentAutonomyPanel.tscn scene. FragmentAnalysisUI.Autonomy.cs now instantiates that
   scene and resolves its unique-name controls instead of constructing the panel programmatically.
   Only capability override rows remain generated because their contents come from the capability
   catalog.]`
@@ -4236,6 +4236,23 @@ is not installed in this workspace environment.]`
   rotation controls form a compact centered group in both layouts, no APPLY button is visible, and
   both ±10° buttons plus the precise step arrows still rotate immediately.]`
 * **Compact-rotation result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — consolidate the Fragment subsystem
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* All Fragment Analysis scripts and scenes, together with the `MonolithFragment` world entity,
+  now live under `scenes/fragment/`. General level, manager, building, and UI consumers remain in
+  their existing architectural folders.
+* Every Godot `res://` dependency and documented source path has been updated to the consolidated
+  location. Fragment textures and signal-control icons remain in `assets/`, following the existing
+  asset organization.
+* Stale duplicate scenes recreated by an open Godot editor were removed. BaseLevel, Level 3,
+  Level 4, and the sandbox now all reference the canonical moved scenes and their canonical UIDs.
+* **Folder-move test:** `[Let Godot rescan the project, then open Level 3, Level 4, and the sandbox.
+  Confirm each Monolith Fragment scene loads, opening Fragment Analysis loads both the main and
+  autonomy panels without missing-resource errors, and analysis can be saved and reopened.]`
+* **Folder-move result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
 ---
 
 # Rover autonomy architecture

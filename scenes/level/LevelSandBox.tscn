@@ -1,14 +1,16 @@
-[gd_scene load_steps=7 format=4 uid="uid://57sppgq5m1ke"]
+[gd_scene load_steps=8 format=4 uid="uid://57sppgq5m1ke"]
 
 [ext_resource type="PackedScene" uid="uid://bipxsk1snp5nq" path="res://scenes/level/BaseLevel.tscn" id="1_nhive"]
 [ext_resource type="Resource" uid="uid://di82r04j6fqfh" path="res://resources/level/level_sb.tres" id="2_m1erg"]
+[ext_resource type="PackedScene" uid="uid://cb8e7vaji1v7h" path="res://scenes/fragment/FragmentAnalysisUI.tscn" id="3_c385l"]
 [ext_resource type="TileSet" uid="uid://dvqwr0ci0x55u" path="res://resources/tiles.tres" id="3_r1i0g"]
 [ext_resource type="PackedScene" uid="uid://iv4rk5h4ybki" path="res://scenes/level/util/ElevationLayer.tscn" id="4_qfqqe"]
-[ext_resource type="PackedScene" uid="uid://btvyw41qnsuet" path="res://scenes/building/MonolithFragment.tscn" id="5_eqxvm"]
+[ext_resource type="PackedScene" uid="uid://btvyw41qnsuet" path="res://scenes/fragment/MonolithFragment.tscn" id="5_eqxvm"]
 [ext_resource type="PackedScene" uid="uid://cv6tnl0bv6sfg" path="res://scenes/building/Base.tscn" id="5_r4rkm"]
 
 [node name="LevelSandBox" instance=ExtResource("1_nhive")]
 levelDefinitionResource = ExtResource("2_m1erg")
+fragmentAnalysisScene = ExtResource("3_c385l")
 
 [node name="GridManager" parent="." index="1" node_paths=PackedStringArray("bridgeTileMapLayerBase", "bridgeTileMapLayerElevation")]
 bridgeTileMapLayerBase = NodePath("../YSortRoot/BaseTerrainTileMapLayer/BridgeLayerBase")

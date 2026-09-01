@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cu8oj6h1ununv"]
 
-[ext_resource type="Script" path="res://scenes/ui/FragmentDirectionInset.cs" id="1_direction"]
+[ext_resource type="Script" path="res://scenes/fragment/FragmentDirectionInset.cs" id="1_direction"]
 
 [node name="RoverPanel" type="PanelContainer"]
 custom_minimum_size = Vector2(380, 0)

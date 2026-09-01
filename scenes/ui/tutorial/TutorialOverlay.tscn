@@ -1,0 +1,154 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/tutorial/TutorialOverlay.cs" id="1_overlay"]
+[ext_resource type="Theme" uid="uid://lrxwuh3o4l5k" path="res://resources/sci-fi-theme.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_focus"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 6
+border_width_top = 6
+border_width_right = 6
+border_width_bottom = 6
+border_color = Color(0.2, 0.9, 1, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_callout"]
+bg_color = Color(0.035, 0.075, 0.11, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.2, 0.9, 1, 0.9)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0, 0, 0, 0.55)
+shadow_size = 12
+
+[node name="TutorialOverlay" type="CanvasLayer"]
+process_mode = 3
+layer = 9
+script = ExtResource("1_overlay")
+
+[node name="OverlayRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TopBlocker" type="ColorRect" parent="OverlayRoot"]
+unique_name_in_owner = true
+layout_mode = 0
+color = Color(0.005, 0.015, 0.025, 0.76)
+mouse_default_cursor_shape = 0
+
+[node name="BottomBlocker" type="ColorRect" parent="OverlayRoot"]
+unique_name_in_owner = true
+layout_mode = 0
+color = Color(0.005, 0.015, 0.025, 0.76)
+mouse_default_cursor_shape = 0
+
+[node name="LeftBlocker" type="ColorRect" parent="OverlayRoot"]
+unique_name_in_owner = true
+layout_mode = 0
+color = Color(0.005, 0.015, 0.025, 0.76)
+mouse_default_cursor_shape = 0
+
+[node name="RightBlocker" type="ColorRect" parent="OverlayRoot"]
+unique_name_in_owner = true
+layout_mode = 0
+color = Color(0.005, 0.015, 0.025, 0.76)
+mouse_default_cursor_shape = 0
+
+[node name="FocusBorder" type="Panel" parent="OverlayRoot"]
+unique_name_in_owner = true
+layout_mode = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_focus")
+
+[node name="ArrowLine" type="Line2D" parent="OverlayRoot"]
+unique_name_in_owner = true
+width = 5.0
+default_color = Color(0.2, 0.9, 1, 1)
+joint_mode = 2
+begin_cap_mode = 2
+end_cap_mode = 2
+antialiased = true
+
+[node name="ArrowHead" type="Polygon2D" parent="OverlayRoot"]
+unique_name_in_owner = true
+polygon = PackedVector2Array(0, 0, -20, -11, -20, 11)
+color = Color(0.2, 0.9, 1, 1)
+
+[node name="Callout" type="PanelContainer" parent="OverlayRoot"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(460, 190)
+layout_mode = 0
+theme = ExtResource("2_theme")
+theme_override_styles/panel = SubResource("StyleBox_callout")
+
+[node name="Margin" type="MarginContainer" parent="OverlayRoot/Callout"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 18
+
+[node name="Content" type="VBoxContainer" parent="OverlayRoot/Callout/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Header" type="HBoxContainer" parent="OverlayRoot/Callout/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="OverlayRoot/Callout/Margin/Content/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.2, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 28
+text = "TUTORIAL"
+
+[node name="SkipButton" type="Button" parent="OverlayRoot/Callout/Margin/Content/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(105, 38)
+layout_mode = 2
+tooltip_text = "Skip tutorial"
+theme_override_colors/font_color = Color(1, 0.25, 0.25, 1)
+theme_override_colors/font_hover_color = Color(1, 0.5, 0.5, 1)
+theme_override_colors/font_pressed_color = Color(0.85, 0.12, 0.12, 1)
+theme_override_colors/font_focus_color = Color(1, 0.35, 0.35, 1)
+theme_override_font_sizes/font_size = 16
+text = "SKIP  X"
+flat = true
+
+[node name="BodyLabel" type="Label" parent="OverlayRoot/Callout/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(412, 70)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 19
+text = "Tutorial instruction"
+autowrap_mode = 3
+
+[node name="Actions" type="HBoxContainer" parent="OverlayRoot/Callout/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Spacer" type="Control" parent="OverlayRoot/Callout/Margin/Content/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ContinueButton" type="Button" parent="OverlayRoot/Callout/Margin/Content/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 44)
+layout_mode = 2
+text = "CONTINUE"

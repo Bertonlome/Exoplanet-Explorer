@@ -17,6 +17,8 @@ public partial class Cursor : CanvasLayer
 
     public override void _Ready()
     {
+        // The cursor is global UI and must keep tracking during hard-paused menus/tutorials.
+        ProcessMode = ProcessModeEnum.Always;
         Input.MouseMode = Input.MouseModeEnum.Hidden;
 
         sprite2D = GetNode<Sprite2D>("Sprite2D");

@@ -7,6 +7,7 @@ using Game.Manager;
 using Game.Resources.Level;
 using Game.Ui;
 using Game.UI;
+using Game.UI.Tutorial;
 using Godot;
 
 namespace Game;
@@ -46,6 +47,11 @@ public partial class BaseLevel : Node
 	private int currentTimeElapsed = 0;
 	private GravitationalAnomalyMap gravitationalAnomalyMap;
 	SelectedRobotUI selectedRobotUI;
+	private TutorialTargetRegistry tutorialTargetRegistry;
+	private TutorialEventBridge tutorialEventBridge;
+	private TutorialDirector tutorialDirector;
+	private TutorialOverlay tutorialOverlay;
+	private TutorialTargetRegistration preplacedBaseTutorialTarget;
 
 	public override void _Ready()
 	{
@@ -80,6 +86,98 @@ public partial class BaseLevel : Node
 		GameEvents.Instance.Connect(
 			GameEvents.SignalName.FragmentAnalysisRequested,
 			Callable.From<Vector2I, BuildingComponent, int>(OnFragmentAnalysisRequested));
+
+		if (LevelManager.IsTutorialModeActive)
+		{
+			CallDeferred(nameof(StartTutorialIfEnabled));
+		}
+	}
+
+	private void StartTutorialIfEnabled()
+	{
+		if (!LevelManager.IsTutorialModeActive || levelDefinitionResource == null)
+		{
+			return;
+		}
+		if (!TutorialCatalog.TryCreateScript(levelDefinitionResource.Id, out TutorialScript script))
+		{
+			GD.PushWarning(
+				$"Tutorial mode is active for '{levelDefinitionResource.Id}', but its script is not implemented yet.");
+			return;
+		}
+
+		tutorialTargetRegistry = GetNode<TutorialTargetRegistry>("TutorialTargetRegistry");
+		tutorialEventBridge = GetNode<TutorialEventBridge>("TutorialEventBridge");
+		tutorialDirector = GetNode<TutorialDirector>("TutorialDirector");
+		tutorialOverlay = GetNode<TutorialOverlay>("TutorialOverlay");
+
+		// Level 1 already contains a base. Resolve that state before target registration so the UI
+		// presents rover deployment rather than asking the player to place a second base.
+		buildingManager.RefreshPreplacedBaseState();
+		gameUI.RegisterTutorialTargets(tutorialTargetRegistry);
+		RegisterPreplacedBaseTutorialTarget();
+		tutorialEventBridge.Start();
+		tutorialDirector.Initialize(tutorialOverlay, tutorialEventBridge, tutorialTargetRegistry);
+		tutorialDirector.Start(script);
+		tutorialEventBridge.Publish(
+			new TutorialEventContext(TutorialEvent.LevelReady, payload: levelDefinitionResource.Id));
+	}
+
+	private void RegisterPreplacedBaseTutorialTarget()
+	{
+		BuildingComponent preplacedBase = BuildingComponent.GetBaseBuilding(this).FirstOrDefault();
+		if (!GodotObject.IsInstanceValid(preplacedBase))
+		{
+			GD.PushWarning(
+				$"Tutorial level '{levelDefinitionResource.Id}' expected a pre-placed base but none was found.");
+			return;
+		}
+
+		preplacedBaseTutorialTarget = tutorialTargetRegistry.RegisterRectProvider(
+			TutorialTargetIds.PreplacedBase,
+			preplacedBase,
+			() => GetBuildingScreenRect(preplacedBase));
+	}
+
+	private Rect2? GetBuildingScreenRect(BuildingComponent building)
+	{
+		if (!GodotObject.IsInstanceValid(building) || building.BuildingResource == null ||
+			GetViewport() == null)
+		{
+			return null;
+		}
+
+		Vector2 worldSize = new(
+			building.BuildingResource.Dimensions.X * 64f,
+			building.BuildingResource.Dimensions.Y * 64f);
+		Transform2D canvasTransform = GetViewport().GetCanvasTransform();
+		Vector2 firstCorner = canvasTransform * building.GlobalPosition;
+		Vector2 oppositeCorner = canvasTransform * (building.GlobalPosition + worldSize);
+		Vector2 screenPosition = new(
+			Mathf.Min(firstCorner.X, oppositeCorner.X),
+			Mathf.Min(firstCorner.Y, oppositeCorner.Y));
+		Vector2 screenSize = new(
+			Mathf.Abs(oppositeCorner.X - firstCorner.X),
+			Mathf.Abs(oppositeCorner.Y - firstCorner.Y));
+		return new Rect2(screenPosition, screenSize);
+	}
+
+	public override void _ExitTree()
+	{
+		preplacedBaseTutorialTarget?.Dispose();
+		preplacedBaseTutorialTarget = null;
+		if (GodotObject.IsInstanceValid(gameUI))
+		{
+			gameUI.ClearTutorialTargets();
+		}
+		if (GodotObject.IsInstanceValid(tutorialDirector))
+		{
+			tutorialDirector.Stop();
+		}
+		if (GodotObject.IsInstanceValid(tutorialEventBridge))
+		{
+			tutorialEventBridge.Stop();
+		}
 	}
 
 	public void OnBasePlaced()

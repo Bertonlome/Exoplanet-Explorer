@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Specialized;
 using Game;
 using Game.Resources.Level;
 using Godot;
@@ -24,12 +23,14 @@ public partial class SaveManager : Node
 
 	public static bool IsLevelCompleted(string levelId)
 	{
+		saveData.EnsureDefaults();
 		saveData.LevelCompletionStatus.TryGetValue(levelId, out var data);
 		return data?.IsCompleted == true;
 	}
 
 	public static TimeSpan GetBestTimeForLevel(string levelId)
 	{
+		saveData.EnsureDefaults();
 		saveData.LevelCompletionStatus.TryGetValue(levelId, out var data);
 		if(data == null || data.TimeCompletedInSeconds <= 0)
 		{
@@ -40,6 +41,7 @@ public partial class SaveManager : Node
 
 	public static int GetMineralsAnalyzedForLevel(string levelId)
 	{
+		saveData.EnsureDefaults();
 		saveData.LevelCompletionStatus.TryGetValue(levelId, out var data);
 		return data?.MineralsAnalyzed ?? 0;
 	}
@@ -47,6 +49,22 @@ public partial class SaveManager : Node
 	public static void SavelevelCompletion(LevelDefinitionResource levelDefinitionResource, int timeCompletedInSeconds, int mineralsAnalyzed)
 	{
 		saveData.SavelevelCompletion(levelDefinitionResource.Id, true, timeCompletedInSeconds, mineralsAnalyzed);
+		WriteSaveData();
+	}
+
+	public static bool HasTutorialStarted(string levelId)
+	{
+		return saveData.HasTutorialStarted(levelId);
+	}
+
+	public static void MarkTutorialStarted(string levelId)
+	{
+		if (string.IsNullOrWhiteSpace(levelId) || saveData.HasTutorialStarted(levelId))
+		{
+			return;
+		}
+
+		saveData.MarkTutorialStarted(levelId);
 		WriteSaveData();
 	}
 
@@ -69,7 +87,8 @@ public partial class SaveManager : Node
 		var dataString = saveFile.GetLine();
 		try
 		{
-		saveData = JsonConvert.DeserializeObject<SaveData>(dataString);
+		saveData = JsonConvert.DeserializeObject<SaveData>(dataString) ?? new SaveData();
+		saveData.EnsureDefaults();
 		}
 		catch(Exception _)
 		{

@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3 uid="uid://bipxsk1snp5nq"]
+[gd_scene load_steps=31 format=3 uid="uid://bipxsk1snp5nq"]
 
 [ext_resource type="Script" path="res://scenes/level/BaseLevel.cs" id="1_oetcv"]
 [ext_resource type="TileSet" uid="uid://be2deub8k3gjr" path="res://resources/highlight_tileset.tres" id="2_8gl76"]
@@ -25,6 +25,10 @@
 [ext_resource type="PackedScene" uid="uid://b0eal3gs3jkha" path="res://scenes/manager/FloatingTextManager.tscn" id="13_p7dg5"]
 [ext_resource type="PackedScene" uid="uid://bllsmwyng6v5f" path="res://scenes/manager/DiscoveredElementsManager.tscn" id="16_6uy6k"]
 [ext_resource type="PackedScene" uid="uid://b6cycnj1fd6ut" path="res://scenes/LandscapeElements/MudScene.tscn" id="19_30ydk"]
+[ext_resource type="Script" path="res://scenes/ui/tutorial/TutorialTargetRegistry.cs" id="20_tutorial_registry"]
+[ext_resource type="Script" path="res://scenes/ui/tutorial/TutorialEventBridge.cs" id="21_tutorial_bridge"]
+[ext_resource type="Script" path="res://scenes/ui/tutorial/TutorialDirector.cs" id="22_tutorial_director"]
+[ext_resource type="PackedScene" path="res://scenes/ui/tutorial/TutorialOverlay.tscn" id="23_tutorial_overlay"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_uikxx"]
 noise_type = 4
@@ -102,3 +106,14 @@ script = ExtResource("8_ufxub")
 gridManager = NodePath("../GridManager")
 noise = SubResource("FastNoiseLite_uikxx")
 baseTerrainTilemapLayer = NodePath("../YSortRoot/BaseTerrainTileMapLayer")
+
+[node name="TutorialTargetRegistry" type="Node" parent="."]
+script = ExtResource("20_tutorial_registry")
+
+[node name="TutorialEventBridge" type="Node" parent="."]
+script = ExtResource("21_tutorial_bridge")
+
+[node name="TutorialDirector" type="Node" parent="."]
+script = ExtResource("22_tutorial_director")
+
+[node name="TutorialOverlay" parent="." instance=ExtResource("23_tutorial_overlay")]

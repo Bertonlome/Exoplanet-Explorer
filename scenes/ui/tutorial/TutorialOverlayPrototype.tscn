@@ -1,0 +1,154 @@
+[gd_scene load_steps=8 format=3 uid="uid://eltose84wskk"]
+
+[ext_resource type="Script" path="res://scenes/ui/tutorial/TutorialOverlayPrototype.cs" id="1_prototype"]
+[ext_resource type="PackedScene" path="res://scenes/ui/tutorial/TutorialOverlay.tscn" id="2_overlay"]
+[ext_resource type="Theme" uid="uid://lrxwuh3o4l5k" path="res://resources/sci-fi-theme.tres" id="3_theme"]
+[ext_resource type="Script" path="res://scenes/ui/tutorial/TutorialTargetRegistry.cs" id="4_registry"]
+[ext_resource type="Script" path="res://scenes/ui/tutorial/TutorialEventBridge.cs" id="5_bridge"]
+[ext_resource type="Script" path="res://scenes/ui/tutorial/TutorialDirector.cs" id="6_director"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_target"]
+bg_color = Color(0.08, 0.2, 0.25, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.2, 0.9, 1, 0.7)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="TutorialOverlayPrototype" type="Control"]
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("3_theme")
+script = ExtResource("1_prototype")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.055, 0.075, 0.09, 1)
+
+[node name="Heading" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 54.0
+offset_bottom = 102.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 34
+text = "TUTORIAL RUNTIME — CHECKPOINT 1"
+horizontal_alignment = 1
+
+[node name="MockPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 120.0
+offset_top = -110.0
+offset_right = 460.0
+offset_bottom = 110.0
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBox_target")
+
+[node name="Margin" type="MarginContainer" parent="MockPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="MockPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Label" type="Label" parent="MockPanel/Margin/Content"]
+layout_mode = 2
+text = "Mock gameplay panel"
+horizontal_alignment = 1
+
+[node name="MockTarget" type="Button" parent="MockPanel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 90)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "MOCK GAMEPLAY TARGET"
+
+[node name="EventPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -440.0
+offset_top = -250.0
+offset_right = -80.0
+offset_bottom = -80.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBox_target")
+
+[node name="Margin" type="MarginContainer" parent="EventPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="EventPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="EventPanel/Margin/Content"]
+layout_mode = 2
+text = "Semantic event publisher"
+horizontal_alignment = 1
+
+[node name="EventSourceButton" type="Button" parent="EventPanel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 78)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "EVENT SOURCE"
+
+[node name="StatusLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 48.0
+offset_top = -100.0
+offset_right = -48.0
+offset_bottom = -48.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 18
+text = "Starting prototype..."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="TutorialTargetRegistry" type="Node" parent="."]
+script = ExtResource("4_registry")
+
+[node name="TutorialEventBridge" type="Node" parent="."]
+script = ExtResource("5_bridge")
+
+[node name="TutorialDirector" type="Node" parent="."]
+process_mode = 3
+script = ExtResource("6_director")
+
+[node name="TutorialOverlay" parent="." instance=ExtResource("2_overlay")]

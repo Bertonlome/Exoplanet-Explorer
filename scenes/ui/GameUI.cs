@@ -9,6 +9,7 @@ using Game.Component;
 using Game.Manager;
 using Game.Resources.Building;
 using Game.Services;
+using Game.UI.Tutorial;
 using Godot;
 
 namespace Game.UI;
@@ -80,6 +81,9 @@ public partial class GameUI : CanvasLayer
 	private RichTextLabel messageLogLabel;
 	private ScrollContainer messageLogScrollContainer;
 	private MinimapViewport minimapViewport;
+	private TutorialTargetRegistry tutorialTargetRegistry;
+	private readonly List<TutorialTargetRegistration> staticTutorialTargets = new();
+	private readonly List<TutorialTargetRegistration> deploymentTutorialTargets = new();
 
 	[Export]
 	private GravitationalAnomalyMap gravitationalAnomalyMap;
@@ -209,6 +213,39 @@ public partial class GameUI : CanvasLayer
 	public void SetWorldCameraInputEnabled(bool enabled)
 	{
 		GetParent()?.GetNodeOrNull<GameCamera>("GameCamera")?.SetNavigationInputEnabled(enabled);
+	}
+
+	public void RegisterTutorialTargets(TutorialTargetRegistry registry)
+	{
+		ClearTutorialTargets();
+		tutorialTargetRegistry = registry;
+		if (tutorialTargetRegistry == null)
+		{
+			return;
+		}
+
+		areBuildingSectionsVisible = true;
+		ApplyBuildingSectionVisibility();
+		UpdateFoldBuildingSectionButtonState();
+		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
+			TutorialTargetIds.StatusPanel,
+			GetNode<PanelContainer>("MarginContainer/PanelContainer")));
+		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
+			TutorialTargetIds.DeploymentPanel,
+			buildingSectionContainer));
+		RegisterDeploymentTutorialTargets();
+	}
+
+	public void ClearTutorialTargets()
+	{
+		DisposeTutorialTargets(deploymentTutorialTargets);
+		DisposeTutorialTargets(staticTutorialTargets);
+		tutorialTargetRegistry = null;
+	}
+
+	public override void _ExitTree()
+	{
+		ClearTutorialTargets();
 	}
 
 	public void RefreshMinimap()
@@ -490,6 +527,7 @@ public partial class GameUI : CanvasLayer
 
 	private void CreateBuildingSections()
 	{
+		DisposeTutorialTargets(deploymentTutorialTargets);
 		// Clear existing building sections first
 		foreach (Node child in buildingSectionContainer.GetChildren())
 		{
@@ -538,6 +576,46 @@ public partial class GameUI : CanvasLayer
 
 		ApplyBuildingSectionVisibility();
 		UpdateFoldBuildingSectionButtonState();
+		RegisterDeploymentTutorialTargets();
+	}
+
+	private void RegisterDeploymentTutorialTargets()
+	{
+		if (tutorialTargetRegistry == null || buildingSectionContainer == null)
+		{
+			return;
+		}
+
+		foreach (Node child in buildingSectionContainer.GetChildren())
+		{
+			if (child is not BuildingSection section || section.BuildingResource == null ||
+				section.SelectButton == null)
+			{
+				continue;
+			}
+
+			string targetId = section.BuildingResource.DisplayName switch
+			{
+				"Base" => TutorialTargetIds.BaseDeployButton,
+				"Rover" => TutorialTargetIds.RoverDeployButton,
+				"Drone" => TutorialTargetIds.DroneDeployButton,
+				_ => null,
+			};
+			if (targetId != null)
+			{
+				deploymentTutorialTargets.Add(
+					tutorialTargetRegistry.RegisterControl(targetId, section.SelectButton));
+			}
+		}
+	}
+
+	private static void DisposeTutorialTargets(List<TutorialTargetRegistration> registrations)
+	{
+		foreach (TutorialTargetRegistration registration in registrations)
+		{
+			registration.Dispose();
+		}
+		registrations.Clear();
 	}
 
 	private void OnBasePlaced()

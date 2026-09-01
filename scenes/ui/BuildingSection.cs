@@ -17,6 +17,9 @@ public partial class BuildingSection : PanelContainer
 	private TextureRect materialIconRect;
 	private Button selectButton;
 
+	public BuildingResource BuildingResource { get; private set; }
+	public Button SelectButton => selectButton;
+
 	public override void _Ready()
 	{
 		titleLabel = GetNode<Label>("%TitleLabel");
@@ -32,6 +35,7 @@ public partial class BuildingSection : PanelContainer
 
 	public void SetBuildingResource(BuildingResource buildingResource)
 	{
+		BuildingResource = buildingResource;
 		titleLabel.Text = buildingResource.DisplayName;
 		costLabel.Text = $"{buildingResource.ResourceCost}";
 		if (materialIconRect != null)

@@ -161,7 +161,7 @@ public partial class BuildingManager : Node
 		Callable.From(() => EmitSignal(SignalName.AvailableResourceCountChanged, AvailableWoodCount)).CallDeferred();
 		
 		// Schedule the check after 1 second to ensure scene tree is ready
-		CallDeferred(nameof(CheckAndEmitBasePlaced));
+		CallDeferred(nameof(RefreshPreplacedBaseState));
 	}
 
 	public override void _UnhandledInput(InputEvent evt)
@@ -790,15 +790,18 @@ public partial class BuildingManager : Node
 		EmitSignal(SignalName.BasePlaced);
 	}
 	
-	private void CheckAndEmitBasePlaced()
+	public void RefreshPreplacedBaseState()
 	{
 		var baseBuilding = BuildingComponent.GetBaseBuilding(this).FirstOrDefault();
 		if (baseBuilding != null)
 		{
 			var gameCamera = GetNodeOrNull<GameCamera>("../GameCamera");
 			gameCamera?.CenterOnPosition(baseBuilding.GlobalPosition);
-			IsBasePlaced = true;
-			EmitSignal(SignalName.BasePlaced);
+			if (!IsBasePlaced)
+			{
+				IsBasePlaced = true;
+				EmitSignal(SignalName.BasePlaced);
+			}
 		}
 		else
 		{

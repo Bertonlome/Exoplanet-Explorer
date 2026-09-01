@@ -18,6 +18,7 @@ public partial class LevelSelectSection : PanelContainer
 	private int levelIndex;
 	private Label timeCompletionLabel;
 	private Label mineralsAnalyzedLabel;
+	private Label tutorialStatusLabel;
 
 	public override void _Ready()
 	{
@@ -30,6 +31,7 @@ public partial class LevelSelectSection : PanelContainer
 		completedIndicator = GetNode<TextureRect>("%CompletedIndicator");
 		timeCompletionLabel = GetNode<Label>("%TimeCompletionLabel");
 		mineralsAnalyzedLabel = GetNode<Label>("%MineralsAnalyzedLabel");
+		tutorialStatusLabel = GetNode<Label>("%TutorialStatusLabel");
 
 		button.Pressed += OnButtonPressed;
 	}
@@ -55,6 +57,23 @@ public partial class LevelSelectSection : PanelContainer
 	{
 		levelIndex = index;
 		levelNumberLabel.Text = $"Level {index + 1}";
+	}
+
+	public void SetTutorialAvailability(bool hasTutorial, bool tutorialPreviouslyStarted)
+	{
+		if (!hasTutorial)
+		{
+			tutorialStatusLabel.Visible = false;
+			button.Text = "Select";
+			return;
+		}
+
+		levelNumberLabel.Text = $"Level {levelIndex + 1}\n(Tutorial)";
+		tutorialStatusLabel.Visible = true;
+		tutorialStatusLabel.Text = tutorialPreviouslyStarted
+			? "Tutorial previously started"
+			: "Tutorial available";
+		button.Text = tutorialPreviouslyStarted ? "Choose mode" : "Start tutorial";
 	}
 
 	private void OnButtonPressed()

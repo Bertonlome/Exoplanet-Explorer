@@ -81,6 +81,7 @@ public partial class BuildingComponent : Node2D
 	private Node2D grappleRoot;
 	private bool IsGrappleExtended = false;
 	private AnimatedSprite2D robotSprite;
+	private bool isDetachingForMovement = false;
 
 	public enum ExplorMode
 	{
@@ -175,6 +176,16 @@ public partial class BuildingComponent : Node2D
 	{
 		if (groundRobot != this)
 			return;
+
+		await PlayDropAnimationAsync();
+	}
+
+	private async System.Threading.Tasks.Task PlayDropAnimationAsync()
+	{
+		if (!GodotObject.IsInstanceValid(robotSprite))
+		{
+			return;
+		}
 
 		robotSprite.Play("drop");
 
@@ -508,16 +519,21 @@ public partial class BuildingComponent : Node2D
 		}
 	}
 
-	public void Move(string direction)
+	public async void Move(string direction)
 	{
+		if (isDetachingForMovement) return;
+
 		if (BuildingResource.IsAerial && AttachedRobot is not null && Battery >= 0)
 		{
-			MoveLifted(direction);
-			AttachedRobot.MoveLifted(direction);
+			MoveLiftedPair(direction);
 		}
 		else
 		{
-			if (AttachedRobot is not null)
+			if (IsLifted)
+			{
+				if (!await DetachForMovementAsync()) return;
+			}
+			else if (AttachedRobot is not null)
 			{
 				AttachedRobot.DetachRobot();
 				DetachRobot();
@@ -529,6 +545,48 @@ public partial class BuildingComponent : Node2D
 	public void MoveLifted(string direction)
 	{
 		buildingManager.LiftInDirection(this, direction);
+	}
+
+	public bool MoveLiftedPair(string direction)
+	{
+		if (!BuildingResource.IsAerial || !IsLifting ||
+			!GodotObject.IsInstanceValid(AttachedRobot) || !AttachedRobot.IsLifted ||
+			AttachedRobot.AttachedRobot != this)
+		{
+			return false;
+		}
+
+		return buildingManager.LiftPairInDirection(this, AttachedRobot, direction);
+	}
+
+	private async System.Threading.Tasks.Task<bool> DetachForMovementAsync()
+	{
+		if (!IsLifted)
+		{
+			return true;
+		}
+		if (isDetachingForMovement)
+		{
+			return false;
+		}
+
+		isDetachingForMovement = true;
+		try
+		{
+			var liftingRobot = AttachedRobot;
+			DetachRobot();
+			if (GodotObject.IsInstanceValid(liftingRobot) && liftingRobot.AttachedRobot == this)
+			{
+				liftingRobot.DetachRobot();
+			}
+
+			await PlayDropAnimationAsync();
+			return true;
+		}
+		finally
+		{
+			isDetachingForMovement = false;
+		}
 	}
 
 	public bool cancelMoveRequested = false;
@@ -770,7 +828,29 @@ public partial class BuildingComponent : Node2D
 
 	public async void MoveAlongPath(Vector2I targetPosition, bool astar=false)
 	{
-		if (AttachedRobot is not null) DetachRobot();
+		if (isDetachingForMovement) return;
+
+		BuildingComponent carriedRobot = null;
+		if (BuildingResource.IsAerial && IsLifting &&
+			GodotObject.IsInstanceValid(AttachedRobot) && AttachedRobot.IsLifted &&
+			AttachedRobot.AttachedRobot == this)
+		{
+			carriedRobot = AttachedRobot;
+		}
+		else if (IsLifted)
+		{
+			if (!await DetachForMovementAsync()) return;
+		}
+		else if (AttachedRobot is not null)
+		{
+			var previouslyAttachedRobot = AttachedRobot;
+			DetachRobot();
+			if (GodotObject.IsInstanceValid(previouslyAttachedRobot) &&
+				previouslyAttachedRobot.AttachedRobot == this)
+			{
+				previouslyAttachedRobot.DetachRobot();
+			}
+		}
 		// Cancel any previous movement
 		cancelMoveRequested = true;
 
@@ -913,6 +993,9 @@ public partial class BuildingComponent : Node2D
 				if (currentExplorMode == ExplorMode.None) break;
 				if (IsStuck) break;
 				if (Battery <= 0) break;
+				if (carriedRobot != null &&
+					(!GodotObject.IsInstanceValid(carriedRobot) || AttachedRobot != carriedRobot ||
+					 !IsLifting || !carriedRobot.IsLifted || carriedRobot.AttachedRobot != this)) break;
 				
 				var currentDirection = path[i];
 				var currentPos = GetGridCellPosition();
@@ -959,8 +1042,12 @@ public partial class BuildingComponent : Node2D
 					}
 				}
 				
-				// Now move in this direction
-				buildingManager.MoveInDirectionAutomated(this, currentDirection);
+				// A right-click path keeps a valid UAV/rover lift pair attached and
+				// advances both components as one movement step.
+				bool moveSucceeded = carriedRobot != null
+					? MoveLiftedPair(currentDirection)
+					: buildingManager.MoveInDirectionAutomated(this, currentDirection);
+				if (!moveSucceeded) break;
 				}
 				await ToSignal(GetTree().CreateTimer(BuildingResource.moveInterval), "timeout");
 			}
@@ -1172,9 +1259,8 @@ public partial class BuildingComponent : Node2D
 			// Use lifted movement if carrying a robot, otherwise use normal automated movement
 			if (BuildingResource.IsAerial && AttachedRobot != null)
 			{
-				// Drone is lifting - use lifted movement for both
-				MoveLifted(direction);
-				AttachedRobot.MoveLifted(direction);
+				// Drone is lifting - advance both components atomically.
+				if (!MoveLiftedPair(direction)) break;
 			}
 			else
 			{

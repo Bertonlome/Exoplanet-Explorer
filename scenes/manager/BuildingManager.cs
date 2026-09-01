@@ -1317,6 +1317,64 @@ public partial class BuildingManager : Node
 
 	}
 
+	public bool LiftPairInDirection(
+		BuildingComponent aerialRobot,
+		BuildingComponent carriedRobot,
+		StringName direction)
+	{
+		if (!GodotObject.IsInstanceValid(aerialRobot) ||
+			!GodotObject.IsInstanceValid(carriedRobot) ||
+			!aerialRobot.BuildingResource.IsAerial || !aerialRobot.IsLifting ||
+			aerialRobot.AttachedRobot != carriedRobot || !carriedRobot.IsLifted ||
+			carriedRobot.AttachedRobot != aerialRobot)
+		{
+			return false;
+		}
+
+		if (aerialRobot.Battery <= 0)
+		{
+			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of battery", aerialRobot);
+			Game.UI.GameUI.PushMessage("Robot out of battery", "red", true, aerialRobot);
+			return false;
+		}
+
+		Vector2I directionVector;
+		if (direction == MOVE_UP) directionVector = Vector2I.Up;
+		else if (direction == MOVE_DOWN) directionVector = Vector2I.Down;
+		else if (direction == MOVE_LEFT) directionVector = Vector2I.Left;
+		else if (direction == MOVE_RIGHT) directionVector = Vector2I.Right;
+		else return false;
+
+		var aerialDestination = aerialRobot.GetAreaOccupiedAfterMovingFromPos(
+			aerialRobot.GetGridCellPosition() + directionVector);
+		aerialRobot.CanMove = gridManager.CanMoveBuilding(aerialRobot, aerialDestination);
+		carriedRobot.CanMove = aerialRobot.CanMove;
+		if (!aerialRobot.CanMove)
+		{
+			Game.UI.GameUI.PushMessage("Robot out of antenna coverage", "red", true, aerialRobot);
+			return false;
+		}
+
+		CommitLiftedMove(aerialRobot, direction, directionVector);
+		CommitLiftedMove(carriedRobot, direction, directionVector);
+		return true;
+	}
+
+	private static void CommitLiftedMove(
+		BuildingComponent robot,
+		StringName direction,
+		Vector2I directionVector)
+	{
+		var originPosition = robot.GetGridCellPosition();
+		var destinationPosition = originPosition + directionVector;
+		var buildingNode = (Node2D)robot.GetParent();
+
+		robot.UpdateMoveHistory(originPosition, direction);
+		robot.FreeOccupiedCellPosition();
+		buildingNode.Position += directionVector * 64;
+		robot.Moved(originPosition, destinationPosition);
+	}
+
 	public void MoveInDirection(BuildingComponent robot, StringName direction)
 	{
 		if (robot.IsStuck) return;

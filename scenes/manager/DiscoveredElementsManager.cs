@@ -145,7 +145,13 @@ public partial class DiscoveredElementsManager : Node
 			tileToDiscoveredElements.Remove(tile);
 		}
 
-		var elementNode2D = discoveredElements.GetNode<Node2D>("%ElementNode2D");
+		// Ground decals must render below robots, while props such as trees must
+		// remain in the regular Y-sorted layer. Keeping separate roots lets mud use
+		// a lower canvas depth without pulling every discovered element behind the
+		// terrain/world layers.
+		var elementNode2D = type == "mud"
+			? discoveredElements.GetNode<Node2D>("%GroundElementNode2D")
+			: discoveredElements.GetNode<Node2D>("%ElementNode2D");
 
 		Node2D elementHolder = new Node2D();
 		elementNode2D.AddChild(elementHolder);

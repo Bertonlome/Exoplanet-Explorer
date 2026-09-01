@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_qkdll")
 Id = "concrete_bricks"
-StartingWoodCount = 20
-StartingMaterialCount = 30
+StartingWoodCount = 0
+StartingMaterialCount = 11
 LevelScenePath = "res://scenes/level/Level3.tscn"
 LevelDuration = 1500

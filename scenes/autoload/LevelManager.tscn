@@ -1,14 +1,15 @@
-[gd_scene load_steps=7 format=3 uid="uid://bbe6xijnluas7"]
+[gd_scene load_steps=8 format=3 uid="uid://bbe6xijnluas7"]
 
 [ext_resource type="Script" path="res://scenes/autoload/LevelManager.cs" id="1_olqhd"]
 [ext_resource type="Resource" uid="uid://hksumikloa8y" path="res://resources/level/level_01.tres" id="2_0ih6b"]
 [ext_resource type="Resource" uid="uid://bwph5153j8sde" path="res://resources/level/level_02.tres" id="3_7hsax"]
 [ext_resource type="Resource" uid="uid://beg3tak5yp2j4" path="res://resources/level/level_03.tres" id="4_qqy33"]
 [ext_resource type="Resource" uid="uid://d3fvd6bh7nrc0" path="res://resources/level/level_04.tres" id="5_us0cl"]
-[ext_resource type="Resource" uid="uid://di82r04j6fqfh" path="res://resources/level/level_sb.tres" id="6_e04du"]
+[ext_resource type="Resource" uid="uid://vs3mjh4f8c7c" path="res://resources/level/level_05.tres" id="6_g6m10"]
+[ext_resource type="Resource" uid="uid://dvmysfqesxtsg" path="res://resources/level/level_06.tres" id="7_un4t8"]
 
 [node name="LevelManager" type="Node"]
 script = ExtResource("1_olqhd")
-levelDefinitions = Array[Object]([ExtResource("2_0ih6b"), ExtResource("3_7hsax"), ExtResource("4_qqy33"), ExtResource("5_us0cl"), ExtResource("6_e04du")])
+levelDefinitions = Array[Object]([ExtResource("2_0ih6b"), ExtResource("3_7hsax"), ExtResource("4_qqy33"), ExtResource("5_us0cl"), ExtResource("6_g6m10"), ExtResource("7_un4t8")])
 introCutScenePath = "res://scenes/level/IntroCutScene.tscn"
 mainMenuScenePath = "res://scenes/ui/MainMenu.tscn"

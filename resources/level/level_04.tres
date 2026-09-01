@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_bfefd")
 Id = "white_ferrari"
-StartingWoodCount = 20
-StartingMaterialCount = 30
+StartingWoodCount = 15
+StartingMaterialCount = 15
 LevelScenePath = "res://scenes/level/Level4.tscn"
 LevelDuration = 1500

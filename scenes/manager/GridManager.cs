@@ -143,6 +143,7 @@ public partial class GridManager : Node
 	public void SetBaseArea(Vector2I dimensions, Vector2I position)
 	{
 		baseArea = new Rect2I(position, dimensions);
+		baseProximityTiles = GetTilesInRadiusFiltered(baseArea, 1, (_) => true).ToHashSet();
 	}
 
 	private void OnRobotSelected(BuildingComponent buildingComponent)
@@ -337,6 +338,38 @@ public partial class GridManager : Node
 		});
 	}
 
+	/// <summary>
+	/// Returns whether a robot can be deployed from the base at this area.
+	/// Ground robots must be on the same elevation layer as the base so a base
+	/// beside a cliff cannot deploy them directly uphill or downhill.
+	/// </summary>
+	public bool IsRobotDeploymentAreaValid(Rect2I tileArea, bool isAerial)
+	{
+		if (!baseProximityTiles.Contains(tileArea.Position) || !IsTileAreaBuildable(tileArea))
+		{
+			return false;
+		}
+
+		if (isAerial)
+		{
+			return true;
+		}
+
+		var baseTiles = baseArea.ToTiles();
+		var deploymentTiles = tileArea.ToTiles();
+		if (baseTiles.Count == 0 || deploymentTiles.Count == 0)
+		{
+			return false;
+		}
+
+		var (baseElevationLayer, _) = GetElevationLayerForTile(baseTiles[0]);
+		return deploymentTiles.All(tile =>
+		{
+			var (deploymentElevationLayer, _) = GetElevationLayerForTile(tile);
+			return deploymentElevationLayer == baseElevationLayer;
+		});
+	}
+
 	public bool IsTileOccupied(Vector2I tilePosition)
 	{
 		return occupiedTiles.Contains(tilePosition);
@@ -499,6 +532,27 @@ public partial class GridManager : Node
 			foreach (var tilePosition in GetValidTileSet())
 			{
 				highlightTilemapLayer.SetCell(tilePosition, 0, Vector2I.Zero);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Highlights only the valid root cells from which the selected robot can be
+	/// deployed. This deliberately bypasses the general highlight preference:
+	/// these cells are placement affordances shown only while in deploy mode.
+	/// </summary>
+	public void HighlightRobotDeploymentTiles(Vector2I dimensions, bool isAerial)
+	{
+		using (Telemetry.Scope("GridManager.HighlightRobotDeploymentTiles"))
+		{
+			EnsureBuildableTileCache();
+			foreach (var tilePosition in baseProximityTiles)
+			{
+				var deploymentArea = new Rect2I(tilePosition, dimensions);
+				if (IsRobotDeploymentAreaValid(deploymentArea, isAerial))
+				{
+					highlightTilemapLayer.SetCell(tilePosition, 0, Vector2I.Zero);
+				}
 			}
 		}
 	}

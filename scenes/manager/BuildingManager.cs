@@ -174,6 +174,7 @@ public partial class BuildingManager : Node
 					if (selectedBuildingComponent != null)
 					{
 						Vector2I targetGridCell = gridManager.GetMouseGridCellPosition();
+						GameEvents.EmitDirectedMoveRequested(selectedBuildingComponent, targetGridCell);
 						selectedBuildingComponent.MoveAlongPath(targetGridCell, true);
 						GetViewport().SetInputAsHandled();
 					}
@@ -770,16 +771,22 @@ public partial class BuildingManager : Node
 				buildingGhost.SetInvalid();
 			}
 		}
-		else if (gridManager.IsInBaseProximity(hoveredGridArea.Position) && IsBuildingResourcePlaceableAtArea(hoveredGridArea))
-		{
-			gridManager.HighlightExpandedBuildableTiles(hoveredGridArea, toPlaceBuildingResource.BuildableRadius);
-			gridManager.HighlightResourceTiles(hoveredGridArea, toPlaceBuildingResource.ResourceRadius);
-			buildingGhost.SetValid();
-			
-		}
 		else
 		{
-			buildingGhost.SetInvalid();
+			gridManager.HighlightRobotDeploymentTiles(
+				toPlaceBuildingResource.Dimensions,
+				toPlaceBuildingResource.IsAerial);
+
+			if (IsRobotDeploymentPlaceableAtArea(hoveredGridArea))
+			{
+				gridManager.HighlightExpandedBuildableTiles(hoveredGridArea, toPlaceBuildingResource.BuildableRadius);
+				gridManager.HighlightResourceTiles(hoveredGridArea, toPlaceBuildingResource.ResourceRadius);
+				buildingGhost.SetValid();
+			}
+			else
+			{
+				buildingGhost.SetInvalid();
+			}
 		}
 		buildingGhost.DoHoverAnimation();
 	}
@@ -795,6 +802,9 @@ public partial class BuildingManager : Node
 		var baseBuilding = BuildingComponent.GetBaseBuilding(this).FirstOrDefault();
 		if (baseBuilding != null)
 		{
+			gridManager.SetBaseArea(
+				baseBuilding.BuildingResource.Dimensions,
+				baseBuilding.GetGridCellPosition());
 			var gameCamera = GetNodeOrNull<GameCamera>("../GameCamera");
 			gameCamera?.CenterOnPosition(baseBuilding.GlobalPosition);
 			if (!IsBasePlaced)
@@ -826,7 +836,7 @@ public partial class BuildingManager : Node
 			gridManager.SetBaseArea(buildingResource.Dimensions, hoveredGridArea.Position);
 			CallDeferred("EmitSignalBasePlaced");
 		}
-		else if (!IsBuildingResourcePlaceableAtArea(hoveredGridArea))
+		else if (buildingResource.DisplayName == "Antenna" && !IsBuildingResourcePlaceableAtArea(hoveredGridArea))
 		{
 			FloatingTextManager.ShowMessageAtMousePosition("Invalid placement!");
 			return;
@@ -838,13 +848,10 @@ public partial class BuildingManager : Node
 				return;
 			}
 		}
-		else if (!buildingResource.IsBase)
+		else if (!gridManager.IsRobotDeploymentAreaValid(hoveredGridArea, buildingResource.IsAerial))
 		{
-			if (!gridManager.IsInBaseProximity(hoveredGridArea.Position))
-			{
-				FloatingTextManager.ShowMessageAtMousePosition("Too far from base!");
-				return;
-			}
+			FloatingTextManager.ShowMessageAtMousePosition("Invalid deployment tile!");
+			return;
 		}
 
 		var building = toPlaceBuildingResource.BuildingScene.Instantiate<Node2D>();
@@ -2034,6 +2041,12 @@ public partial class BuildingManager : Node
 	{
 		var allTilesBuildable = gridManager.IsTileAreaBuildable(tileArea);
 		return allTilesBuildable && CanAffordRobot();
+	}
+
+	private bool IsRobotDeploymentPlaceableAtArea(Rect2I tileArea)
+	{
+		return gridManager.IsRobotDeploymentAreaValid(tileArea, toPlaceBuildingResource.IsAerial)
+			&& CanAffordRobot();
 	}
 
 	private bool IsBasePlaceableAtArea(Rect2I tileArea)

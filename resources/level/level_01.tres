@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_netsu")
 Id = "when_cucumbers_fall"
-StartingWoodCount = 10
+StartingWoodCount = 0
 StartingMaterialCount = 11
 LevelScenePath = "res://scenes/level/Level1.tscn"
-LevelDuration = 300
+LevelDuration = 1000

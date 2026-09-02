@@ -11,12 +11,22 @@ public enum TutorialEvent
 	BuildingPlaced,
 	RobotSelected,
 	RobotMoved,
+	DirectedMoveRequested,
+	BatteryDecreased,
+	BatteryRecharged,
+	ChargingStarted,
+	ResourceCollected,
+	ResourcesDropped,
+	MaterialCreated,
+	ExplorationModeSelected,
 	ExplorationStarted,
+	DroneScoutStarted,
 	ExplorationStopped,
 	FragmentAnalysisRequested,
 	FragmentAnalysisOpened,
 	FragmentAnalysisCompleted,
 	BridgePlaced,
+	MonolithTouched,
 	AntennaPlaced,
 	RobotLiftRequested,
 	RobotDropRequested,
@@ -213,4 +223,41 @@ public static class TutorialTargetIds
 	public const string RoverDeployButton = "game-ui.deploy.rover";
 	public const string DroneDeployButton = "game-ui.deploy.drone";
 	public const string PreplacedBase = "world.preplaced-base";
+	public const string DeployedRover = "world.deployed-rover";
+	public const string ManualMovementDestination = "world.level1.manual-destination";
+	public const string ReturnDestination = "world.level1.return-destination";
+	public const string DeployedRoverBattery = "game-ui.unit.rover.battery";
+	public const string SelectedRoverBattery = "selected-rover-ui.battery";
+	public const string ExplorationModeMenu = "selected-rover-ui.exploration-mode";
+	public const string StartExplorationButton = "selected-rover-ui.start-exploration";
+	public const string DropResourcesButton = "selected-rover-ui.drop-resources";
+	public const string ResourcesCarried = "selected-rover-ui.resources-carried";
+	public const string AnomalyRadar = "selected-rover-ui.anomaly-radar";
+	public const string AnomalyIndicator = "selected-rover-ui.anomaly-indicator";
+	public const string PlaceBridgeButton = "selected-rover-ui.place-bridge";
+	public const string AddMaterialButton = "game-ui.add-material";
+	public const string LiftRobotButton = "selected-robot-ui.lift-robot";
+}
+
+public sealed class TutorialLevelContext
+{
+	public Vector2I BasePosition { get; }
+	public Vector2I ManualMovementDestination { get; }
+	public Vector2I ReturnDestination { get; }
+	public Vector2I BaseReturnDestination { get; }
+	public Vector2I MonolithPosition { get; }
+
+	public TutorialLevelContext(
+		Vector2I basePosition,
+		Vector2I manualMovementDestination,
+		Vector2I returnDestination,
+		Vector2I baseReturnDestination,
+		Vector2I monolithPosition)
+	{
+		BasePosition = basePosition;
+		ManualMovementDestination = manualMovementDestination;
+		ReturnDestination = returnDestination;
+		BaseReturnDestination = baseReturnDestination;
+		MonolithPosition = monolithPosition;
+	}
 }

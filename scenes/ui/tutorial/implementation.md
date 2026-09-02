@@ -563,9 +563,9 @@ They are replaced by these level-specific checkpoints:
 
 **Coverage:** Lines 270–272. Later Level 1 instructions remain gated behind Checkpoints 3–5.
 
-**Implementation status — 2026-09-01:** The initial Godot test failed because the pre-placed base was
-rendered behind terrain and the rover-placement presentation obscured the map. A focused correction is
-implemented and compile-verified; awaiting the retest gate below. Checkpoint 3 has not been started.
+**Implementation status — 2026-09-02:** The base/presentation correction passed far enough to expose a
+latched left-mouse camera drag when the post-deployment step completed. The input-latch correction is
+implemented and compile-verified; awaiting the latest retest gate below. Checkpoint 3 has not started.
 
 **Implementation summary:**
 
@@ -660,10 +660,44 @@ shell, so scene parsing and visual/input behavior require the editor test.
 
 **Checkpoint 2 retest feedback (fill after testing):**
 
-- **Result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED`
+- **Result:** `[ ] PASS  [x] FAIL  [ ] BLOCKED`
 - **Base visibility/focus comments:**
 - **Undimmed top-right placement comments:**
 - **Top-right Skip Tutorial button comments:**
+- **Pointer input comments:** After the Rover is deployed and the post-deployment step is dismissed,
+  the game behaves as though left mouse is held until another left click.
+- **Approved to implement Checkpoint 3:** `[ ] YES  [x] NO`
+
+**Pointer-latch correction — 2026-09-02:**
+
+- The post-deployment instruction is already an undimmed, top-right guided step in the current
+  `Level1Tutorial.cs`, and it completes when the deployed Rover is selected. Those user-authored copy
+  and sequence changes were preserved.
+- Diagnosed the persistent-click behavior as `GameCamera.isDragging` retaining an event-derived press
+  when a tutorial transition consumes or interrupts the matching release.
+- `GameCamera` now reconciles the latched drag flag against the physical left-button state every frame.
+  A missed release therefore clears automatically instead of waiting for another click.
+- `BaseLevel` also cancels camera drag immediately and once deferred after tutorial step starts,
+  completions, skips, and overall completion. The deferred cancellation handles the case where the
+  same press continues propagating after a tutorial callback closes the overlay.
+- Tutorial transition subscriptions are removed during level cleanup. Build verification passes with
+  0 errors and the same three pre-existing warnings; `git diff --check` passes.
+
+**Pointer-latch focused retest:**
+
+1. Start Level 1 tutorial, deploy a Rover, and reach the top-right **Rover Ready** instruction.
+2. Click the Rover to satisfy that step, then release the mouse and move it without holding any button.
+   The camera must remain stationary and no repeated selection/action should occur.
+3. Perform one deliberate left-button camera drag and release it. The camera must move only while held
+   and stop immediately on release.
+4. Repeat the deployment/selection flow once, clicking the Rover near the top-right callout if the map
+   permits, to exercise GUI/world event boundaries. The latch must not recur.
+
+**Checkpoint 2 pointer-latch retest feedback (fill after testing):**
+
+- **Result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED`
+- **Post-selection pointer/camera comments:**
+- **Normal camera-drag comments:**
 - **Approved to implement Checkpoint 3:** `[ ] YES  [ ] NO`
 
 ### Checkpoint 3 — Level 1B: movement and bridges
@@ -697,6 +731,18 @@ shell, so scene parsing and visual/input behavior require the editor test.
 - Implement source lines 285–288: directed or autonomous drone scouting, anomaly readings and the
   monolith goal, rover/drone capability comparison, and lifting the rover to the hilltop monolith.
 
+### Level 2 implementation summary
+
+Level 2 now starts without the Level 1 pre-placed-base assumption and implements the complete sequence:
+valid base deployment; rover-first deployment; rover selection and directed beach exploration; collection
+of all three ore types; exploration-mode return and successful unloading; mineral-to-material conversion;
+drone construction; directed or exploration-mode drone scouting; rover/drone terrain limitations; lifting
+the rover; carrying the attached pair near the monolith; and dropping the rover at the hilltop objective.
+
+Game-test feedback should verify that each dynamically replaced deployment card remains highlighted, the
+material-conversion button is visible after unloading three distinct ores, the drone lift target appears
+only for the selected drone, and both right-click movement and Start Exploration satisfy aerial scouting.
+
 ### Checkpoint 9 — Level 3A: reach a sample safely
 
 - Implement source lines 293–294: move a ground rover into sample range and introduce battery,
@@ -724,6 +770,57 @@ shell, so scene parsing and visual/input behavior require the editor test.
 
 At every checkpoint, run `dotnet build --no-restore`. Visual/input behavior still needs an in-editor
 Godot test because the repository has no automated UI test setup.
+
+## Level 1 movement checkpoint implementation summary
+
+Implemented after rover selection:
+
+1. A paused explanation maps W/A/S/D to north/west/south/east manual movement.
+2. A guided, undimmed step highlights a world tile computed five cells right of the pre-placed base
+   and advances only when the Rover reaches that exact cell.
+3. Two paused explanations highlight the Rover battery in the deployed-units panel and the exact
+   `moves left` value in the selected-rover panel.
+4. Before selection, an undimmed step introduces mouse-wheel zoom, arrow-key panning, and left-drag
+   camera panning; the following step highlights the deployed Rover for left-click selection.
+5. A guided step highlights a distant cell at base offset `(20, 3)` and requires a right-click
+   destination command. The stated goal is to gather one wood, and the A* step remains active until
+   that wood is actually collected.
+6. The selected Rover's carried-resources container is highlighted and explains its shared capacity
+   of eight wood and/or mineral items.
+7. The exploration-mode dropdown must be changed to `ReturnToBase`, then the separately highlighted
+   **Start Exploration** button launches the autonomous return.
+8. The return step waits for a Rover movement event at the Return-to-base destination, exactly base
+   position plus `(2, 3)`, rather than relying on the unreliable exploration-stopped signal. The player must
+   then press the highlighted **Drop resources** button; charging is disabled while cargo is carried.
+9. The recharge explanation remains visible until a real battery increase occurs. Entering base
+   proximity alone is insufficient; the existing recharge cycle must restore charge and consume wood.
+10. The anomaly radar and gravitational-anomaly trend receive separate highlights. The radar step
+    remains interactive so the player can left-drag its 3D camera before continuing.
+11. A resource objective waits until the selected Rover actually carries more than five wood.
+12. Bridge instruction accepts either manual construction through **Place bridge** or bridges created
+    as part of a right-click A* plan. It completes when the Rover moves into the northern-island sector,
+    where its base-relative position satisfies `X > 4` and `Y < -9`; it does not depend on the unreliable
+    `BridgePlaced` event or require the optional manual button to be visible.
+13. The final exploration objective waits until the Rover is within two cells on both axes of the
+    monolith. The discovery step hard-pauses, centers the camera on the Rover at maximum zoom, and
+    explains the recurring monolith/sample objective.
+14. Continuing resumes play and instructs the player to touch the monolith. The final tutorial step
+    completes from the same ground-rover/monolith contact callback that wins the level.
+
+The implementation also initializes `GridManager.baseArea` from Level 1's pre-placed base, publishes
+semantic directed-movement and battery events through `TutorialEventBridge`, and registers dynamic
+battery UI controls as tutorial targets.
+
+### Game-test feedback requested
+
+- Is the five-cells-right destination reachable and visually clear at the camera zoom used in Level 1?
+- Does each WASD move update both battery displays, and does the selected panel show the expected
+  remaining movement count?
+- Does right-clicking anywhere except the highlighted return cell leave the instruction active?
+- Does the A* callout remain top-right and leave the route visible while the Rover moves?
+- On arrival, does the Rover enter `Charging`, gain battery after the recharge interval, and reduce the
+  base wood count by one before the tutorial completes?
+- Do any click, camera-drag, pause, or focus latches remain after advancing these steps?
 
 ## Alternatives considered
 

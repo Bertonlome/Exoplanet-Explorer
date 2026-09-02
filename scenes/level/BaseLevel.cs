@@ -52,6 +52,11 @@ public partial class BaseLevel : Node
 	private TutorialDirector tutorialDirector;
 	private TutorialOverlay tutorialOverlay;
 	private TutorialTargetRegistration preplacedBaseTutorialTarget;
+	private TutorialTargetRegistration manualDestinationTutorialTarget;
+	private TutorialTargetRegistration returnDestinationTutorialTarget;
+	private TutorialTargetRegistration deployedRoverTutorialTarget;
+	private Vector2I level1ManualDestination;
+	private Vector2I level1ReturnDestination;
 
 	public override void _Ready()
 	{
@@ -99,7 +104,31 @@ public partial class BaseLevel : Node
 		{
 			return;
 		}
-		if (!TutorialCatalog.TryCreateScript(levelDefinitionResource.Id, out TutorialScript script))
+		bool hasPreplacedBase = levelDefinitionResource.Id == TutorialCatalog.Level1Id;
+		BuildingComponent tutorialBase = BuildingComponent.GetBaseBuilding(this).FirstOrDefault();
+		if (hasPreplacedBase && !GodotObject.IsInstanceValid(tutorialBase))
+		{
+			GD.PushWarning($"Tutorial level '{levelDefinitionResource.Id}' has no base.");
+			return;
+		}
+		Vector2I basePosition = GodotObject.IsInstanceValid(tutorialBase)
+			? tutorialBase.GetGridCellPosition()
+			: Vector2I.Zero;
+		level1ManualDestination = basePosition + new Vector2I(8, 1);
+		level1ReturnDestination = basePosition + new Vector2I(12, 2);
+		Vector2I level1BaseReturnDestination = basePosition + new Vector2I(2, 3);
+		Vector2I monolithPosition = baseTerrainTilemapLayer.LocalToMap(
+			baseTerrainTilemapLayer.ToLocal(monolith.GlobalPosition));
+		TutorialLevelContext tutorialContext = new(
+			basePosition,
+			level1ManualDestination,
+			level1ReturnDestination,
+			level1BaseReturnDestination,
+			monolithPosition);
+		if (!TutorialCatalog.TryCreateScript(
+			levelDefinitionResource.Id,
+			tutorialContext,
+			out TutorialScript script))
 		{
 			GD.PushWarning(
 				$"Tutorial mode is active for '{levelDefinitionResource.Id}', but its script is not implemented yet.");
@@ -113,14 +142,54 @@ public partial class BaseLevel : Node
 
 		// Level 1 already contains a base. Resolve that state before target registration so the UI
 		// presents rover deployment rather than asking the player to place a second base.
-		buildingManager.RefreshPreplacedBaseState();
+		if (hasPreplacedBase) buildingManager.RefreshPreplacedBaseState();
 		gameUI.RegisterTutorialTargets(tutorialTargetRegistry);
-		RegisterPreplacedBaseTutorialTarget();
+		if (hasPreplacedBase)
+		{
+			RegisterPreplacedBaseTutorialTarget();
+			RegisterLevel1MovementTargets();
+		}
 		tutorialEventBridge.Start();
 		tutorialDirector.Initialize(tutorialOverlay, tutorialEventBridge, tutorialTargetRegistry);
+		tutorialDirector.StepStarted += OnTutorialStepTransition;
+		tutorialDirector.StepCompleted += OnTutorialStepTransition;
+		tutorialDirector.TutorialCompleted += OnTutorialEnded;
+		tutorialDirector.TutorialSkipped += OnTutorialEnded;
 		tutorialDirector.Start(script);
 		tutorialEventBridge.Publish(
 			new TutorialEventContext(TutorialEvent.LevelReady, payload: levelDefinitionResource.Id));
+	}
+
+	private void RegisterLevel1MovementTargets()
+	{
+		deployedRoverTutorialTarget = tutorialTargetRegistry.RegisterRectProvider(
+			TutorialTargetIds.DeployedRover,
+			this,
+			() =>
+			{
+				BuildingComponent rover = BuildingComponent.GetValidBuildingComponents(this)
+					.FirstOrDefault(building => building.BuildingResource?.DisplayName == "Rover");
+				return GetBuildingScreenRect(rover);
+			});
+		manualDestinationTutorialTarget = tutorialTargetRegistry.RegisterRectProvider(
+			TutorialTargetIds.ManualMovementDestination,
+			this,
+			() => GetWorldCellScreenRect(level1ManualDestination));
+		returnDestinationTutorialTarget = tutorialTargetRegistry.RegisterRectProvider(
+			TutorialTargetIds.ReturnDestination,
+			this,
+			() => GetWorldCellScreenRect(level1ReturnDestination));
+	}
+
+	private Rect2? GetWorldCellScreenRect(Vector2I cell)
+	{
+		if (GetViewport() == null) return null;
+		Transform2D canvasTransform = GetViewport().GetCanvasTransform();
+		Vector2 firstCorner = canvasTransform * (Vector2)(cell * 64);
+		Vector2 oppositeCorner = canvasTransform * (Vector2)((cell + Vector2I.One) * 64);
+		return new Rect2(
+			new Vector2(Mathf.Min(firstCorner.X, oppositeCorner.X), Mathf.Min(firstCorner.Y, oppositeCorner.Y)),
+			new Vector2(Mathf.Abs(oppositeCorner.X - firstCorner.X), Mathf.Abs(oppositeCorner.Y - firstCorner.Y)));
 	}
 
 	private void RegisterPreplacedBaseTutorialTarget()
@@ -166,18 +235,65 @@ public partial class BaseLevel : Node
 	{
 		preplacedBaseTutorialTarget?.Dispose();
 		preplacedBaseTutorialTarget = null;
+		manualDestinationTutorialTarget?.Dispose();
+		manualDestinationTutorialTarget = null;
+		returnDestinationTutorialTarget?.Dispose();
+		returnDestinationTutorialTarget = null;
+		deployedRoverTutorialTarget?.Dispose();
+		deployedRoverTutorialTarget = null;
 		if (GodotObject.IsInstanceValid(gameUI))
 		{
 			gameUI.ClearTutorialTargets();
 		}
 		if (GodotObject.IsInstanceValid(tutorialDirector))
 		{
+			tutorialDirector.StepStarted -= OnTutorialStepTransition;
+			tutorialDirector.StepCompleted -= OnTutorialStepTransition;
+			tutorialDirector.TutorialCompleted -= OnTutorialEnded;
+			tutorialDirector.TutorialSkipped -= OnTutorialEnded;
 			tutorialDirector.Stop();
 		}
 		if (GodotObject.IsInstanceValid(tutorialEventBridge))
 		{
 			tutorialEventBridge.Stop();
 		}
+	}
+
+	private void OnTutorialStepTransition(string stepId)
+	{
+		CancelTutorialPointerLatch();
+		if (stepId == "level1.monolith-discovered")
+		{
+			BuildingComponent rover = BuildingComponent.GetValidBuildingComponents(this)
+				.FirstOrDefault(building => building.BuildingResource?.DisplayName == "Rover");
+			if (GodotObject.IsInstanceValid(rover))
+			{
+				gameCamera.FocusAtMaximumZoom(rover.GlobalPosition);
+			}
+		}
+	}
+
+	private void OnTutorialEnded()
+	{
+		CancelTutorialPointerLatch();
+	}
+
+	private void CancelTutorialPointerLatch()
+	{
+		if (GodotObject.IsInstanceValid(gameCamera))
+		{
+			gameCamera.SuppressMouseDragUntilRelease();
+		}
+
+		// Run once more after the current input event finishes. This catches a press that continues
+		// propagating to GameCamera after a tutorial completion callback closed the overlay.
+		Callable.From(() =>
+		{
+			if (GodotObject.IsInstanceValid(gameCamera))
+			{
+				gameCamera.SuppressMouseDragUntilRelease();
+			}
+		}).CallDeferred();
 	}
 
 	public void OnBasePlaced()
@@ -248,6 +364,7 @@ public partial class BaseLevel : Node
 	private void OnGroundRobotTouchingMonolith()
 	{
 		if (isComplete) return;
+		tutorialEventBridge?.Publish(new TutorialEventContext(TutorialEvent.MonolithTouched));
 		ShowLevelComplete();
 	}
 
@@ -267,6 +384,11 @@ public partial class BaseLevel : Node
 		AddChild(selectedRobotUI);
 		//selectedRobotUI.selectedBuildingComponent = buildingComponent;
 		selectedRobotUI.SetupUI(buildingComponent, gravitationalAnomalyMap); // Call setup after adding to tree
+		if (GodotObject.IsInstanceValid(tutorialTargetRegistry) &&
+			buildingComponent.BuildingResource?.DisplayName == "Rover")
+		{
+			selectedRobotUI.RegisterTutorialTargets(tutorialTargetRegistry);
+		}
 	}
 
 	private void OnFragmentAnalysisRequested(

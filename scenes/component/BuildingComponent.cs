@@ -1362,7 +1362,8 @@ public partial class BuildingComponent : Node2D
 	public void SetRecharging(bool recharging)
 	{
     // Only allow charging if near base AND wood is available
-    bool canCharge = buildingManager.gridManager.IsInBaseProximity(GetGridCellPosition()) && buildingManager.AvailableWoodCount > 0;
+    bool canCharge = buildingManager.gridManager.IsInBaseProximity(GetGridCellPosition()) &&
+		buildingManager.AvailableWoodCount > 0 && resourceCollected.Count == 0;
 
     if (recharging && canCharge)
     {
@@ -1383,6 +1384,7 @@ public partial class BuildingComponent : Node2D
 		if (resourceCollected.Count < BuildingResource.ResourceCapacity)
 		{
 			resourceCollected.Add(resourceType);
+			GameEvents.EmitResourceCollected(this, resourceType);
 			GameEvents.EmitCarriedResourceCountChanged(resourceCollected.Count);
 		}
 	}
@@ -1403,6 +1405,8 @@ public partial class BuildingComponent : Node2D
 			buildingManager.DropResourcesAtBase(resourceCollected);
 			resourceCollected.Clear();
 			GameEvents.EmitCarriedResourceCountChanged(resourceCollected.Count);
+			GameEvents.EmitResourcesDropped(this);
+			SetRecharging(true);
 			//FloatingTextManager.ShowMessageAtBuildingPosition("Resources dropped at base", this);
 			Game.UI.GameUI.PushMessage("Resources dropped at base", "green", false, this);
 		}

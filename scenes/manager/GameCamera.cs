@@ -54,6 +54,7 @@ public partial class GameCamera : Camera2D
 	// Mouse drag variables
 	private bool isDragging = false;
 	private bool navigationInputEnabled = true;
+	private bool suppressMouseDragUntilRelease = false;
 	private Vector2 lastMousePosition;
 
     public override void _Ready()
@@ -75,8 +76,20 @@ public partial class GameCamera : Camera2D
 		}
     }
 
-    public override void _Process(double delta)
+	public override void _Process(double delta)
 	{
+		if (suppressMouseDragUntilRelease && !Input.IsMouseButtonPressed(MouseButton.Left))
+		{
+			suppressMouseDragUntilRelease = false;
+		}
+
+		// GUI/tutorial transitions can consume a mouse-release event after drag started. Reconcile the
+		// latched event state with the physical button so camera panning cannot remain stuck indefinitely.
+		if (isDragging && !Input.IsMouseButtonPressed(MouseButton.Left))
+		{
+			isDragging = false;
+		}
+
 		// Handle mouse drag panning
 		if (navigationInputEnabled && isDragging && currentState == State.CameraFree)
 		{
@@ -134,6 +147,12 @@ public partial class GameCamera : Camera2D
 	public override void _UnhandledInput(InputEvent evt)
 	{
 		if (!navigationInputEnabled) return;
+		if (suppressMouseDragUntilRelease && evt is InputEventMouseButton suppressedButton &&
+			suppressedButton.ButtonIndex == MouseButton.Left)
+		{
+			GetViewport().SetInputAsHandled();
+			return;
+		}
 
 		// Handle mouse button press/release for drag panning
 		if (evt is InputEventMouseButton mouseButton)
@@ -203,6 +222,16 @@ public partial class GameCamera : Camera2D
 		isDragging = false;
 	}
 
+	/// <summary>
+	/// Cancels camera panning and prevents the click that closed a modal UI from becoming a new
+	/// world-drag press. Normal drag input is restored as soon as the physical button is released.
+	/// </summary>
+	public void SuppressMouseDragUntilRelease()
+	{
+		isDragging = false;
+		suppressMouseDragUntilRelease = Input.IsMouseButtonPressed(MouseButton.Left);
+	}
+
 	public void SetNavigationInputEnabled(bool enabled)
 	{
 		navigationInputEnabled = enabled;
@@ -213,6 +242,14 @@ public partial class GameCamera : Camera2D
 	{
 		OnStopTrackingRobot();
 		GlobalPosition = ClampCenterToWorld(position);
+	}
+
+	public void FocusAtMaximumZoom(Vector2 worldPosition)
+	{
+		OnStopTrackingRobot();
+		Zoom = Vector2.One * maxZoom;
+		GlobalPosition = ClampCenterToWorld(worldPosition);
+		EmitSignal(SignalName.CameraZoom);
 	}
 
 	public Rect2 GetVisibleWorldRect()

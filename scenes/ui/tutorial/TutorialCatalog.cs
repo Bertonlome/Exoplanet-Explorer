@@ -24,11 +24,15 @@ public static class TutorialCatalog
 		return !string.IsNullOrWhiteSpace(levelId) && TutorialLevelIds.Contains(levelId);
 	}
 
-	public static bool TryCreateScript(string levelId, out TutorialScript script)
+	public static bool TryCreateScript(
+		string levelId,
+		TutorialLevelContext context,
+		out TutorialScript script)
 	{
 		script = levelId switch
 		{
-			Level1Id => new Scripts.Level1Tutorial(),
+			Level1Id when context != null => new Scripts.Level1Tutorial(context),
+			Level2Id when context != null => new Scripts.Level2Tutorial(context),
 			_ => null,
 		};
 		return script != null;

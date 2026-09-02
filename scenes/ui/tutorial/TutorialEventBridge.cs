@@ -20,9 +20,18 @@ public partial class TutorialEventBridge : Node
 	private Callable buildingPlacedCallable;
 	private Callable robotSelectedCallable;
 	private Callable robotMovedCallable;
+	private Callable directedMoveCallable;
 	private Callable fragmentAnalysisRequestedCallable;
 	private Callable liftRobotCallable;
 	private Callable dropRobotCallable;
+	private Callable resourceCollectedCallable;
+	private Callable explorationModeSelectedCallable;
+	private Callable explorationStartedCallable;
+	private Callable robotBackToIdleCallable;
+	private Callable resourcesDroppedCallable;
+	private Callable materialCreatedCallable;
+	private readonly Dictionary<BuildingComponent, List<Callable>> robotSignalCallables = new();
+	private readonly Dictionary<BuildingComponent, int> lastBatteryValues = new();
 
 	public void Start()
 	{
@@ -41,8 +50,11 @@ public partial class TutorialEventBridge : Node
 		buildingPlacedCallable = Callable.From<BuildingComponent>(OnBuildingPlaced);
 		robotSelectedCallable = Callable.From<BuildingComponent>(
 			building => Publish(new TutorialEventContext(TutorialEvent.RobotSelected, building)));
-		robotMovedCallable = Callable.From<BuildingComponent>(
-			building => Publish(new TutorialEventContext(TutorialEvent.RobotMoved, building)));
+		robotMovedCallable = Callable.From<BuildingComponent>(building => Publish(new TutorialEventContext(
+			TutorialEvent.RobotMoved,
+			building,
+			worldPosition: building?.GetGridCellPosition())));
+		directedMoveCallable = Callable.From<BuildingComponent, Vector2I>(OnDirectedMoveRequested);
 		fragmentAnalysisRequestedCallable = Callable.From<Vector2I, BuildingComponent, int>(
 			(position, rover, origin) => Publish(new TutorialEventContext(
 				TutorialEvent.FragmentAnalysisRequested,
@@ -59,13 +71,30 @@ public partial class TutorialEventBridge : Node
 				TutorialEvent.RobotDropRequested,
 				aerialRobot,
 				groundRobot)));
+		resourceCollectedCallable = Callable.From<BuildingComponent, string>((building, resourceType) =>
+			Publish(new TutorialEventContext(TutorialEvent.ResourceCollected, building, payload: resourceType)));
+		explorationModeSelectedCallable = Callable.From<BuildingComponent, string>((building, mode) =>
+			Publish(new TutorialEventContext(TutorialEvent.ExplorationModeSelected, building, payload: mode)));
+		explorationStartedCallable = Callable.From<BuildingComponent, string>(OnExplorationStarted);
+		robotBackToIdleCallable = Callable.From<BuildingComponent>(building =>
+			Publish(new TutorialEventContext(TutorialEvent.ExplorationStopped, building)));
+		resourcesDroppedCallable = Callable.From<BuildingComponent>(building =>
+			Publish(new TutorialEventContext(TutorialEvent.ResourcesDropped, building)));
+		materialCreatedCallable = Callable.From(() => Publish(TutorialEvent.MaterialCreated));
 
 		ConnectGameEvent(GameEvents.SignalName.BuildingPlaced, buildingPlacedCallable);
 		ConnectGameEvent(GameEvents.SignalName.RobotSelected, robotSelectedCallable);
 		ConnectGameEvent(GameEvents.SignalName.BuildingMoved, robotMovedCallable);
+		ConnectGameEvent(GameEvents.SignalName.DirectedMoveRequested, directedMoveCallable);
 		ConnectGameEvent(GameEvents.SignalName.FragmentAnalysisRequested, fragmentAnalysisRequestedCallable);
 		ConnectGameEvent(GameEvents.SignalName.LiftRobotButtonPressed, liftRobotCallable);
 		ConnectGameEvent(GameEvents.SignalName.DropRobotButtonPressed, dropRobotCallable);
+		ConnectGameEvent(GameEvents.SignalName.ResourceCollected, resourceCollectedCallable);
+		ConnectGameEvent(GameEvents.SignalName.ExplorationModeSelected, explorationModeSelectedCallable);
+		ConnectGameEvent(GameEvents.SignalName.ExplorationStarted, explorationStartedCallable);
+		ConnectGameEvent(GameEvents.SignalName.RobotBackToIdle, robotBackToIdleCallable);
+		ConnectGameEvent(GameEvents.SignalName.ResourcesDropped, resourcesDroppedCallable);
+		ConnectGameEvent(GameEvents.SignalName.MaterialCreated, materialCreatedCallable);
 		connectedToGameEvents = true;
 	}
 
@@ -82,11 +111,26 @@ public partial class TutorialEventBridge : Node
 			DisconnectGameEvent(GameEvents.SignalName.BuildingPlaced, buildingPlacedCallable);
 			DisconnectGameEvent(GameEvents.SignalName.RobotSelected, robotSelectedCallable);
 			DisconnectGameEvent(GameEvents.SignalName.BuildingMoved, robotMovedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.DirectedMoveRequested, directedMoveCallable);
 			DisconnectGameEvent(GameEvents.SignalName.FragmentAnalysisRequested, fragmentAnalysisRequestedCallable);
 			DisconnectGameEvent(GameEvents.SignalName.LiftRobotButtonPressed, liftRobotCallable);
 			DisconnectGameEvent(GameEvents.SignalName.DropRobotButtonPressed, dropRobotCallable);
+			DisconnectGameEvent(GameEvents.SignalName.ResourceCollected, resourceCollectedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.ExplorationModeSelected, explorationModeSelectedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.ExplorationStarted, explorationStartedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.RobotBackToIdle, robotBackToIdleCallable);
+			DisconnectGameEvent(GameEvents.SignalName.ResourcesDropped, resourcesDroppedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.MaterialCreated, materialCreatedCallable);
 		}
 		connectedToGameEvents = false;
+		foreach ((BuildingComponent robot, List<Callable> callables) in robotSignalCallables)
+		{
+			if (!IsInstanceValid(robot)) continue;
+			robot.Disconnect(BuildingComponent.SignalName.BatteryChange, callables[0]);
+			robot.Disconnect(BuildingComponent.SignalName.StartCharging, callables[1]);
+		}
+		robotSignalCallables.Clear();
+		lastBatteryValues.Clear();
 		latestEvents.Clear();
 	}
 
@@ -122,6 +166,7 @@ public partial class TutorialEventBridge : Node
 
 	private void OnBuildingPlaced(BuildingComponent building)
 	{
+		AttachRobotSignals(building);
 		Publish(new TutorialEventContext(TutorialEvent.BuildingPlaced, building));
 		string displayName = building?.BuildingResource?.DisplayName;
 		if (displayName == "Bridge")
@@ -132,6 +177,57 @@ public partial class TutorialEventBridge : Node
 		{
 			Publish(new TutorialEventContext(TutorialEvent.AntennaPlaced, building));
 		}
+	}
+
+	private void OnDirectedMoveRequested(BuildingComponent building, Vector2I destination)
+	{
+		Publish(new TutorialEventContext(
+			TutorialEvent.DirectedMoveRequested,
+			building,
+			worldPosition: destination));
+		if (building?.BuildingResource?.DisplayName == "Drone")
+		{
+			Publish(new TutorialEventContext(
+				TutorialEvent.DroneScoutStarted,
+				building,
+				payload: "DirectedMove",
+				worldPosition: destination));
+		}
+	}
+
+	private void OnExplorationStarted(BuildingComponent building, string mode)
+	{
+		Publish(new TutorialEventContext(TutorialEvent.ExplorationStarted, building, payload: mode));
+		if (building?.BuildingResource?.DisplayName == "Drone")
+		{
+			Publish(new TutorialEventContext(TutorialEvent.DroneScoutStarted, building, payload: mode));
+		}
+	}
+
+	private void AttachRobotSignals(BuildingComponent building)
+	{
+		if (!IsInstanceValid(building) || building.BuildingResource == null ||
+			building.BuildingResource.IsBase || robotSignalCallables.ContainsKey(building)) return;
+
+		lastBatteryValues[building] = building.Battery;
+		Callable batteryCallable = Callable.From<int>(value =>
+		{
+			int previous = lastBatteryValues.TryGetValue(building, out int oldValue) ? oldValue : value;
+			lastBatteryValues[building] = value;
+			if (value == previous) return;
+			Publish(new TutorialEventContext(
+				value > previous ? TutorialEvent.BatteryRecharged : TutorialEvent.BatteryDecreased,
+				building,
+				payload: value,
+				worldPosition: building.GetGridCellPosition()));
+		});
+		Callable chargingCallable = Callable.From(() => Publish(new TutorialEventContext(
+			TutorialEvent.ChargingStarted,
+			building,
+			worldPosition: building.GetGridCellPosition())));
+		building.Connect(BuildingComponent.SignalName.BatteryChange, batteryCallable);
+		building.Connect(BuildingComponent.SignalName.StartCharging, chargingCallable);
+		robotSignalCallables[building] = new List<Callable> { batteryCallable, chargingCallable };
 	}
 
 	private static void ConnectGameEvent(StringName signalName, Callable callable)

@@ -14,6 +14,8 @@ public partial class MiniMapController : Node
     private bool _isRobotWindowMode = false;
     private bool _isOrbiting = false;
     private Vector2I _windowSize = new Vector2I(64, 64);
+
+    public Control AnomalyRadarControl => Container;
     
     public override void _Ready()
     {

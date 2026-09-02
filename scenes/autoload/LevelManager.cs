@@ -59,7 +59,7 @@ public partial class LevelManager : Node
 
 	public static void ChangeToNextLevel()
 	{
-		ChangeToLevel(currentLevelIndex + 1);
+		ChangeToLevel(currentLevelIndex + 1, IsTutorialModeActive);
 	}
 	public static bool IsLastLevel()
 	{

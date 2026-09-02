@@ -4,6 +4,8 @@ namespace Game;
 
 public partial class Monolith : Node2D
 {
+	private const int ACTIVE_Z_INDEX = 1000;
+
 	[Export]
 	private Texture2D activeTexture;
 
@@ -17,6 +19,13 @@ public partial class Monolith : Node2D
 
 	public void SetActive()
 	{
+		// The activation tween changes the monolith's Y position. Since the world
+		// root is Y-sorted, that could place the rover in front during the win
+		// animation. Use an absolute foreground depth while active; CanvasLayer UI
+		// (including the level-complete screen) still renders above the world.
+		ZAsRelative = false;
+		ZIndex = ACTIVE_Z_INDEX;
+
 		upDownRoot = GetNode<Node2D>("%UpDownRoot");
 		sprite.Texture = activeTexture;
 		var upDownTween = CreateTween();

@@ -84,6 +84,7 @@ public partial class GameUI : CanvasLayer
 	private TutorialTargetRegistry tutorialTargetRegistry;
 	private readonly List<TutorialTargetRegistration> staticTutorialTargets = new();
 	private readonly List<TutorialTargetRegistration> deploymentTutorialTargets = new();
+	private readonly List<TutorialTargetRegistration> unitTutorialTargets = new();
 
 	[Export]
 	private GravitationalAnomalyMap gravitationalAnomalyMap;
@@ -233,11 +234,15 @@ public partial class GameUI : CanvasLayer
 		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
 			TutorialTargetIds.DeploymentPanel,
 			buildingSectionContainer));
+		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
+			TutorialTargetIds.AddMaterialButton,
+			addMaterialButton));
 		RegisterDeploymentTutorialTargets();
 	}
 
 	public void ClearTutorialTargets()
 	{
+		DisposeTutorialTargets(unitTutorialTargets);
 		DisposeTutorialTargets(deploymentTutorialTargets);
 		DisposeTutorialTargets(staticTutorialTargets);
 		tutorialTargetRegistry = null;
@@ -664,6 +669,12 @@ public partial class GameUI : CanvasLayer
 		buildingComponent.StopCharging += unitSection.OnStopCharging;
 		buildingManager.NewRobotSelected += unitSection.OnNewRobotSelected;
 		buildingManager.NoMoreRobotSelected += unitSection.OnNoMoreRobotSelected;
+		if (tutorialTargetRegistry != null && buildingResource.DisplayName == "Rover")
+		{
+			unitTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
+				TutorialTargetIds.DeployedRoverBattery,
+				unitSection.BatteryDisplay));
+		}
 	}
 
 	private void OnStopRobotButtonPressed()
@@ -725,7 +736,12 @@ public partial class GameUI : CanvasLayer
 	
 	private void OnAddMaterialButtonPressed()
 	{
+		int materialBefore = buildingManager.AvailableMaterialCount;
 		buildingManager.CreateMaterialFromMineral();
+		if (buildingManager.AvailableMaterialCount > materialBefore)
+		{
+			GameEvents.EmitMaterialCreated();
+		}
 	}
 	
 	private async void OnSendPathToRobotButtonPressed()

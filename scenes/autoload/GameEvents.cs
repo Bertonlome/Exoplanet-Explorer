@@ -25,6 +25,10 @@ public partial class GameEvents : Node
 	[Signal]
 	public delegate void BuildingMovedEventHandler(BuildingComponent buildingComponent);
 	[Signal]
+	public delegate void DirectedMoveRequestedEventHandler(
+		BuildingComponent buildingComponent,
+		Vector2I destination);
+	[Signal]
 	public delegate void BuildingStuckEventHandler(BuildingComponent buildingComponent);
 	[Signal]
 	public delegate void BuildingUnStuckEventHandler(BuildingComponent buildingComponent);
@@ -50,6 +54,16 @@ public partial class GameEvents : Node
 	public delegate void CarriedResourceCountChangedEventHandler(int carriedResourceCount);
 	[Signal]
 	public delegate void RobotBackToIdleEventHandler(BuildingComponent buildingComponent);
+	[Signal]
+	public delegate void ResourceCollectedEventHandler(BuildingComponent buildingComponent, string resourceType);
+	[Signal]
+	public delegate void ExplorationModeSelectedEventHandler(BuildingComponent buildingComponent, string mode);
+	[Signal]
+	public delegate void ExplorationStartedEventHandler(BuildingComponent buildingComponent, string mode);
+	[Signal]
+	public delegate void ResourcesDroppedEventHandler(BuildingComponent buildingComponent);
+	[Signal]
+	public delegate void MaterialCreatedEventHandler();
 
 	public override void _Notification(int what)
 	{
@@ -80,6 +94,28 @@ public partial class GameEvents : Node
 	{
 		Instance.EmitSignal(SignalName.BuildingMoved, buildingComponent);
 	}
+
+	public static void EmitDirectedMoveRequested(
+		BuildingComponent buildingComponent,
+		Vector2I destination)
+	{
+		Instance.EmitSignal(SignalName.DirectedMoveRequested, buildingComponent, destination);
+	}
+
+	public static void EmitResourceCollected(BuildingComponent buildingComponent, string resourceType) =>
+		Instance.EmitSignal(SignalName.ResourceCollected, buildingComponent, resourceType);
+
+	public static void EmitExplorationModeSelected(BuildingComponent buildingComponent, string mode) =>
+		Instance.EmitSignal(SignalName.ExplorationModeSelected, buildingComponent, mode);
+
+	public static void EmitExplorationStarted(BuildingComponent buildingComponent, string mode) =>
+		Instance.EmitSignal(SignalName.ExplorationStarted, buildingComponent, mode);
+
+	public static void EmitResourcesDropped(BuildingComponent buildingComponent) =>
+		Instance.EmitSignal(SignalName.ResourcesDropped, buildingComponent);
+
+	public static void EmitMaterialCreated() =>
+		Instance.EmitSignal(SignalName.MaterialCreated);
 
 	public static void EmitRobotSelected(BuildingComponent buildingComponent)
 	{

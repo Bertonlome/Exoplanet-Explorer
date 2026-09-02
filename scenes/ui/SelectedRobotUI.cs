@@ -5,6 +5,7 @@ using System.Diagnostics.Tracing;
 using Game.Autoload;
 using Game.Component;
 using Game.Resources.Building;
+using Game.UI.Tutorial;
 using Godot;
 
 namespace Game.UI;
@@ -55,6 +56,15 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private MultiPurposeButtonState currentButtonState;
 	private bool signalsDisconnected;
+	private TutorialTargetRegistration batteryTutorialTarget;
+	private TutorialTargetRegistration explorationModeTutorialTarget;
+	private TutorialTargetRegistration startExplorationTutorialTarget;
+	private TutorialTargetRegistration dropResourcesTutorialTarget;
+	private TutorialTargetRegistration resourcesCarriedTutorialTarget;
+	private TutorialTargetRegistration anomalyRadarTutorialTarget;
+	private TutorialTargetRegistration anomalyIndicatorTutorialTarget;
+	private TutorialTargetRegistration placeBridgeTutorialTarget;
+	private TutorialTargetRegistration liftRobotTutorialTarget;
 	public BuildingComponent selectedBuildingComponent;
 	public BuildingComponent groundRobotBelowUav;
 	private MiniMapController miniMapController;
@@ -62,6 +72,129 @@ public partial class SelectedRobotUI : CanvasLayer
 	private const int MaxAnomalyHistoryEntries = 10;
 	private const int AnomalyBarLength = 24;
 	private const float MaxAnomalyValuePossible = 500f;
+
+	public void RegisterTutorialTargets(TutorialTargetRegistry registry)
+	{
+		batteryTutorialTarget?.Dispose();
+		Control batteryDisplay = GetNodeOrNull<Control>("%RobotInfoContainer3");
+		if (registry != null && IsInstanceValid(batteryDisplay))
+		{
+			ScrollContainer scrollContainer = FindAncestorScrollContainer(batteryDisplay);
+			batteryTutorialTarget = registry.RegisterRectProvider(
+				TutorialTargetIds.SelectedRoverBattery,
+				batteryDisplay,
+				() =>
+				{
+					if (!IsInstanceValid(batteryDisplay) || !batteryDisplay.IsVisibleInTree())
+					{
+						return null;
+					}
+					scrollContainer?.EnsureControlVisible(batteryDisplay);
+					return batteryDisplay.GetGlobalRect();
+				},
+				batteryDisplay);
+		}
+		explorationModeTutorialTarget?.Dispose();
+		startExplorationTutorialTarget?.Dispose();
+		dropResourcesTutorialTarget?.Dispose();
+		resourcesCarriedTutorialTarget?.Dispose();
+		anomalyRadarTutorialTarget?.Dispose();
+		anomalyIndicatorTutorialTarget?.Dispose();
+		placeBridgeTutorialTarget?.Dispose();
+		liftRobotTutorialTarget?.Dispose();
+		if (registry != null)
+		{
+			explorationModeTutorialTarget = registry.RegisterControl(
+				TutorialTargetIds.ExplorationModeMenu,
+				explorModeOptionsButton);
+			startExplorationTutorialTarget = registry.RegisterControl(
+				TutorialTargetIds.StartExplorationButton,
+				startExplorButton);
+			ScrollContainer resourceScrollContainer = FindAncestorScrollContainer(dropResourcesButton);
+			dropResourcesTutorialTarget = registry.RegisterRectProvider(
+				TutorialTargetIds.DropResourcesButton,
+				dropResourcesButton,
+				() =>
+				{
+					if (!IsInstanceValid(dropResourcesButton) || !dropResourcesButton.IsVisibleInTree())
+					{
+						return null;
+					}
+					resourceScrollContainer?.EnsureControlVisible(dropResourcesButton);
+					return dropResourcesButton.GetGlobalRect();
+				},
+				dropResourcesButton);
+			ScrollContainer carriedResourcesScroll = FindAncestorScrollContainer(resourcesCarriedContainer);
+			resourcesCarriedTutorialTarget = registry.RegisterRectProvider(
+				TutorialTargetIds.ResourcesCarried,
+				resourcesCarriedContainer,
+				() =>
+				{
+					if (!IsInstanceValid(resourcesCarriedContainer) ||
+						!resourcesCarriedContainer.IsVisibleInTree()) return null;
+					carriedResourcesScroll?.EnsureControlVisible(resourcesCarriedContainer);
+					return resourcesCarriedContainer.GetGlobalRect();
+				},
+				resourcesCarriedContainer);
+			if (IsInstanceValid(miniMapController?.AnomalyRadarControl))
+			{
+				anomalyRadarTutorialTarget = registry.RegisterControl(
+					TutorialTargetIds.AnomalyRadar,
+					miniMapController.AnomalyRadarControl);
+			}
+			Control anomalyIndicator = GetNodeOrNull<Control>("%RobotInfoContainer");
+			if (IsInstanceValid(anomalyIndicator))
+			{
+				ScrollContainer anomalyScroll = FindAncestorScrollContainer(anomalyIndicator);
+				anomalyIndicatorTutorialTarget = registry.RegisterRectProvider(
+					TutorialTargetIds.AnomalyIndicator,
+					anomalyIndicator,
+					() =>
+					{
+						if (!IsInstanceValid(anomalyIndicator) || !anomalyIndicator.IsVisibleInTree()) return null;
+						anomalyScroll?.EnsureControlVisible(anomalyIndicator);
+						return anomalyIndicator.GetGlobalRect();
+					},
+					anomalyIndicator);
+			}
+			ScrollContainer bridgeScroll = FindAncestorScrollContainer(placeBridgeButton);
+			placeBridgeTutorialTarget = registry.RegisterRectProvider(
+				TutorialTargetIds.PlaceBridgeButton,
+				placeBridgeButton,
+				() =>
+				{
+					if (!IsInstanceValid(placeBridgeButton) || !placeBridgeButton.IsVisibleInTree()) return null;
+					bridgeScroll?.EnsureControlVisible(placeBridgeButton);
+					return placeBridgeButton.GetGlobalRect();
+				},
+				placeBridgeButton);
+			if (selectedBuildingComponent?.BuildingResource?.IsAerial == true)
+			{
+				ScrollContainer liftScroll = FindAncestorScrollContainer(liftRobotButton);
+				liftRobotTutorialTarget = registry.RegisterRectProvider(
+					TutorialTargetIds.LiftRobotButton,
+					liftRobotButton,
+					() =>
+					{
+						if (!IsInstanceValid(liftRobotButton) || !liftRobotButton.IsVisibleInTree()) return null;
+						liftScroll?.EnsureControlVisible(liftRobotButton);
+						return liftRobotButton.GetGlobalRect();
+					},
+					liftRobotButton);
+			}
+		}
+	}
+
+	private static ScrollContainer FindAncestorScrollContainer(Node node)
+	{
+		Node current = node?.GetParent();
+		while (current != null)
+		{
+			if (current is ScrollContainer scrollContainer) return scrollContainer;
+			current = current.GetParent();
+		}
+		return null;
+	}
 
 	public enum MultiPurposeButtonState
 	{
@@ -423,10 +556,12 @@ public partial class SelectedRobotUI : CanvasLayer
 				currentexplorMode = ExplorMode.ReturnToBase;
 			}
 		}
+		GameEvents.EmitExplorationModeSelected(selectedBuildingComponent, currentexplorMode.ToString());
 	}
 
 	private void OnStartExplorButtonSelected()
 	{
+		GameEvents.EmitExplorationStarted(selectedBuildingComponent, currentexplorMode.ToString());
 		if (currentexplorMode == ExplorMode.None && selectedBuildingComponent.BuildingResource.IsAerial)
 		{
 			//assume it's random
@@ -679,6 +814,24 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	private void DisconnectSignals()
 	{
+		batteryTutorialTarget?.Dispose();
+		batteryTutorialTarget = null;
+		explorationModeTutorialTarget?.Dispose();
+		explorationModeTutorialTarget = null;
+		startExplorationTutorialTarget?.Dispose();
+		startExplorationTutorialTarget = null;
+		dropResourcesTutorialTarget?.Dispose();
+		dropResourcesTutorialTarget = null;
+		resourcesCarriedTutorialTarget?.Dispose();
+		resourcesCarriedTutorialTarget = null;
+		anomalyRadarTutorialTarget?.Dispose();
+		anomalyRadarTutorialTarget = null;
+		anomalyIndicatorTutorialTarget?.Dispose();
+		anomalyIndicatorTutorialTarget = null;
+		placeBridgeTutorialTarget?.Dispose();
+		placeBridgeTutorialTarget = null;
+		liftRobotTutorialTarget?.Dispose();
+		liftRobotTutorialTarget = null;
 		if (signalsDisconnected) return;
 		signalsDisconnected = true;
 		// Safely disconnect signals before the object is freed - check connection first

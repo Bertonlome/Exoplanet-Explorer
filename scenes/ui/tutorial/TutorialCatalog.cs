@@ -33,6 +33,7 @@ public static class TutorialCatalog
 		{
 			Level1Id when context != null => new Scripts.Level1Tutorial(context),
 			Level2Id when context != null => new Scripts.Level2Tutorial(context),
+			Level3Id when context != null => new Scripts.Level3Tutorial(context),
 			_ => null,
 		};
 		return script != null;

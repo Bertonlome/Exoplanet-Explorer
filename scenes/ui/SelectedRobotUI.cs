@@ -32,6 +32,7 @@ public partial class SelectedRobotUI : CanvasLayer
 	private Button gradientSearchButton;
 	private Button returnToBaseButton;
 	private Button startExplorButton;
+	private Button customPathButton;
 	private OptionButton explorModeOptionsButton;
 	private Label gravAnomValueLabel;
 	private Label batteryLabel;
@@ -65,6 +66,9 @@ public partial class SelectedRobotUI : CanvasLayer
 	private TutorialTargetRegistration anomalyIndicatorTutorialTarget;
 	private TutorialTargetRegistration placeBridgeTutorialTarget;
 	private TutorialTargetRegistration liftRobotTutorialTarget;
+	private TutorialTargetRegistration customPathTutorialTarget;
+	private TutorialTargetRegistration analyseSampleTutorialTarget;
+	private TutorialTargetRegistration placeAntennaTutorialTarget;
 	public BuildingComponent selectedBuildingComponent;
 	public BuildingComponent groundRobotBelowUav;
 	private MiniMapController miniMapController;
@@ -102,6 +106,9 @@ public partial class SelectedRobotUI : CanvasLayer
 		anomalyIndicatorTutorialTarget?.Dispose();
 		placeBridgeTutorialTarget?.Dispose();
 		liftRobotTutorialTarget?.Dispose();
+		customPathTutorialTarget?.Dispose();
+		analyseSampleTutorialTarget?.Dispose();
+		placeAntennaTutorialTarget?.Dispose();
 		if (registry != null)
 		{
 			explorationModeTutorialTarget = registry.RegisterControl(
@@ -181,6 +188,18 @@ public partial class SelectedRobotUI : CanvasLayer
 						return liftRobotButton.GetGlobalRect();
 					},
 					liftRobotButton);
+			}
+			customPathTutorialTarget = registry.RegisterControl(
+				TutorialTargetIds.CustomPathButton,
+				customPathButton);
+			if (selectedBuildingComponent?.BuildingResource?.IsAerial == false)
+			{
+				analyseSampleTutorialTarget = registry.RegisterControl(
+					TutorialTargetIds.AnalyseSampleButton,
+					analyseSampleButton);
+				placeAntennaTutorialTarget = registry.RegisterControl(
+					TutorialTargetIds.PlaceAntennaButton,
+					placeAntennaButton);
 			}
 		}
 	}
@@ -269,8 +288,18 @@ public partial class SelectedRobotUI : CanvasLayer
 			GameEvents.Instance.Connect(GameEvents.SignalName.BuildingMoved, buildingMovedCallable);
 		}
 		RefreshNearbySampleAvailability();
+		ApplyLevelSpecificSensorVisibility();
 		
 		Visible = true;
+	}
+
+	private void ApplyLevelSpecificSensorVisibility()
+	{
+		if (baseLevel?.LevelId != TutorialCatalog.Level3Id) return;
+
+		miniMapController?.AnomalyRadarControl?.Hide();
+		GetNodeOrNull<Control>("%RobotInfoContainer")?.Hide();
+		AudioHelpers.StopGeigerCounter();
 	}
 
 	private void InitializeUI()
@@ -288,6 +317,7 @@ public partial class SelectedRobotUI : CanvasLayer
 		stopExplorbutton = GetNode<Button>("%StopExplorButton");
 		trackRobotButton = GetNode<Button>("%TrackRobotButton");
 		startExplorButton = GetNode<Button>("%StartExplorButton");
+		customPathButton = GetNode<Button>("%CustomPathButton");
 		placeBridgeButton = GetNode<Button>("%PlaceBridgeButton");
 		liftRobotButton = GetNode<Button>("%LiftRobotButton");
 		analyseSampleButton = GetNode<Button>("%AnalyseSampleButton");
@@ -339,6 +369,7 @@ public partial class SelectedRobotUI : CanvasLayer
 		}
 		explorModeOptionsButton.ItemSelected += OnOptionsButtonItemSelected;
 		startExplorButton.Pressed += OnStartExplorButtonSelected;
+		customPathButton.Pressed += OnCustomPathButtonPressed;
 
 
 		if (selectedBuildingComponent.BuildingResource.IsAerial)
@@ -577,6 +608,11 @@ public partial class SelectedRobotUI : CanvasLayer
 	{
 		currentexplorMode = ExplorMode.None;
 		selectedBuildingComponent.StopAnyAutomatedMovementMode();
+	}
+
+	private void OnCustomPathButtonPressed()
+	{
+		GameEvents.EmitCustomPathRequested(selectedBuildingComponent);
 	}
 
 	private void OnTrackRobotButtonPressed()
@@ -832,6 +868,12 @@ public partial class SelectedRobotUI : CanvasLayer
 		placeBridgeTutorialTarget = null;
 		liftRobotTutorialTarget?.Dispose();
 		liftRobotTutorialTarget = null;
+		customPathTutorialTarget?.Dispose();
+		customPathTutorialTarget = null;
+		analyseSampleTutorialTarget?.Dispose();
+		analyseSampleTutorialTarget = null;
+		placeAntennaTutorialTarget?.Dispose();
+		placeAntennaTutorialTarget = null;
 		if (signalsDisconnected) return;
 		signalsDisconnected = true;
 		// Safely disconnect signals before the object is freed - check connection first
@@ -874,6 +916,10 @@ public partial class SelectedRobotUI : CanvasLayer
 		if (startExplorButton.IsConnected("pressed", Callable.From(OnStartExplorButtonSelected)))
 		{
 			startExplorButton.Pressed -= OnStartExplorButtonSelected;
+		}
+		if (customPathButton.IsConnected("pressed", Callable.From(OnCustomPathButtonPressed)))
+		{
+			customPathButton.Pressed -= OnCustomPathButtonPressed;
 		}
 		if(placeAntennaButton.IsConnected("pressed", Callable.From(OnPlaceAntennaButtonPressed)))
 		{

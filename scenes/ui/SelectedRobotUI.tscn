@@ -132,6 +132,12 @@ modulate = Color(0.773438, 0.181274, 0.181274, 1)
 layout_mode = 2
 text = "Stop Exploration"
 
+[node name="CustomPathButton" type="Button" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer/VBoxContainer4/HBoxContainer2/VBoxContainer2"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Draw and send a custom path (B)"
+text = "Custom Path"
+
 [node name="RobotInfoContainer" type="HBoxContainer" parent="MarginContainer/HBoxContainer/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2

@@ -20,7 +20,10 @@ public partial class TutorialOverlay : CanvasLayer
 	public delegate void ContinueRequestedEventHandler();
 
 	[Signal]
-	public delegate void SkipRequestedEventHandler();
+	public delegate void CloseWindowRequestedEventHandler();
+
+	[Signal]
+	public delegate void QuitTutorialRequestedEventHandler();
 
 	private const float FocusMargin = 10f;
 	private const float ViewportMargin = 24f;
@@ -38,7 +41,8 @@ public partial class TutorialOverlay : CanvasLayer
 	private Label titleLabel;
 	private Label bodyLabel;
 	private Button continueButton;
-	private Button skipButton;
+	private Button closeWindowButton;
+	private Button quitTutorialButton;
 
 	private Rect2? requestedFocusRect;
 	private TutorialCalloutPlacement requestedCalloutPlacement;
@@ -61,11 +65,17 @@ public partial class TutorialOverlay : CanvasLayer
 		titleLabel = GetNode<Label>("%TitleLabel");
 		bodyLabel = GetNode<Label>("%BodyLabel");
 		continueButton = GetNode<Button>("%ContinueButton");
-		skipButton = GetNode<Button>("%SkipButton");
+		closeWindowButton = GetNode<Button>("%CloseWindowButton");
+		quitTutorialButton = GetNode<Button>("%QuitTutorialButton");
 
-		AudioHelpers.RegisterButtons(new Button[] { continueButton, skipButton });
+		AudioHelpers.RegisterButtons(new Button[] {
+			continueButton,
+			closeWindowButton,
+			quitTutorialButton
+		});
 		continueButton.Pressed += OnContinuePressed;
-		skipButton.Pressed += OnSkipPressed;
+		closeWindowButton.Pressed += OnCloseWindowPressed;
+		quitTutorialButton.Pressed += OnQuitTutorialPressed;
 		GetViewport().SizeChanged += RefreshLayout;
 		HideStep();
 	}
@@ -76,9 +86,13 @@ public partial class TutorialOverlay : CanvasLayer
 		{
 			continueButton.Pressed -= OnContinuePressed;
 		}
-		if (skipButton != null)
+		if (closeWindowButton != null)
 		{
-			skipButton.Pressed -= OnSkipPressed;
+			closeWindowButton.Pressed -= OnCloseWindowPressed;
+		}
+		if (quitTutorialButton != null)
+		{
+			quitTutorialButton.Pressed -= OnQuitTutorialPressed;
 		}
 		if (GetViewport() != null)
 		{
@@ -105,7 +119,7 @@ public partial class TutorialOverlay : CanvasLayer
 		Rect2? targetScreenRect,
 		TutorialOverlayMode mode,
 		bool showContinue = true,
-		bool showSkip = true,
+		bool showQuitTutorial = true,
 		bool dimBackground = true,
 		TutorialCalloutPlacement calloutPlacement = TutorialCalloutPlacement.Auto)
 	{
@@ -114,7 +128,8 @@ public partial class TutorialOverlay : CanvasLayer
 		requestedFocusRect = targetScreenRect;
 		requestedCalloutPlacement = calloutPlacement;
 		continueButton.Visible = showContinue;
-		skipButton.Visible = showSkip;
+		closeWindowButton.Visible = true;
+		quitTutorialButton.Visible = showQuitTutorial;
 
 		// A guided step with no resolved target is the safe text-only fallback: the dimmer remains
 		// visible, but input passes through so a missing registration cannot trap the player.
@@ -132,10 +147,6 @@ public partial class TutorialOverlay : CanvasLayer
 		if (showContinue)
 		{
 			continueButton.GrabFocus();
-		}
-		else if (showSkip)
-		{
-			skipButton.GrabFocus();
 		}
 	}
 
@@ -231,7 +242,11 @@ public partial class TutorialOverlay : CanvasLayer
 		callout.Size = minimumSize;
 
 		Vector2 position;
-		if (requestedCalloutPlacement == TutorialCalloutPlacement.TopRight)
+		if (requestedCalloutPlacement == TutorialCalloutPlacement.TopLeft)
+		{
+			position = new Vector2(ViewportMargin, ViewportMargin);
+		}
+		else if (requestedCalloutPlacement == TutorialCalloutPlacement.TopRight)
 		{
 			position = new Vector2(
 				viewportSize.X - minimumSize.X - ViewportMargin,
@@ -344,8 +359,13 @@ public partial class TutorialOverlay : CanvasLayer
 		EmitSignal(SignalName.ContinueRequested);
 	}
 
-	private void OnSkipPressed()
+	private void OnCloseWindowPressed()
 	{
-		EmitSignal(SignalName.SkipRequested);
+		EmitSignal(SignalName.CloseWindowRequested);
+	}
+
+	private void OnQuitTutorialPressed()
+	{
+		EmitSignal(SignalName.QuitTutorialRequested);
 	}
 }

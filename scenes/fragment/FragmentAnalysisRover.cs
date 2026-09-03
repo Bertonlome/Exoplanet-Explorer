@@ -1077,12 +1077,18 @@ public partial class FragmentAnalysisRover : Node
 
 	public void RefreshArrowCandidates(
 		bool recordHistory = false,
-		bool playerRequested = false)
+		bool playerRequested = false,
+		bool autonomousTargetOnly = false)
 	{
 		if (State == null || observationSource == null ||
 			(!playerRequested && (State.IsPaused ||
 			 GetEffectiveMode(FragmentAutonomyCapability.SenseDirectionalArrow) ==
 				FragmentAutonomyMode.Off))) return;
+		if (autonomousTargetOnly || IsAutonomousArrowStage())
+		{
+			RefreshAutonomousArrowCandidate(recordHistory);
+			return;
+		}
 
 		FragmentObservableScan scan = observationSource.CaptureObservableScan();
 		IReadOnlyList<FragmentArrowCandidate> detected =
@@ -1141,10 +1147,120 @@ public partial class FragmentAnalysisRover : Node
 		ArrowCandidatesChanged?.Invoke();
 	}
 
+	private bool IsAutonomousArrowStage() =>
+		State?.GlobalMode == FragmentAutonomyMode.Performer &&
+		autonomousTargetRegionId >= 0 &&
+		autonomousWorkflowStage is
+			FragmentAutonomousWorkflowStage.AwaitingArrowReview or
+			FragmentAutonomousWorkflowStage.AwaitingPlayerArrow;
+
+	private void RefreshAutonomousArrowCandidate(bool recordHistory)
+	{
+		FragmentCandidateRegion targetRegion = State.CandidateRegions.Find(region =>
+			region.Id == autonomousTargetRegionId &&
+			region.Disposition == FragmentAnnotationDisposition.Accepted);
+		FragmentDetectedStructure targetStructure = State.SelectedStructureId is int structureId
+			? State.DetectedStructures.Find(structure =>
+				structure.Id == structureId &&
+				structure.Disposition == FragmentAnnotationDisposition.Accepted &&
+				targetRegion != null &&
+				StructureTouchesRegion(structure, targetRegion))
+			: null;
+
+		bool continuingReview = autonomousWorkflowStage is
+			FragmentAutonomousWorkflowStage.AwaitingArrowReview or
+			FragmentAutonomousWorkflowStage.AwaitingPlayerArrow;
+		List<FragmentArrowCandidate> previous = continuingReview
+			? State.ArrowCandidates.FindAll(candidate =>
+				candidate.RegionId == autonomousTargetRegionId)
+			: new List<FragmentArrowCandidate>();
+		int nextId = GetNextArrowId();
+		FragmentArrowCandidate soleCandidate = previous.Find(candidate =>
+			candidate.IsPlayerDefined &&
+			candidate.Disposition != FragmentAnnotationDisposition.Dismissed);
+
+		if (soleCandidate == null && targetRegion != null && targetStructure != null)
+		{
+			List<FragmentDetectedFeature> scopedFeatures = new();
+			foreach (int featureId in targetStructure.FeatureIds)
+			{
+				FragmentDetectedFeature feature = State.DetectedFeatures.Find(candidate =>
+					candidate.Id == featureId &&
+					candidate.Disposition != FragmentAnnotationDisposition.Dismissed &&
+					IsFeatureInRegion(candidate, targetRegion));
+				if (feature != null) scopedFeatures.Add(feature);
+			}
+			IReadOnlyList<FragmentArrowCandidate> detected =
+				FragmentArrowDetector.DetectCandidates(
+					scopedFeatures,
+					new List<FragmentDetectedStructure> { targetStructure },
+					observationSource.CaptureObservableScan()?.SampleSize ?? Vector2.One);
+			if (detected.Count > 0)
+			{
+				FragmentArrowCandidate best = detected[0];
+				soleCandidate = previous.Find(candidate => SameArrowGeometry(candidate, best));
+				soleCandidate ??= new FragmentArrowCandidate
+				{
+					Id = nextId,
+					Tail = best.Tail,
+					Tip = best.Tip,
+					Confidence = best.Confidence,
+					Disposition = FragmentAnnotationDisposition.Proposed,
+					FeatureIds = new List<int>(best.FeatureIds),
+					Provenance = FragmentAnnotationProvenance.Rover,
+					Evidence = best.Evidence,
+					RegionId = autonomousTargetRegionId
+				};
+			}
+		}
+
+		State.ArrowCandidates.Clear();
+		if (soleCandidate != null)
+		{
+			soleCandidate.RegionId = autonomousTargetRegionId;
+			State.ArrowCandidates.Add(soleCandidate);
+		}
+		bool acceptedStillPresent = soleCandidate != null &&
+			soleCandidate.Disposition == FragmentAnnotationDisposition.Accepted &&
+			State.AcceptedArrowId == soleCandidate.Id;
+		if (!acceptedStillPresent)
+		{
+			State.AcceptedArrowId = null;
+			InvalidateDirectionInterpretation();
+		}
+		State.SelectedArrowId = soleCandidate != null &&
+			soleCandidate.Disposition != FragmentAnnotationDisposition.Dismissed
+			? soleCandidate.Id
+			: null;
+
+		int proposals = soleCandidate?.Disposition == FragmentAnnotationDisposition.Proposed ? 1 : 0;
+		string structureTarget = targetStructure == null
+			? $"the validated Structure in R{autonomousTargetRegionId}"
+			: $"Structure S{targetStructure.Id}";
+		status = new FragmentRoverActionStatus
+		{
+			Activity = GetIdleActivity(),
+			CurrentAction = proposals == 1
+				? $"Detected one arrow for {structureTarget}"
+				: $"No arrow detected for {structureTarget}",
+			NextAction = proposals == 1
+				? "Review the single Arrow proposal"
+				: "Use manual Arrow drawing in the selected Region",
+			CurrentTarget = $"Region {autonomousTargetRegionId}",
+			MeasuredResult = proposals == 1 ? "One scoped Arrow candidate" : "No scoped Arrow candidate",
+			LockedParameters = GetLockedProcessingParameterNames()
+		};
+		if (recordHistory)
+			RecordAction($"ARROW SCAN: {proposals} proposal for R{autonomousTargetRegionId}");
+		StatusChanged?.Invoke(status);
+		ArrowCandidatesChanged?.Invoke();
+	}
+
 	public void ApplyArrowEdit(FragmentArrowEditAction action, int arrowId)
 	{
 		FragmentArrowCandidate candidate = State?.ArrowCandidates.Find(arrow => arrow.Id == arrowId);
 		if (candidate == null) return;
+		if (IsAutonomousArrowStage() && candidate.RegionId != autonomousTargetRegionId) return;
 		if (action == FragmentArrowEditAction.Select)
 		{
 			State.SelectedArrowId = arrowId;
@@ -1286,6 +1402,16 @@ public partial class FragmentAnalysisRover : Node
 		tip = new Vector2(Mathf.Clamp(tip.X, 0f, 1f), Mathf.Clamp(tip.Y, 0f, 1f));
 		if (tail.DistanceTo(tip) < 0.015f) return -1;
 		int id = GetNextArrowId();
+		bool autonomousTarget = IsAutonomousArrowStage();
+		if (autonomousTarget)
+		{
+			// A manual replacement belongs to the already chosen Region and supersedes the Rover's
+			// sole proposal; autonomous analysis never accumulates cross-Region arrows.
+			State.ArrowCandidates.Clear();
+			State.SelectedArrowId = null;
+			State.AcceptedArrowId = null;
+			InvalidateDirectionInterpretation();
+		}
 		FragmentArrowCandidate candidate = new()
 		{
 			Id = id,
@@ -1296,7 +1422,9 @@ public partial class FragmentAnalysisRover : Node
 			Provenance = FragmentAnnotationProvenance.Player,
 			IsPlayerDefined = true,
 			Evidence = "PLAYER-DRAWN ARROW",
-			RegionId = ResolveArrowRegionId(tail, tip, null)
+			RegionId = autonomousTarget
+				? autonomousTargetRegionId
+				: ResolveArrowRegionId(tail, tip, null)
 		};
 		State.ArrowCandidates.Add(candidate);
 		State.SelectedArrowId = id;
@@ -4146,10 +4274,10 @@ public partial class FragmentAnalysisRover : Node
 	{
 		if (State == null || State.GlobalMode != FragmentAutonomyMode.Performer ||
 			autonomousTargetRegionId < 0) return;
-		RefreshArrowCandidates(true);
+		RefreshArrowCandidates(true, autonomousTargetOnly: true);
 		bool hasCandidate = State.ArrowCandidates.Exists(candidate =>
 			candidate.Disposition == FragmentAnnotationDisposition.Proposed &&
-			(candidate.RegionId < 0 || candidate.RegionId == autonomousTargetRegionId));
+			candidate.RegionId == autonomousTargetRegionId);
 		SetAutonomousWorkflowStage(hasCandidate
 			? FragmentAutonomousWorkflowStage.AwaitingArrowReview
 			: FragmentAutonomousWorkflowStage.AwaitingPlayerArrow);

@@ -29,6 +29,8 @@ public partial class GameEvents : Node
 		BuildingComponent buildingComponent,
 		Vector2I destination);
 	[Signal]
+	public delegate void CustomPathRequestedEventHandler(BuildingComponent buildingComponent);
+	[Signal]
 	public delegate void BuildingStuckEventHandler(BuildingComponent buildingComponent);
 	[Signal]
 	public delegate void BuildingUnStuckEventHandler(BuildingComponent buildingComponent);
@@ -64,6 +66,14 @@ public partial class GameEvents : Node
 	public delegate void ResourcesDroppedEventHandler(BuildingComponent buildingComponent);
 	[Signal]
 	public delegate void MaterialCreatedEventHandler();
+	[Signal]
+	public delegate void CustomPathExecutedEventHandler(BuildingComponent buildingComponent);
+	[Signal]
+	public delegate void RobotOutOfAntennaCoverageEventHandler(BuildingComponent buildingComponent);
+	[Signal]
+	public delegate void FragmentModeSelectedEventHandler(int mode);
+	[Signal]
+	public delegate void FragmentReloadedEventHandler();
 
 	public override void _Notification(int what)
 	{
@@ -102,6 +112,11 @@ public partial class GameEvents : Node
 		Instance.EmitSignal(SignalName.DirectedMoveRequested, buildingComponent, destination);
 	}
 
+	public static void EmitCustomPathRequested(BuildingComponent buildingComponent)
+	{
+		Instance.EmitSignal(SignalName.CustomPathRequested, buildingComponent);
+	}
+
 	public static void EmitResourceCollected(BuildingComponent buildingComponent, string resourceType) =>
 		Instance.EmitSignal(SignalName.ResourceCollected, buildingComponent, resourceType);
 
@@ -116,6 +131,18 @@ public partial class GameEvents : Node
 
 	public static void EmitMaterialCreated() =>
 		Instance.EmitSignal(SignalName.MaterialCreated);
+
+	public static void EmitCustomPathExecuted(BuildingComponent buildingComponent) =>
+		Instance.EmitSignal(SignalName.CustomPathExecuted, buildingComponent);
+
+	public static void EmitRobotOutOfAntennaCoverage(BuildingComponent buildingComponent) =>
+		Instance.EmitSignal(SignalName.RobotOutOfAntennaCoverage, buildingComponent);
+
+	public static void EmitFragmentModeSelected(int mode) =>
+		Instance.EmitSignal(SignalName.FragmentModeSelected, mode);
+
+	public static void EmitFragmentReloaded() =>
+		Instance.EmitSignal(SignalName.FragmentReloaded);
 
 	public static void EmitRobotSelected(BuildingComponent buildingComponent)
 	{

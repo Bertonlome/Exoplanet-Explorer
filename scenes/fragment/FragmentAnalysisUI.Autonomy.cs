@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using Game.UI;
+using Game.Autoload;
 
 public partial class FragmentAnalysisUI
 {
@@ -1001,6 +1002,7 @@ public partial class FragmentAnalysisUI
 		autonomousEditStructureButton.Pressed += OnAutonomousEditStructurePressed;
 		autonomousValidateStructureButton.Pressed += OnAutonomousValidateStructurePressed;
         reloadConfirmationDialog.Confirmed += OnReloadConfirmed;
+        reloadConfirmationDialog.Canceled += OnReloadCanceled;
 		scanFeaturesButton.Pressed += OnScanFeaturesPressed;
 		featureSideBySideButton.Pressed += OnComparisonOpenPressed;
 		showFeatureOverlayButton.Toggled += OnFeatureOverlayToggled;
@@ -1148,6 +1150,7 @@ public partial class FragmentAnalysisUI
 		autonomousValidateStructureButton.Pressed -= OnAutonomousValidateStructurePressed;
         autonomyAdvancedButton.Pressed -= OnAutonomyAdvancedPressed;
         reloadConfirmationDialog.Confirmed -= OnReloadConfirmed;
+        reloadConfirmationDialog.Canceled -= OnReloadCanceled;
 		scanFeaturesButton.Pressed -= OnScanFeaturesPressed;
 		featureSideBySideButton.Pressed -= OnComparisonOpenPressed;
 		showFeatureOverlayButton.Toggled -= OnFeatureOverlayToggled;
@@ -2790,11 +2793,22 @@ public void DispatchAnalysisConfiguration(
     private void ShowReloadConfirmation()
     {
         reloadConfirmationDialog.PopupCentered();
+		SetAutonomousWorkflowPopupCursor(true);
     }
 
-    private void OnReloadConfirmed()
-    {
-        fragmentCanvas.GenerateFragment();
+	private void OnReloadConfirmed()
+	{
+		SetAutonomousWorkflowPopupCursor(false);
+
+		// A reload starts a fresh analysis allocation. Stop any active Rover workflow before
+		// resetting its puzzle state so no work begins behind the mode-selection overlay.
+		fragmentAnalysisRover.SetMode(FragmentAutonomyMode.Off);
+		GenerateFragmentForAnalysisPass(
+			"AUTONOMOUS / RELOAD",
+			Level3TutorialAutonomousSeed);
+		hasPublishedGlyphRevealed = false;
+		hasPublishedGlyphUpright = false;
+		hasPublishedAnalysisCompleted = false;
         wasEverSolved = false;
         isRestoredSession = false;
         UpdateFragmentLifecycleLabel(false, false);
@@ -2803,7 +2817,14 @@ public void DispatchAnalysisConfiguration(
         lastControlState = CaptureControlState();
         UpdateRotationLabel();
         RefreshAutonomyUi();
+		ShowInitialModeDialog();
+		GameEvents.EmitFragmentReloaded();
     }
+
+	private void OnReloadCanceled()
+	{
+		SetAutonomousWorkflowPopupCursor(false);
+	}
 
     private void OnAutonomyOffToggled(bool pressed)
     {
@@ -3040,9 +3061,18 @@ public void DispatchAnalysisConfiguration(
 				break;
 		}
 		RefreshAutonomousWorkflowUi();
-		if (fragmentAnalysisRover.IsAutonomousWorkflowWaitingForPlayer &&
+		bool tutorialHandlesCompletion =
+			stage == FragmentAutonomousWorkflowStage.Complete && AnalysisCompleted != null;
+		if (tutorialHandlesCompletion)
+			HideAutonomousWorkflowPopup();
+		else if (fragmentAnalysisRover.IsAutonomousWorkflowWaitingForPlayer &&
 			!isSubmittingPlayerArrow)
 			ShowAutonomousWorkflowPopup();
+		if (stage == FragmentAutonomousWorkflowStage.Complete && !hasPublishedAnalysisCompleted)
+		{
+			hasPublishedAnalysisCompleted = true;
+			AnalysisCompleted?.Invoke();
+		}
 	}
 
 	private void ShowAutonomousWorkflowPopup()
@@ -3189,10 +3219,11 @@ public void DispatchAnalysisConfiguration(
         initialManualButton.GrabFocus();
     }
 
-    private void CloseInitialModeDialog(FragmentAutonomyMode mode)
-    {
-        initialModeOverlay.Hide();
-        fragmentAnalysisRover.SetMode(mode);
+	private void CloseInitialModeDialog(FragmentAutonomyMode mode)
+	{
+		initialModeOverlay.Hide();
+		fragmentAnalysisRover.SetMode(mode);
+		GameEvents.EmitFragmentModeSelected((int)mode);
 		if (mode == FragmentAutonomyMode.Performer)
 			StartPerformerWorkflowImmediately();
 		else if (mode == FragmentAutonomyMode.Supporter)

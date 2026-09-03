@@ -122,7 +122,9 @@ public partial class BuildingManager : Node
 	private BuildingGhost buildingGhost;
 	private TileGhost tileGhost;
 	private Rake selectedRake;
+	private Rake hoveredRake;
 	private List<Rake> placedRakes = new();
+	private const float RAKE_HOVER_MARGIN = 16f;
 	private Vector2I buildingGhostDimensions;
 	private Vector2I tileGhostDimensions;
 	private State currentState;
@@ -154,6 +156,7 @@ public partial class BuildingManager : Node
 		gameUI.SendPathToRobotButtonPressed += OnSendPathToRobotButtonPressed;
 		GameEvents.Instance.Connect(GameEvents.SignalName.PlaceBridgeButtonPressed, Callable.From<BuildingComponent, BuildingResource>(OnPlaceBridgeButtonPressed));
 		GameEvents.Instance.Connect(GameEvents.SignalName.PlaceAntennaButtonPressed, Callable.From<BuildingComponent, BuildingResource>(OnPlaceAntennaButtonPressed));
+		GameEvents.Instance.Connect(GameEvents.SignalName.CustomPathRequested, Callable.From<BuildingComponent>(OnCustomPathRequested));
 		GameEvents.Instance.Connect(GameEvents.SignalName.BuildingStuck, Callable.From<BuildingComponent>(OnBuildingStuck));
 
 		currentState = State.Normal;
@@ -259,19 +262,8 @@ public partial class BuildingManager : Node
 				}
 				if (evt.IsActionPressed(ACTION_PAINT_PATH))
 				{
-					if (selectedBuildingComponent != null)
+					if (TryEnterCustomPathMode(selectedBuildingComponent))
 					{
-						ChangeState(State.PaintingPath);
-						selectedBuildingComponent.paintedTiles.Clear();
-						// Clear avoided positions and waypoints when starting a new path
-						if (robotAvoidedPositions.ContainsKey(selectedBuildingComponent))
-						{
-							robotAvoidedPositions[selectedBuildingComponent].Clear();
-						}
-						if (robotRequiredWaypoints.ContainsKey(selectedBuildingComponent))
-						{
-							robotRequiredWaypoints[selectedBuildingComponent].Clear();
-						}
 						GetViewport().SetInputAsHandled();
 					}
 				}
@@ -341,7 +333,8 @@ public partial class BuildingManager : Node
 						{
 							// First check if there's a rake at this position
 							Vector2I clickedGridCell = gridManager.GetMouseGridCellPosition();
-							Rake rakeAtPosition = GetRakeAtPosition(clickedGridCell);
+							Rake rakeAtPosition = GetRakeNearWorldPosition(ySortRoot.GetGlobalMousePosition())
+								?? GetRakeAtPosition(clickedGridCell);
 							
 							if (rakeAtPosition != null)
 							{
@@ -349,6 +342,7 @@ public partial class BuildingManager : Node
 								placedRakes.Remove(rakeAtPosition);
 								selectedRake = rakeAtPosition;
 								selectedRake.PickUp();
+								selectedRake.SetGridCursorPosition(clickedGridCell);
 								ChangeState(State.DragRake);
 								GetViewport().SetInputAsHandled();
 							}
@@ -432,7 +426,8 @@ public partial class BuildingManager : Node
 				{
 					if (selectedRake != null)
 					{
-						placedRakes.Add(selectedRake); // Leave rake on map in PickedUp state
+						selectedRake.Place(gridManager.GetMouseGridCellPosition());
+						placedRakes.Add(selectedRake);
 						selectedRake = null;
 					}
 					ChangeState(State.PaintingPath);
@@ -479,7 +474,7 @@ public partial class BuildingManager : Node
 					ChangeState(State.DroppedRake);
 					if (selectedRake != null)
 					{
-						placedRakes.Add(selectedRake); // Leave rake on map in Pressed state
+						placedRakes.Add(selectedRake); // Keep it pressed in place.
 						selectedRake = null;
 					}
 					GetViewport().SetInputAsHandled();
@@ -493,16 +488,18 @@ public partial class BuildingManager : Node
 				else if (evt.IsActionPressed(ACTION_LEFT_CLICK))
 				{
 					Vector2I clickedGridCell = gridManager.GetMouseGridCellPosition();
-					Rake rakeAtPosition = GetRakeAtPosition(clickedGridCell);
+					Rake rakeAtPosition = GetRakeNearWorldPosition(ySortRoot.GetGlobalMousePosition())
+						?? GetRakeAtPosition(clickedGridCell);
 					if (rakeAtPosition != null)
 					{
 						// Found a rake - pick it up
 						placedRakes.Remove(rakeAtPosition);
 						selectedRake = rakeAtPosition;
+						selectedRake.PickUp();
+						selectedRake.SetGridCursorPosition(clickedGridCell);
+						ChangeState(State.DragRake);
+						GetViewport().SetInputAsHandled();
 					}
-					ChangeState(State.DragRake);
-					selectedRake.PickUp();
-					GetViewport().SetInputAsHandled();
 				}
 				else if (evt.IsActionPressed(ACTION_RIGHT_CLICK))
 				{
@@ -587,6 +584,7 @@ public partial class BuildingManager : Node
 			case State.PaintingPath:
 				mouseGridPosition = gridManager.GetMouseGridCellPositionWithDimensionOffset(tileGhostDimensions);
 				tileGhost.GlobalPosition = mouseGridPosition * 64;
+				UpdateRakeHover(ySortRoot.GetGlobalMousePosition());
 				
 				// Continuously paint while left mouse button is held down
 				if (isPaintingWithMouse && selectedBuildingComponent != null)
@@ -623,7 +621,7 @@ public partial class BuildingManager : Node
 				mouseGridPosition = gridManager.GetMouseGridCellPosition();
 				if (selectedRake != null)
 				{
-					selectedRake.SetCenteredPosition(mouseGridPosition * 64);
+					selectedRake.SetGridCursorPosition(mouseGridPosition);
 					hoveredGridArea.Position = mouseGridPosition;
 					UpdateGridDisplay();
 				}
@@ -637,7 +635,7 @@ public partial class BuildingManager : Node
 				mouseGridPosition = gridManager.GetMouseGridCellPosition();
 				if (selectedRake != null)
 				{
-					selectedRake.SetCenteredPosition(mouseGridPosition * 64);
+					selectedRake.SetGridCursorPosition(mouseGridPosition);
 					hoveredGridArea.Position = mouseGridPosition;
 					UpdateGridDisplay();
 				}
@@ -646,6 +644,10 @@ public partial class BuildingManager : Node
 					// No rake selected, go back to painting
 					ChangeState(State.PaintingPath);
 				}
+				break;
+			case State.DroppedRake:
+				mouseGridPosition = gridManager.GetMouseGridCellPosition();
+				UpdateRakeHover(ySortRoot.GetGlobalMousePosition());
 				break;
 		}
 
@@ -761,8 +763,11 @@ public partial class BuildingManager : Node
 		}
 		else if (toPlaceBuildingResource.DisplayName == "Antenna")
 		{
-			if (selectedBuildingComponent == null) return;
-			if (selectedBuildingComponent.GetTileAndAdjacent().Contains(hoveredGridArea.Position))
+			gridManager.HighlightAntennaDeploymentTiles(
+				selectedBuildingComponent,
+				toPlaceBuildingResource.Dimensions);
+
+			if (IsAntennaPlaceableAtArea(hoveredGridArea))
 			{
 				buildingGhost.SetValid();
 			}
@@ -836,15 +841,25 @@ public partial class BuildingManager : Node
 			gridManager.SetBaseArea(buildingResource.Dimensions, hoveredGridArea.Position);
 			CallDeferred("EmitSignalBasePlaced");
 		}
-		else if (buildingResource.DisplayName == "Antenna" && !IsBuildingResourcePlaceableAtArea(hoveredGridArea))
-		{
-			FloatingTextManager.ShowMessageAtMousePosition("Invalid placement!");
-			return;
-		}
 		else if (buildingResource.DisplayName == "Antenna")
 		{
-			if (!selectedBuildingComponent.GetTileAndAdjacent().Contains(hoveredGridArea.Position))
+			if (selectedBuildingComponent == null ||
+				!selectedBuildingComponent.GetTileAndAdjacent().Contains(hoveredGridArea.Position) ||
+				!IsBuildingResourcePlaceableAtArea(hoveredGridArea))
 			{
+				FloatingTextManager.ShowMessageAtMousePosition("Invalid placement!");
+				return;
+			}
+
+			if (!gridManager.IsAreaWithinConnectedAntennaCoverage(
+				hoveredGridArea,
+				selectedBuildingComponent))
+			{
+				FloatingTextManager.ShowMessageAtMousePosition("Outside communication coverage!");
+				Game.UI.GameUI.PushMessage(
+					"Antenna must be deployed within existing communication coverage",
+					"red",
+					true);
 				return;
 			}
 		}
@@ -1312,6 +1327,7 @@ public partial class BuildingManager : Node
 		{
 			//FloatingTextManager.ShowMessageAtBuildingPosition("liftedRobot out of antenna coverage", liftedRobot);
 			Game.UI.GameUI.PushMessage("liftedRobot out of antenna coverage", "red", true, liftedRobot);
+			GameEvents.EmitRobotOutOfAntennaCoverage(liftedRobot);
 			return;
 		}
 
@@ -1362,6 +1378,7 @@ public partial class BuildingManager : Node
 		if (!aerialRobot.CanMove)
 		{
 			Game.UI.GameUI.PushMessage("Robot out of antenna coverage", "red", true, aerialRobot);
+			GameEvents.EmitRobotOutOfAntennaCoverage(aerialRobot);
 			return false;
 		}
 
@@ -1416,6 +1433,7 @@ public partial class BuildingManager : Node
 		{
 			FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
 			Game.UI.GameUI.PushMessage("Robot out of antenna coverage", "red", true);
+			GameEvents.EmitRobotOutOfAntennaCoverage(robot);
 			return;
 		}
 
@@ -1504,6 +1522,7 @@ public partial class BuildingManager : Node
 				{
 					FloatingTextManager.ShowMessageAtBuildingPosition("Robot out of antenna coverage", robot);
 					Game.UI.GameUI.PushMessage("Robot out of antenna coverage", "red", true);
+					GameEvents.EmitRobotOutOfAntennaCoverage(robot);
 					return false;
 				}
 			}
@@ -1935,6 +1954,46 @@ public partial class BuildingManager : Node
 		return null;
 	}
 
+	private Rake GetRakeNearWorldPosition(Godot.Vector2 worldPosition)
+	{
+		Rake nearestRake = null;
+		float nearestDistanceSquared = float.MaxValue;
+		foreach (var rake in placedRakes)
+		{
+			if (!IsInstanceValid(rake)) continue;
+
+			var selectionBounds = new Rect2(rake.GlobalPosition, rake.Size).Grow(RAKE_HOVER_MARGIN);
+			if (!selectionBounds.HasPoint(worldPosition)) continue;
+
+			float distanceSquared = worldPosition.DistanceSquaredTo(selectionBounds.GetCenter());
+			if (distanceSquared < nearestDistanceSquared)
+			{
+				nearestRake = rake;
+				nearestDistanceSquared = distanceSquared;
+			}
+		}
+		return nearestRake;
+	}
+
+	private void UpdateRakeHover(Godot.Vector2 mouseWorldPosition)
+	{
+		Rake nextHoveredRake = GetRakeNearWorldPosition(mouseWorldPosition);
+		if (nextHoveredRake == hoveredRake) return;
+
+		ClearRakeHover();
+		hoveredRake = nextHoveredRake;
+		hoveredRake?.SetHovered(true);
+	}
+
+	private void ClearRakeHover()
+	{
+		if (IsInstanceValid(hoveredRake))
+		{
+			hoveredRake.SetHovered(false);
+		}
+		hoveredRake = null;
+	}
+
 	private BuildingComponent SelectBuildingAtHoveredCellPosition()
 	{
 		var rootCell = hoveredGridArea.Position;
@@ -2049,6 +2108,16 @@ public partial class BuildingManager : Node
 			&& CanAffordRobot();
 	}
 
+	private bool IsAntennaPlaceableAtArea(Rect2I tileArea)
+	{
+		return selectedBuildingComponent != null &&
+			selectedBuildingComponent.GetTileAndAdjacent().Contains(tileArea.Position) &&
+			IsBuildingResourcePlaceableAtArea(tileArea) &&
+			gridManager.IsAreaWithinConnectedAntennaCoverage(
+				tileArea,
+				selectedBuildingComponent);
+	}
+
 	private bool IsBasePlaceableAtArea(Rect2I tileArea)
 	{
 		var isBase = true;
@@ -2108,6 +2177,7 @@ public partial class BuildingManager : Node
 				toPlaceBuildingResource = null;
 				break;
 			case State.PaintingPath:
+				ClearRakeHover();
 				gridManager.ClearHighlightedTiles();
 				ClearTileGhost();
 				ClearBuildingGhost();
@@ -2141,6 +2211,9 @@ public partial class BuildingManager : Node
 					}
 				}
 				ClearTileGhost();
+				break;
+			case State.DroppedRake:
+				ClearRakeHover();
 				break;
 		}
 
@@ -2192,6 +2265,36 @@ public partial class BuildingManager : Node
 		ChangeState(State.Normal);
 	}
 
+	private void OnCustomPathRequested(BuildingComponent buildingComponent)
+	{
+		TryEnterCustomPathMode(buildingComponent);
+	}
+
+	private bool TryEnterCustomPathMode(BuildingComponent buildingComponent)
+	{
+		if (currentState != State.Normal ||
+			buildingComponent == null ||
+			buildingComponent != selectedBuildingComponent)
+		{
+			return false;
+		}
+
+		ChangeState(State.PaintingPath);
+		buildingComponent.paintedTiles.Clear();
+
+		// A new custom path starts without constraints retained from the previous one.
+		if (robotAvoidedPositions.TryGetValue(buildingComponent, out var avoidedPositions))
+		{
+			avoidedPositions.Clear();
+		}
+		if (robotRequiredWaypoints.TryGetValue(buildingComponent, out var requiredWaypoints))
+		{
+			requiredWaypoints.Clear();
+		}
+
+		return true;
+	}
+
 	private void OnTouchedRakePanel()
 	{
 		if (currentState == State.PaintingPath)
@@ -2201,8 +2304,9 @@ public partial class BuildingManager : Node
 			var rake = rakeScene.Instantiate<Rake>();
 			selectedRake = rake;
 			selectedRake.SetBuildingManager(this);
-			selectedRake.CallDeferred("PickUp");
 			ySortRoot.AddChild(rake);
+			selectedRake.PickUp();
+			selectedRake.SetGridCursorPosition(gridManager.GetMouseGridCellPosition());
 		}
 		else if (currentState == State.DragRake || currentState == State.PressRake)
 		{
@@ -2290,6 +2394,7 @@ public partial class BuildingManager : Node
 		buildingGhost.SetDimensions(buildingResource.Dimensions);
 		buildingGhostDimensions = buildingResource.Dimensions;
 		toPlaceBuildingResource = buildingResource;
+		UpdateGridDisplay();
 	}
 
 	public void ConsumeWoodForCharging(int amount)
@@ -2660,6 +2765,10 @@ public partial class BuildingManager : Node
 		{
 			selectedRake = null;
 		}
+		if (hoveredRake == rake)
+		{
+			hoveredRake = null;
+		}
 		
 		// Destroy the rake
 		rake.QueueFree();
@@ -2684,21 +2793,23 @@ public partial class BuildingManager : Node
 	/// </summary>
 	public void DeleteAllRakes()
 	{
-		// Create a copy of the list to avoid modification during iteration
-		var rakesToDelete = new List<Rake>(placedRakes);
+		// The actively dragged/pressed rake is not in placedRakes, so include it
+		// explicitly when leaving custom path mode.
+		var rakesToDelete = new HashSet<Rake>(placedRakes.Where(IsInstanceValid));
+		if (IsInstanceValid(selectedRake))
+		{
+			rakesToDelete.Add(selectedRake);
+		}
 		
 		foreach (var rake in rakesToDelete)
 		{
+			rake.SetHovered(false);
 			rake.QueueFree();
 		}
 		
 		placedRakes.Clear();
-		
-		// Clear selected rake if any
-		if (selectedRake != null)
-		{
-			selectedRake = null;
-		}
+		selectedRake = null;
+		hoveredRake = null;
 		
 		GD.Print($"Deleted all rakes ({rakesToDelete.Count} total)");
 	}

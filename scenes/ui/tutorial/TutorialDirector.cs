@@ -33,6 +33,7 @@ public partial class TutorialDirector : Node
 	private bool waitingForTrigger;
 	private bool waitingForTarget;
 	private bool targetFallbackActive;
+	private bool currentOverlayDismissed;
 	private double missingTargetElapsed;
 	private bool ownsPause;
 	private bool previousPauseState;
@@ -75,7 +76,8 @@ public partial class TutorialDirector : Node
 		running = true;
 		eventBridge.EventPublished += OnEventPublished;
 		overlay.ContinueRequested += OnContinueRequested;
-		overlay.SkipRequested += OnSkipRequested;
+		overlay.CloseWindowRequested += OnCloseWindowRequested;
+		overlay.QuitTutorialRequested += OnQuitTutorialRequested;
 		TryActivateNextStep();
 	}
 
@@ -88,6 +90,14 @@ public partial class TutorialDirector : Node
 	{
 		if (!running || currentStep == null)
 		{
+			return;
+		}
+		if (currentOverlayDismissed)
+		{
+			MaintainDismissedTargetSubscription();
+			if (currentStep.Completion.Kind == TutorialCompletionKind.State &&
+				currentStep.Completion.StatePredicate?.Invoke() == true)
+				CompleteCurrentStep();
 			return;
 		}
 
@@ -173,6 +183,7 @@ public partial class TutorialDirector : Node
 	{
 		waitingForTarget = false;
 		targetFallbackActive = false;
+		currentOverlayDismissed = false;
 		missingTargetElapsed = 0d;
 		ApplyPausePolicy(currentStep.Mode);
 		EmitSignal(SignalName.StepStarted, currentStep.Id);
@@ -194,9 +205,9 @@ public partial class TutorialDirector : Node
 				null,
 				TutorialOverlayMode.HardPause,
 				showContinue: false,
-				showSkip: currentStep.Skippable,
+				showQuitTutorial: currentStep.Skippable,
 				dimBackground: currentStep.DimBackground,
-				calloutPlacement: currentStep.CalloutPlacement);
+				calloutPlacement: GetMissingTargetPlacement());
 		}
 		CheckAlreadySatisfiedCompletion();
 	}
@@ -231,9 +242,9 @@ public partial class TutorialDirector : Node
 			null,
 			currentStep.Mode,
 			showContinue: targetPressNeedsEscape,
-			showSkip: currentStep.Skippable,
+			showQuitTutorial: currentStep.Skippable,
 			dimBackground: currentStep.DimBackground,
-			calloutPlacement: currentStep.CalloutPlacement);
+			calloutPlacement: GetMissingTargetPlacement());
 		EmitSignal(SignalName.TargetFallbackUsed, currentStep.Id, currentStep.TargetId);
 	}
 
@@ -245,7 +256,7 @@ public partial class TutorialDirector : Node
 			targetRect,
 			mode,
 			showContinue: currentStep.Completion.Kind == TutorialCompletionKind.Continue,
-			showSkip: currentStep.Skippable,
+			showQuitTutorial: currentStep.Skippable,
 			dimBackground: currentStep.DimBackground,
 			calloutPlacement: currentStep.CalloutPlacement);
 	}
@@ -301,7 +312,21 @@ public partial class TutorialDirector : Node
 		}
 	}
 
-	private void OnSkipRequested()
+	private void OnCloseWindowRequested()
+	{
+		if (currentStep == null) return;
+		if (currentStep.Completion.Kind == TutorialCompletionKind.Continue)
+		{
+			CompleteCurrentStep();
+			return;
+		}
+
+		currentOverlayDismissed = true;
+		overlay.HideStep();
+		RestorePausePolicy();
+	}
+
+	private void OnQuitTutorialRequested()
 	{
 		if (currentStep == null || !currentStep.Skippable)
 		{
@@ -333,6 +358,7 @@ public partial class TutorialDirector : Node
 		RestorePausePolicy();
 		waitingForTarget = false;
 		targetFallbackActive = false;
+		currentOverlayDismissed = false;
 		currentStep = null;
 		completedStepIds.Add(completedStep.Id);
 		EmitSignal(SignalName.StepCompleted, completedStep.Id);
@@ -400,7 +426,8 @@ public partial class TutorialDirector : Node
 		if (overlay != null)
 		{
 			overlay.ContinueRequested -= OnContinueRequested;
-			overlay.SkipRequested -= OnSkipRequested;
+			overlay.CloseWindowRequested -= OnCloseWindowRequested;
+			overlay.QuitTutorialRequested -= OnQuitTutorialRequested;
 			if (hideOverlay)
 			{
 				overlay.HideStep();
@@ -415,8 +442,24 @@ public partial class TutorialDirector : Node
 		waitingForTrigger = false;
 		waitingForTarget = false;
 		targetFallbackActive = false;
+		currentOverlayDismissed = false;
 		currentStep = null;
 		steps = Array.Empty<TutorialStep>();
+	}
+
+	private TutorialCalloutPlacement GetMissingTargetPlacement() =>
+		currentStep.CalloutPlacement == TutorialCalloutPlacement.Auto
+			? TutorialCalloutPlacement.TopRight
+			: currentStep.CalloutPlacement;
+
+	private void MaintainDismissedTargetSubscription()
+	{
+		if (string.IsNullOrWhiteSpace(currentStep.TargetId)) return;
+		if (targetRegistry.TryResolve(currentStep.TargetId, out Node targetNode, out _))
+		{
+			waitingForTarget = false;
+			AttachTargetButton(targetNode as BaseButton);
+		}
 	}
 
 	private void EnsureInitialized()

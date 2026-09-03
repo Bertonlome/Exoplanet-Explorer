@@ -4253,6 +4253,37 @@ is not installed in this workspace environment.]`
   Confirm each Monolith Fragment scene loads, opening Fragment Analysis loads both the main and
   autonomy panels without missing-resource errors, and analysis can be saved and reopened.]`
 * **Folder-move result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — choose allocation again after Reload
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Confirming `RELOAD` stops any current Rover workflow, creates the new puzzle in a neutral Manual
+  allocation, and displays the existing Manual / Rover Support / Rover Autonomous selector again.
+  No Support or Autonomous action begins behind the selector.
+* Choosing a mode follows the same initialization path as the first opening, including immediately
+  starting the autonomous workflow when Rover Autonomous is selected.
+* **Reload-mode test:** `[Start once in each of the three modes, press Reload, and confirm the reload
+  warning first. After confirming, verify the mode selector appears every time and the Rover remains
+  inactive until a choice is made. Select each mode and confirm its normal startup behavior.]`
+* **Reload-mode result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
+
+### Final touch — one autonomous Arrow for the chosen Structure
+
+**Implementation status:** Implemented; awaiting focused Godot test.
+
+* Autonomous Arrow detection is scoped to the accepted Structure belonging to the Region the
+  player chose after side-by-side analysis. Structures and Features from every other Region are
+  excluded from this detection pass.
+* The Rover exposes only its highest-ranked scoped Arrow. Entering this stage discards unrelated
+  stored candidates, and a player-drawn replacement supersedes the Rover proposal and is explicitly
+  owned by the chosen Region. Manual and Rover Support Arrow behavior is unchanged.
+* **Scoped-Arrow test:** `[In Rover Autonomous mode, accept at least two Regions and their Features,
+  then choose one Region and validate its Structure. Complete Rotation and confirm exactly zero or
+  one Arrow is shown, it belongs to the chosen Region/Structure, and no Arrow from another Region is
+  present. If none is detected, draw one and confirm it replaces rather than supplements any prior
+  proposal and produces the bearing for the chosen Region.]`
+* **Scoped-Arrow result:** `[ ] PASS  [ ] FAIL  [ ] BLOCKED REASON: __________]`
 ---
 
 # Rover autonomy architecture

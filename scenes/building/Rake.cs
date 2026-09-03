@@ -22,6 +22,7 @@ public partial class Rake : Control
 	[Export] private Color rakeColorPickedUp = new Color(0.8f, 0.8f, 0.8f, 0.7f);
 	[Export] private Color rakeColorPlaced = new Color(0.5f, 0.5f, 1.0f, 0.5f);
 	[Export] private Color rakeColorPressed = new Color(1.0f, 0.5f, 0.5f, 0.8f);
+	[Export] private Color rakeColorHovered = new Color(1.0f, 1.0f, 0.55f, 1.0f);
 	[Export] private float tileSize = 64f;
 	
 	// Node references
@@ -42,6 +43,7 @@ public partial class Rake : Control
 	
 	// === BuildingManager reference ===
 	private BuildingManager buildingManager;
+	private bool isHovered;
 	
 	// === Affected Tiles ===
 	private List<PaintedTile> affectedPaintedTiles = new();
@@ -55,10 +57,7 @@ public partial class Rake : Control
 		pressedTexture = GD.Load<Texture2D>("res://assets/buildings/rake.png");
 		defaultTexture = sprite.Texture; // Save the default texture
 		
-		// Initialize the rake with default size (1 tile)
-		CustomMinimumSize = new Vector2(tileSize, tileSize);
-		Size = new Vector2(tileSize, tileSize);
-		CallDeferred("PutInDisplay");
+		PutInDisplay();
 	}
 	
 	/// <summary>
@@ -67,6 +66,15 @@ public partial class Rake : Control
 	public void SetBuildingManager(BuildingManager manager)
 	{
 		buildingManager = manager;
+
+		// This scene is also used as an icon inside a UI container. World rakes
+		// must not retain those layout anchors or their position will be offset by
+		// the viewport/container size.
+		AnchorLeft = 0f;
+		AnchorTop = 0f;
+		AnchorRight = 0f;
+		AnchorBottom = 0f;
+		MouseFilter = MouseFilterEnum.Ignore;
 	}
 	
 	// === Public API ===
@@ -76,48 +84,10 @@ public partial class Rake : Control
 	/// </summary>
 	public void SetSize(int newSize)
 	{
-		if (newSize < 1) newSize = 1;
-		if (newSize > 10) newSize = 10; // Max size limit
-		
-		// Store old size to calculate offset
-		Vector2 oldSize = Size;
-		
-		RakeDimension = newSize;
-		
-		// Resize the Control node and sprite to match the rake dimension
-		if (Orientation == RakeOrientation.Horizontal)
-		{
-			// Horizontal: width = RakeDimension tiles, height = 1 tile
-			CustomMinimumSize = new Vector2(RakeDimension * tileSize, tileSize);
-			Size = new Vector2(RakeDimension * tileSize, tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(RakeDimension, 1);
-				// When sprite is scaled, it grows from its center point
-				// Position it so the scaled sprite fills the control properly
-				//sprite.Position = new Vector2(tileSize / 2, tileSize / 2);
-				sprite.Offset = new Vector2(tileSize / 2.5f, tileSize / 2.5f);
-			}
-			
-			// Adjust position to keep centered (move left by half the size difference)
-			GlobalPosition = new Vector2(GlobalPosition.X + (Size.X - oldSize.X) / 2, GlobalPosition.Y);
-		}
-		else // Vertical
-		{
-			// Vertical: width = 1 tile, height = RakeDimension tiles
-			CustomMinimumSize = new Vector2(tileSize, RakeDimension * tileSize);
-			Size = new Vector2(tileSize, RakeDimension * tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(1, RakeDimension);
-				// When sprite is scaled, it grows from its center point
-				// Position it so the scaled sprite fills the control properly
-				sprite.Position = new Vector2(tileSize / 2, tileSize / 2);
-			}
-			
-			// Adjust position to keep centered (move up by half the size difference)
-			GlobalPosition = new Vector2(GlobalPosition.X, GlobalPosition.Y - (Size.Y - oldSize.Y) / 2);
-		}
+		Vector2 centerPosition = GlobalPosition + Size / 2f;
+		RakeDimension = Mathf.Clamp(newSize, 1, 10);
+		ApplyVisualGeometry();
+		GlobalPosition = centerPosition - Size / 2f;
 		
 		if (State == RakeState.Placed || State == RakeState.Pressed)
 		{
@@ -130,37 +100,12 @@ public partial class Rake : Control
 	/// </summary>
 	public void ToggleOrientation()
 	{
+		Vector2 centerPosition = GlobalPosition + Size / 2f;
 		Orientation = Orientation == RakeOrientation.Horizontal 
 			? RakeOrientation.Vertical 
 			: RakeOrientation.Horizontal;
-		
-		// Store the center position before resizing
-		Vector2 centerPos = GlobalPosition + Size / 2;
-		
-		// Resize the Control node and sprite based on orientation
-		if (Orientation == RakeOrientation.Vertical)
-		{
-			CustomMinimumSize = new Vector2(tileSize, RakeDimension * tileSize);
-			Size = new Vector2(tileSize, RakeDimension * tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(1, RakeDimension);
-				sprite.Position = new Vector2(tileSize / 2, tileSize / 2);
-			}
-		}
-		else
-		{
-			CustomMinimumSize = new Vector2(RakeDimension * tileSize, tileSize);
-			Size = new Vector2(RakeDimension * tileSize, tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(RakeDimension, 1);
-				sprite.Position = new Vector2(tileSize / 2, tileSize / 2);
-			}
-		}
-		
-		// Restore center position
-		GlobalPosition = centerPos - Size / 2;
+		ApplyVisualGeometry();
+		GlobalPosition = centerPosition - Size / 2f;
 		
 		if (State == RakeState.Placed || State == RakeState.Pressed)
 		{
@@ -173,29 +118,10 @@ public partial class Rake : Control
 	/// </summary>
 	public void SetOrientation(RakeOrientation newOrientation)
 	{
+		Vector2 centerPosition = GlobalPosition + Size / 2f;
 		Orientation = newOrientation;
-		
-		// Resize the Control node and sprite based on orientation
-		if (Orientation == RakeOrientation.Vertical)
-		{
-			CustomMinimumSize = new Vector2(tileSize, RakeDimension * tileSize);
-			Size = new Vector2(tileSize, RakeDimension * tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(1, RakeDimension);
-				sprite.Position = new Vector2(tileSize / 2, tileSize / 2);
-			}
-		}
-		else
-		{
-			CustomMinimumSize = new Vector2(RakeDimension * tileSize, tileSize);
-			Size = new Vector2(RakeDimension * tileSize, tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(RakeDimension, 1);
-				sprite.Position = new Vector2(tileSize / 2, tileSize / 2);
-			}
-		}
+		ApplyVisualGeometry();
+		GlobalPosition = centerPosition - Size / 2f;
 		
 		if (State == RakeState.Placed || State == RakeState.Pressed)
 		{
@@ -211,35 +137,13 @@ public partial class Rake : Control
 		State = RakeState.PickedUp;
 		IsMidAir = true;
 		isFirstPositionSet = false;
+		SetHovered(false);
 
 		if (sprite != null && defaultTexture != null)
 		{
 			sprite.Texture = defaultTexture;
 		}
-		
-		// Don't reset size - preserve current RakeDimension and Orientation
-		// Just ensure the visual representation matches the current state
-		if (Orientation == RakeOrientation.Horizontal)
-		{
-			CustomMinimumSize = new Vector2(RakeDimension * tileSize, tileSize);
-			Size = new Vector2(RakeDimension * tileSize, tileSize);
-			if (sprite != null && RakeDimension == 1)
-			{
-				sprite.Scale = new Vector2(RakeDimension, 1);
-				sprite.Position = new Vector2(64, 64);
-				sprite.Offset = new Vector2(0,0);
-			}
-		}
-		else // Vertical
-		{
-			CustomMinimumSize = new Vector2(tileSize, RakeDimension * tileSize);
-			Size = new Vector2(tileSize, RakeDimension * tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(1, RakeDimension);
-				sprite.Position = new Vector2(64,64);
-			}
-		}
+		ApplyVisualGeometry();
 	}
 
 	public void PutInDisplay()
@@ -253,27 +157,31 @@ public partial class Rake : Control
 			sprite.Texture = defaultTexture;
 		}
 		
-		// Don't reset size - preserve current RakeDimension and Orientation
-		// Just ensure the visual representation matches the current state
-		if (Orientation == RakeOrientation.Horizontal)
+		ApplyVisualGeometry();
+	}
+
+	private void ApplyVisualGeometry()
+	{
+		Vector2 rakeSize = Orientation == RakeOrientation.Horizontal
+			? new Vector2(RakeDimension * tileSize, tileSize)
+			: new Vector2(tileSize, RakeDimension * tileSize);
+		CustomMinimumSize = rakeSize;
+		Size = rakeSize;
+
+		if (sprite == null) return;
+		sprite.Position = Vector2.Zero;
+		sprite.Offset = new Vector2(tileSize / 2f, tileSize / 2f);
+		sprite.Scale = Orientation == RakeOrientation.Horizontal
+			? new Vector2(RakeDimension, 1f)
+			: new Vector2(1f, RakeDimension);
+	}
+
+	public void SetHovered(bool hovered)
+	{
+		isHovered = hovered;
+		if (sprite != null)
 		{
-			CustomMinimumSize = new Vector2(RakeDimension * tileSize, tileSize);
-			Size = new Vector2(RakeDimension * tileSize, tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(RakeDimension, 1);
-				sprite.Position = new Vector2(0,0);
-			}
-		}
-		else // Vertical
-		{
-			CustomMinimumSize = new Vector2(tileSize, RakeDimension * tileSize);
-			Size = new Vector2(tileSize, RakeDimension * tileSize);
-			if (sprite != null)
-			{
-				sprite.Scale = new Vector2(1, RakeDimension);
-				sprite.Position = new Vector2(0,0);
-			}
+			sprite.Modulate = isHovered ? rakeColorHovered : Colors.White;
 		}
 	}
 	
@@ -284,8 +192,7 @@ public partial class Rake : Control
 	{
 		State = RakeState.Placed;
 		IsMidAir = false;
-		GridPosition = gridPosition;
-		GlobalPosition = new Vector2(gridPosition.X * tileSize, gridPosition.Y * tileSize);
+		SetGridCursorPosition(gridPosition);
 	}
 	
 	/// <summary>
@@ -388,8 +295,37 @@ public partial class Rake : Control
 		}
 		
 		GlobalPosition = newPosition;
+		GridPosition = new Vector2I(
+			Mathf.FloorToInt(newPosition.X / tileSize),
+			Mathf.FloorToInt(newPosition.Y / tileSize));
 		lastGlobalPosition = newPosition;
 		
+		if (!isFirstPositionSet)
+		{
+			isFirstPositionSet = true;
+		}
+	}
+
+	/// <summary>
+	/// Aligns the rake to whole grid cells around the cell under the cursor.
+	/// Keeping this conversion inside Rake ensures drawing, hit-testing and tile
+	/// pushing all use the same top-left origin.
+	/// </summary>
+	public void SetGridCursorPosition(Vector2I cursorCell)
+	{
+		Vector2I topLeftCell = Orientation == RakeOrientation.Horizontal
+			? new Vector2I(cursorCell.X - (RakeDimension - 1) / 2, cursorCell.Y)
+			: new Vector2I(cursorCell.X, cursorCell.Y - (RakeDimension - 1) / 2);
+		Vector2 newPosition = (Vector2)(topLeftCell * (int)tileSize);
+
+		if (State == RakeState.Pressed && isFirstPositionSet)
+		{
+			DetectAndPushTiles(newPosition);
+		}
+
+		GlobalPosition = newPosition;
+		GridPosition = topLeftCell;
+		lastGlobalPosition = newPosition;
 		if (!isFirstPositionSet)
 		{
 			isFirstPositionSet = true;

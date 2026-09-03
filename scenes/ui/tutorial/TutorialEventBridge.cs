@@ -30,6 +30,11 @@ public partial class TutorialEventBridge : Node
 	private Callable robotBackToIdleCallable;
 	private Callable resourcesDroppedCallable;
 	private Callable materialCreatedCallable;
+	private Callable customPathRequestedCallable;
+	private Callable customPathExecutedCallable;
+	private Callable robotOutOfAntennaCoverageCallable;
+	private Callable fragmentModeSelectedCallable;
+	private Callable fragmentReloadedCallable;
 	private readonly Dictionary<BuildingComponent, List<Callable>> robotSignalCallables = new();
 	private readonly Dictionary<BuildingComponent, int> lastBatteryValues = new();
 
@@ -81,6 +86,18 @@ public partial class TutorialEventBridge : Node
 		resourcesDroppedCallable = Callable.From<BuildingComponent>(building =>
 			Publish(new TutorialEventContext(TutorialEvent.ResourcesDropped, building)));
 		materialCreatedCallable = Callable.From(() => Publish(TutorialEvent.MaterialCreated));
+		customPathRequestedCallable = Callable.From<BuildingComponent>(building =>
+			Publish(new TutorialEventContext(TutorialEvent.CustomPathStarted, building)));
+		customPathExecutedCallable = Callable.From<BuildingComponent>(building =>
+			Publish(new TutorialEventContext(TutorialEvent.CustomPathExecuted, building)));
+		robotOutOfAntennaCoverageCallable = Callable.From<BuildingComponent>(building =>
+			Publish(new TutorialEventContext(
+				TutorialEvent.RobotOutOfAntennaCoverage,
+				building,
+				worldPosition: building?.GetGridCellPosition())));
+		fragmentModeSelectedCallable = Callable.From<int>(mode =>
+			Publish(new TutorialEventContext(TutorialEvent.FragmentModeSelected, payload: mode)));
+		fragmentReloadedCallable = Callable.From(() => Publish(TutorialEvent.FragmentReloaded));
 
 		ConnectGameEvent(GameEvents.SignalName.BuildingPlaced, buildingPlacedCallable);
 		ConnectGameEvent(GameEvents.SignalName.RobotSelected, robotSelectedCallable);
@@ -95,6 +112,11 @@ public partial class TutorialEventBridge : Node
 		ConnectGameEvent(GameEvents.SignalName.RobotBackToIdle, robotBackToIdleCallable);
 		ConnectGameEvent(GameEvents.SignalName.ResourcesDropped, resourcesDroppedCallable);
 		ConnectGameEvent(GameEvents.SignalName.MaterialCreated, materialCreatedCallable);
+		ConnectGameEvent(GameEvents.SignalName.CustomPathRequested, customPathRequestedCallable);
+		ConnectGameEvent(GameEvents.SignalName.CustomPathExecuted, customPathExecutedCallable);
+		ConnectGameEvent(GameEvents.SignalName.RobotOutOfAntennaCoverage, robotOutOfAntennaCoverageCallable);
+		ConnectGameEvent(GameEvents.SignalName.FragmentModeSelected, fragmentModeSelectedCallable);
+		ConnectGameEvent(GameEvents.SignalName.FragmentReloaded, fragmentReloadedCallable);
 		connectedToGameEvents = true;
 	}
 
@@ -121,6 +143,11 @@ public partial class TutorialEventBridge : Node
 			DisconnectGameEvent(GameEvents.SignalName.RobotBackToIdle, robotBackToIdleCallable);
 			DisconnectGameEvent(GameEvents.SignalName.ResourcesDropped, resourcesDroppedCallable);
 			DisconnectGameEvent(GameEvents.SignalName.MaterialCreated, materialCreatedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.CustomPathRequested, customPathRequestedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.CustomPathExecuted, customPathExecutedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.RobotOutOfAntennaCoverage, robotOutOfAntennaCoverageCallable);
+			DisconnectGameEvent(GameEvents.SignalName.FragmentModeSelected, fragmentModeSelectedCallable);
+			DisconnectGameEvent(GameEvents.SignalName.FragmentReloaded, fragmentReloadedCallable);
 		}
 		connectedToGameEvents = false;
 		foreach ((BuildingComponent robot, List<Callable> callables) in robotSignalCallables)

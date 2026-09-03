@@ -290,12 +290,19 @@ Exact copy and number of steps should be tuned in Godot after the engine is work
 
 ### Level 3 — fragment workflow
 
-- Move a ground rover into sample range;
-- introduce battery, communication coverage, and returning to base.
-- select the rover and identify sample availability;
+- deploy a rover in the canyon to the right of the base
+- Explain to the player that the rover can easily slip on the mud and become stuck, a drone can recover a stuck drone when near one
+- show the monolith fragment to the player, ask the player to use the custom path movement mode to get to it
+- While in custom path the player can freehand paint each path tile or give a destination and the robot will connect departure/arrival in the most efficient way
+- the player can right-click a tile on the custom path to avoid it (e.g. mud tile) or use the special rake tool to push the tiles of the path achieving the same effect.
+- execute path to move the ground rover into sample range;
 - press Analyse Sample;
-- introduce the fragment-analysis interface in short staged instructions;
+- introduce the fragment-analysis interface in manual mode first
+- Go through each step of the analysis.
+- Hit reload and this time select rover autonomous mode
+- Go through each step of the analysis
 - complete or exit analysis and use its directional result in the world.
+- Introduce communication coverage and antenna and robot chaining to augment the coverage.
 
 ## Implementation checkpoints
 
@@ -762,6 +769,19 @@ only for the selected drone, and both right-click movement and Start Exploration
 
 - Implement source line 298: complete or exit analysis, return to world view, and use its directional
   result. Completing this checkpoint completes the Level 3 content contract.
+
+### Level 3 initial implementation summary
+
+Level 3 now supports rover deployment in the right canyon; mud/recovery guidance; an explicitly revealed
+and camera-centered monolith fragment; custom-path entry; freehand versus connected path authoring;
+right-click avoidance and rake explanations; verified path execution; sample-analysis opening; Manual
+mode selection; reload into Rover autonomous mode; analysis exit/completion; result use in the world;
+and an antenna placement objective explaining base coverage and robot chaining.
+
+The fragment UI publishes mode-selection and confirmed-reload events, while BaseLevel publishes analysis
+open and state-save completion events. The first playtest should focus on transient-control visibility,
+whether Execute Path is enabled after the authored route, and whether the analysis is normally saved or
+closed after the Rover autonomous pass.
 
 ### Checkpoint 13 — polish and optional persistence
 

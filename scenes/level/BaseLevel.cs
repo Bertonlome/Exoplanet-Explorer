@@ -4,6 +4,7 @@ using System.Linq;
 using Game.Autoload;
 using Game.Component;
 using Game.Manager;
+using Game.Resources.Building;
 using Game.Resources.Level;
 using Game.Ui;
 using Game.UI;
@@ -15,6 +16,7 @@ namespace Game;
 public partial class BaseLevel : Node
 {
 	public event Action<Vector2I> FragmentAnalysisStatusChanged;
+	public string LevelId => levelDefinitionResource?.Id;
 
 	private readonly StringName ESCAPE_ACTION = "escape";
 	[Export]
@@ -29,6 +31,10 @@ public partial class BaseLevel : Node
 	private PackedScene escapeMenuScene;
 	[Export]
 	private PackedScene fragmentAnalysisScene;
+	[Export]
+	private BuildingResource roverBuildingResource;
+	[Export]
+	private BuildingResource droneBuildingResource;
 
 	private GridManager gridManager;
 	private Monolith monolith;
@@ -55,6 +61,7 @@ public partial class BaseLevel : Node
 	private TutorialTargetRegistration manualDestinationTutorialTarget;
 	private TutorialTargetRegistration returnDestinationTutorialTarget;
 	private TutorialTargetRegistration deployedRoverTutorialTarget;
+	private TutorialTargetRegistration monolithFragmentTutorialTarget;
 	private Vector2I level1ManualDestination;
 	private Vector2I level1ReturnDestination;
 
@@ -104,7 +111,12 @@ public partial class BaseLevel : Node
 		{
 			return;
 		}
-		bool hasPreplacedBase = levelDefinitionResource.Id == TutorialCatalog.Level1Id;
+		if (levelDefinitionResource.Id == TutorialCatalog.Level3Id)
+		{
+			foreach (MonolithFragment fragment in this.GetNodesOfType<MonolithFragment>())
+				fragment.SetVariant(MonolithFragment.Variant.Hominid);
+		}
+		bool hasPreplacedBase = levelDefinitionResource.Id != TutorialCatalog.Level2Id;
 		BuildingComponent tutorialBase = BuildingComponent.GetBaseBuilding(this).FirstOrDefault();
 		if (hasPreplacedBase && !GodotObject.IsInstanceValid(tutorialBase))
 		{
@@ -119,12 +131,17 @@ public partial class BaseLevel : Node
 		Vector2I level1BaseReturnDestination = basePosition + new Vector2I(2, 3);
 		Vector2I monolithPosition = baseTerrainTilemapLayer.LocalToMap(
 			baseTerrainTilemapLayer.ToLocal(monolith.GlobalPosition));
+		MonolithFragment tutorialFragment = this.GetNodesOfType<MonolithFragment>().FirstOrDefault();
+		Vector2I fragmentPosition = GodotObject.IsInstanceValid(tutorialFragment)
+			? baseTerrainTilemapLayer.LocalToMap(baseTerrainTilemapLayer.ToLocal(tutorialFragment.GlobalPosition))
+			: Vector2I.Zero;
 		TutorialLevelContext tutorialContext = new(
 			basePosition,
 			level1ManualDestination,
 			level1ReturnDestination,
 			level1BaseReturnDestination,
-			monolithPosition);
+			monolithPosition,
+			fragmentPosition);
 		if (!TutorialCatalog.TryCreateScript(
 			levelDefinitionResource.Id,
 			tutorialContext,
@@ -147,7 +164,14 @@ public partial class BaseLevel : Node
 		if (hasPreplacedBase)
 		{
 			RegisterPreplacedBaseTutorialTarget();
-			RegisterLevel1MovementTargets();
+			if (levelDefinitionResource.Id == TutorialCatalog.Level1Id) RegisterLevel1MovementTargets();
+		}
+		if (levelDefinitionResource.Id == TutorialCatalog.Level3Id)
+		{
+			monolithFragmentTutorialTarget = tutorialTargetRegistry.RegisterRectProvider(
+				TutorialTargetIds.MonolithFragment,
+				this,
+				() => GetWorldCellScreenRect(fragmentPosition));
 		}
 		tutorialEventBridge.Start();
 		tutorialDirector.Initialize(tutorialOverlay, tutorialEventBridge, tutorialTargetRegistry);
@@ -241,6 +265,8 @@ public partial class BaseLevel : Node
 		returnDestinationTutorialTarget = null;
 		deployedRoverTutorialTarget?.Dispose();
 		deployedRoverTutorialTarget = null;
+		monolithFragmentTutorialTarget?.Dispose();
+		monolithFragmentTutorialTarget = null;
 		if (GodotObject.IsInstanceValid(gameUI))
 		{
 			gameUI.ClearTutorialTargets();
@@ -269,6 +295,14 @@ public partial class BaseLevel : Node
 			if (GodotObject.IsInstanceValid(rover))
 			{
 				gameCamera.FocusAtMaximumZoom(rover.GlobalPosition);
+			}
+		}
+		else if (stepId == "level3.fragment-target")
+		{
+			MonolithFragment fragment = this.GetNodesOfType<MonolithFragment>().FirstOrDefault();
+			if (GodotObject.IsInstanceValid(fragment))
+			{
+				fragment.Show();
 			}
 		}
 	}
@@ -459,6 +493,20 @@ public partial class BaseLevel : Node
 			fragmentAutonomyMode,
 			wasRestored,
 			actionOrigin);
+		fragmentAnalysisUI.RegisterTutorialTargets(tutorialTargetRegistry);
+		if (tutorialEventBridge != null)
+		{
+			fragmentAnalysisUI.GlyphRevealed += () =>
+				tutorialEventBridge.Publish(TutorialEvent.FragmentGlyphRevealed);
+			fragmentAnalysisUI.GlyphUpright += () =>
+				tutorialEventBridge.Publish(TutorialEvent.FragmentGlyphUpright);
+			fragmentAnalysisUI.AnalysisCompleted += () =>
+				tutorialEventBridge.Publish(TutorialEvent.FragmentAnalysisCompleted);
+		}
+		tutorialEventBridge?.Publish(new TutorialEventContext(
+			TutorialEvent.FragmentAnalysisOpened,
+			requestingRover,
+			worldPosition: fragmentPosition));
 		FragmentAnalysisStatusChanged?.Invoke(fragmentPosition);
 		return true;
 	}
@@ -473,6 +521,10 @@ public partial class BaseLevel : Node
 			SetFragmentAutonomyMode(state.RoverState.GlobalMode);
 		}
 		FragmentAnalysisStatusChanged?.Invoke(fragmentPosition);
+		tutorialEventBridge?.Publish(new TutorialEventContext(
+			TutorialEvent.FragmentAnalysisExited,
+			payload: state,
+			worldPosition: fragmentPosition));
 	}
 
 	public bool HasFragmentAnalysisState(Vector2I fragmentPosition)
@@ -523,6 +575,58 @@ public partial class BaseLevel : Node
 		if (currentTimeElapsed >= levelDefinitionResource.LevelDuration)
 		{
 			ShowLevelFailed();
+			return;
 		}
+
+		EvaluateUnrecoverableGameState();
+	}
+
+	private void EvaluateUnrecoverableGameState()
+	{
+		if (isComplete || isFailed || !buildingManager.IsBasePlaced)
+		{
+			return;
+		}
+
+		var robots = BuildingComponent.GetValidBuildingComponents(this)
+			.Where(building =>
+				building.BuildingResource != null &&
+				!building.BuildingResource.IsBase &&
+				building.BuildingResource.DisplayName != "Antenna")
+			.ToList();
+
+		// Do not treat a level where the player has not deployed a robot yet as unwinnable.
+		if (robots.Count == 0)
+		{
+			return;
+		}
+
+		bool hasStuckRover = robots.Any(robot =>
+			!robot.BuildingResource.IsAerial && robot.IsStuck);
+		bool hasPoweredDrone = robots.Any(robot =>
+			robot.BuildingResource.IsAerial && robot.Battery > 0);
+		bool canAffordDrone = CanAffordRobot(droneBuildingResource);
+
+		if (hasStuckRover && !hasPoweredDrone && !canAffordDrone)
+		{
+			ShowLevelFailed();
+			return;
+		}
+
+		bool allRobotsPowerlessAwayFromBase = robots.All(robot =>
+			robot.Battery <= 0 &&
+			!gridManager.IsInBaseProximity(robot.GetGridCellPosition()));
+		bool canAffordAnyRobot = CanAffordRobot(roverBuildingResource) || canAffordDrone;
+
+		if (allRobotsPowerlessAwayFromBase && !canAffordAnyRobot)
+		{
+			ShowLevelFailed();
+		}
+	}
+
+	private bool CanAffordRobot(BuildingResource buildingResource)
+	{
+		return buildingResource != null &&
+			buildingManager.AvailableMaterialCount >= buildingResource.ResourceCost;
 	}
 }

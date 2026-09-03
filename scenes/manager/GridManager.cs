@@ -557,6 +557,31 @@ public partial class GridManager : Node
 		}
 	}
 
+	public void HighlightAntennaDeploymentTiles(
+		BuildingComponent deployingRobot,
+		Vector2I antennaDimensions)
+	{
+		if (!IsInstanceValid(deployingRobot))
+		{
+			return;
+		}
+
+		EnsureMovementCoverageCache();
+		var connectedCoverage = BuildConnectedAntennaNetwork(deployingRobot)
+			.SelectMany(layer => layer.Coverage)
+			.ToHashSet();
+		var robotTiles = deployingRobot.GetOccupiedCellPositions();
+
+		foreach (var tilePosition in deployingRobot.GetTileAndAdjacent().Except(robotTiles))
+		{
+			var deploymentArea = new Rect2I(tilePosition, antennaDimensions);
+			bool isValid = IsTileAreaBuildable(deploymentArea) &&
+				deploymentArea.ToTiles().Any(connectedCoverage.Contains);
+			var atlasCoords = isValid ? new Vector2I(1, 0) : new Vector2I(2, 0);
+			highlightTilemapLayer.SetCell(tilePosition, 0, atlasCoords);
+		}
+	}
+
 	public void HighlightBridgePlaceableTiles(Rect2I robotPosition)
 	{
 		highlightTilemapLayer.SetCell(new Vector2I(robotPosition.Position.X -1, robotPosition.Position.Y), 0, new Vector2I(1, 0));
@@ -746,6 +771,16 @@ public partial class GridManager : Node
 	{
 		EnsureMovementCoverageCache();
 		return BuildConnectedAntennaNetwork();
+	}
+
+	public bool IsAreaWithinConnectedAntennaCoverage(
+		Rect2I tileArea,
+		BuildingComponent excludedBuilding = null)
+	{
+		EnsureMovementCoverageCache();
+		var areaTiles = tileArea.ToTiles();
+		return BuildConnectedAntennaNetwork(excludedBuilding)
+			.Any(layer => areaTiles.Any(layer.Coverage.Contains));
 	}
 
 	private List<AntennaCoverageVisualLayer> BuildConnectedAntennaNetwork(BuildingComponent excludedBuilding = null)

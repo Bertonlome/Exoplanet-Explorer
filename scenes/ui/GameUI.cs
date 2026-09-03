@@ -232,11 +232,20 @@ public partial class GameUI : CanvasLayer
 			TutorialTargetIds.StatusPanel,
 			GetNode<PanelContainer>("MarginContainer/PanelContainer")));
 		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
+			TutorialTargetIds.MinimapContainer,
+			GetNode<PanelContainer>("MinimapPanel")));
+		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
 			TutorialTargetIds.DeploymentPanel,
 			buildingSectionContainer));
 		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
 			TutorialTargetIds.AddMaterialButton,
 			addMaterialButton));
+		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
+			TutorialTargetIds.ExecutePathButton,
+			executePathButton));
+		staticTutorialTargets.Add(tutorialTargetRegistry.RegisterControl(
+			TutorialTargetIds.RakePanel,
+			rakePanel));
 		RegisterDeploymentTutorialTargets();
 	}
 
@@ -1383,6 +1392,7 @@ public partial class GameUI : CanvasLayer
 			GD.PrintErr("No painted tiles to execute");
 			return;
 		}
+		GameEvents.EmitCustomPathExecuted(BuildingManager.selectedBuildingComponent);
 		
 		// Group tiles by robot
 		var robotPaths = new Dictionary<BuildingComponent, List<PaintedTile>>();

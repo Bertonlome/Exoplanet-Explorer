@@ -42,6 +42,8 @@ levelFailedScreenScene = ExtResource("3_dwriv")
 selectedRobotUIScene = ExtResource("3_0tugq")
 escapeMenuScene = ExtResource("3_qe475")
 fragmentAnalysisScene = ExtResource("6_je7g1")
+roverBuildingResource = ExtResource("10_l7o86")
+droneBuildingResource = ExtResource("11_vgav0")
 
 [node name="BuildingManager" parent="." node_paths=PackedStringArray("gridManager", "gameUI", "ySortRoot") instance=ExtResource("2_smhdp")]
 gridManager = NodePath("../GridManager")

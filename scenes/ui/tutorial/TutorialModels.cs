@@ -21,10 +21,18 @@ public enum TutorialEvent
 	ExplorationModeSelected,
 	ExplorationStarted,
 	DroneScoutStarted,
+	CustomPathStarted,
+	CustomPathExecuted,
+	RobotOutOfAntennaCoverage,
+	FragmentModeSelected,
+	FragmentGlyphRevealed,
+	FragmentGlyphUpright,
+	FragmentReloaded,
 	ExplorationStopped,
 	FragmentAnalysisRequested,
 	FragmentAnalysisOpened,
 	FragmentAnalysisCompleted,
+	FragmentAnalysisExited,
 	BridgePlaced,
 	MonolithTouched,
 	AntennaPlaced,
@@ -53,6 +61,7 @@ public enum TutorialCompletionKind
 public enum TutorialCalloutPlacement
 {
 	Auto,
+	TopLeft,
 	TopRight,
 }
 
@@ -218,6 +227,7 @@ public static class TutorialTargetIds
 	public const string PrototypeTarget = "prototype.target";
 	public const string PrototypeMissingTarget = "prototype.missing-target";
 	public const string StatusPanel = "game-ui.status-panel";
+	public const string MinimapContainer = "game-ui.minimap-container";
 	public const string DeploymentPanel = "game-ui.deployment-panel";
 	public const string BaseDeployButton = "game-ui.deploy.base";
 	public const string RoverDeployButton = "game-ui.deploy.rover";
@@ -237,6 +247,20 @@ public static class TutorialTargetIds
 	public const string PlaceBridgeButton = "selected-rover-ui.place-bridge";
 	public const string AddMaterialButton = "game-ui.add-material";
 	public const string LiftRobotButton = "selected-robot-ui.lift-robot";
+	public const string CustomPathButton = "selected-robot-ui.custom-path";
+	public const string ExecutePathButton = "game-ui.execute-path";
+	public const string RakePanel = "game-ui.rake";
+	public const string AnalyseSampleButton = "selected-robot-ui.analyse-sample";
+	public const string PlaceAntennaButton = "selected-robot-ui.place-antenna";
+	public const string MonolithFragment = "world.monolith-fragment";
+	public const string FragmentManualButton = "fragment-analysis.manual-button";
+	public const string ReloadFragmentButton = "fragment-analysis.reload-button";
+	public const string FragmentAutonomousButton = "fragment-analysis.autonomous-button";
+	public const string FragmentExitButton = "fragment-analysis.exit-button";
+	public const string FragmentWorldBearing = "fragment-analysis.world-bearing";
+	public const string FragmentCanvas = "fragment-analysis.canvas";
+	public const string FragmentProcessingControls = "fragment-analysis.processing-controls";
+	public const string FragmentRotationControls = "fragment-analysis.rotation-controls";
 }
 
 public sealed class TutorialLevelContext
@@ -246,18 +270,21 @@ public sealed class TutorialLevelContext
 	public Vector2I ReturnDestination { get; }
 	public Vector2I BaseReturnDestination { get; }
 	public Vector2I MonolithPosition { get; }
+	public Vector2I FragmentPosition { get; }
 
 	public TutorialLevelContext(
 		Vector2I basePosition,
 		Vector2I manualMovementDestination,
 		Vector2I returnDestination,
 		Vector2I baseReturnDestination,
-		Vector2I monolithPosition)
+		Vector2I monolithPosition,
+		Vector2I fragmentPosition)
 	{
 		BasePosition = basePosition;
 		ManualMovementDestination = manualMovementDestination;
 		ReturnDestination = returnDestination;
 		BaseReturnDestination = baseReturnDestination;
 		MonolithPosition = monolithPosition;
+		FragmentPosition = fragmentPosition;
 	}
 }

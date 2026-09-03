@@ -31,9 +31,18 @@ public partial class MonolithFragment : Node2D
 		if (Variants.Length == 0)
 			return;
 
-        currentVariant = (Variant)GD.RandRange(0, Variants.Length - 1);
 		fragmentSprite = GetNode<Sprite2D>("%MonolithFragmentSprite2D");
-		fragmentSprite.Texture = Variants[(int)currentVariant];
+		SetVariant((Variant)GD.RandRange(0, Variants.Length - 1));
+	}
+
+	public void SetVariant(Variant variant)
+	{
+		currentVariant = variant;
+		fragmentSprite ??= GetNodeOrNull<Sprite2D>("%MonolithFragmentSprite2D");
+		int variantIndex = (int)variant;
+		if (fragmentSprite != null && Variants != null &&
+			variantIndex >= 0 && variantIndex < Variants.Length)
+			fragmentSprite.Texture = Variants[variantIndex];
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.

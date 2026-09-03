@@ -34,8 +34,14 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 	private bool isRestoredSession;
 	private FragmentAnalysisActionOrigin initiationOrigin;
 	private bool isSyncingRotationControl;
+	private bool hasPublishedGlyphRevealed;
+	private bool hasPublishedGlyphUpright;
+	private bool hasPublishedAnalysisCompleted;
 
 	public event Action<Vector2I, FragmentAnalysisState> StateSaved;
+	public event Action GlyphRevealed;
+	public event Action GlyphUpright;
+	public event Action AnalysisCompleted;
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -82,15 +88,23 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		GameUI.Instance?.SetMinimapInputEnabled(false);
 		GameUI.Instance?.SetWorldCameraInputEnabled(false);
 		monolithFragment = this.TryGetNodeAtPosition<MonolithFragment>(fragmentPosition);
-		fragmentVariant = monolithFragment?.currentVariant ?? MonolithFragment.Variant.Hominid;
-		FragmentGlyphType glyphType = savedState?.GlyphType ?? GetGlyphType(fragmentVariant);
-		SetFragmentOverviewTexture(monolithFragment?.FragmentTexture ??
-			LoadFragmentReferenceTexture(glyphType));
+		bool forceTutorialHominid = IsLevel3TutorialAnalysis();
+		fragmentVariant = forceTutorialHominid
+			? MonolithFragment.Variant.Hominid
+			: monolithFragment?.currentVariant ?? MonolithFragment.Variant.Hominid;
+		FragmentGlyphType glyphType = forceTutorialHominid
+			? FragmentGlyphType.Hominid
+			: savedState?.GlyphType ?? GetGlyphType(fragmentVariant);
+		SetFragmentOverviewTexture(forceTutorialHominid
+			? LoadFragmentReferenceTexture(FragmentGlyphType.Hominid)
+			: monolithFragment?.FragmentTexture ?? LoadFragmentReferenceTexture(glyphType));
 		fragmentCanvas.SetSpatialContext(fragmentPosition, monolithPosition, glyphType);
 
 		if (savedState == null)
 		{
-			fragmentCanvas.GenerateFragment();
+			GenerateFragmentForAnalysisPass(
+				"MANUAL / INITIAL",
+				Level3TutorialManualSeed);
 		}
 		else
 		{
@@ -98,6 +112,9 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 		}
 
 		SyncFilterState();
+		hasPublishedGlyphRevealed = false;
+		hasPublishedGlyphUpright = false;
+		hasPublishedAnalysisCompleted = false;
 		wasEverSolved = savedState?.WasEverSolved == true || savedState?.WasSolved == true;
 		if (fragmentCanvas.IsPuzzleSolved()) wasEverSolved = true;
 		FragmentAutonomyState restoredRoverState = savedState?.RoverState?.Clone() ??
@@ -139,6 +156,7 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 
 	public override void _ExitTree()
 	{
+		ClearTutorialTargets();
 		DisconnectAutonomySignals();
 		GameUI.Instance?.SetMinimapInputEnabled(true);
 		GameUI.Instance?.SetWorldCameraInputEnabled(true);
@@ -203,6 +221,16 @@ public partial class FragmentAnalysisUI : CanvasLayer, IFragmentAnalysisCommandS
 
 	private void OnPuzzleStateChanged(bool filterCombinationCorrect, bool rotationCorrect)
 	{
+		if (filterCombinationCorrect && !hasPublishedGlyphRevealed)
+		{
+			hasPublishedGlyphRevealed = true;
+			GlyphRevealed?.Invoke();
+		}
+		if (filterCombinationCorrect && rotationCorrect && !hasPublishedGlyphUpright)
+		{
+			hasPublishedGlyphUpright = true;
+			GlyphUpright?.Invoke();
+		}
 		if (filterCombinationCorrect && rotationCorrect)
 		{
 			wasEverSolved = true;

@@ -125,6 +125,7 @@ public partial class BuildingManager : Node
 	private Rake hoveredRake;
 	private List<Rake> placedRakes = new();
 	private const float RAKE_HOVER_MARGIN = 16f;
+	private const float EMPTY_TERRAIN_DRAG_THRESHOLD = 8f;
 	private Vector2I buildingGhostDimensions;
 	private Vector2I tileGhostDimensions;
 	private State currentState;
@@ -134,10 +135,15 @@ public partial class BuildingManager : Node
 	private int currentlyUsedMaterialCount;
 	private int currentlyUsedMineralCount;
 	private int startingMaterialCount;
+	private bool roverCanGetStuck;
 	public static BuildingComponent selectedBuildingComponent { get; private set; } = null;
 	private static Random random = new Random();
 	private bool isPaintingWithMouse = false;
 	private bool isErasingWithMouse = false;
+	private bool isEmptyTerrainClickPending = false;
+	private bool didEmptyTerrainClickDrag = false;
+	private Godot.Vector2 emptyTerrainPressPosition;
+	private BuildingComponent emptyTerrainSelectionAtPress;
 	private Vector2I lastPaintedTile = new Vector2I(int.MinValue, int.MinValue);
 	private Vector2I lastErasedTile = new Vector2I(int.MinValue, int.MinValue);
 	private List<string> mineralsInBase = new();
@@ -172,6 +178,33 @@ public partial class BuildingManager : Node
 		switch (currentState)
 		{
 			case State.Normal:
+				if (isEmptyTerrainClickPending && evt is InputEventMouseMotion mouseMotion &&
+					mouseMotion.Position.DistanceTo(emptyTerrainPressPosition) > EMPTY_TERRAIN_DRAG_THRESHOLD)
+				{
+					didEmptyTerrainClickDrag = true;
+				}
+
+				if (evt is InputEventMouseButton releasedButton &&
+					releasedButton.ButtonIndex == MouseButton.Left &&
+					!releasedButton.Pressed && isEmptyTerrainClickPending)
+				{
+					bool shouldDeselect = !didEmptyTerrainClickDrag &&
+						emptyTerrainSelectionAtPress == selectedBuildingComponent &&
+						SelectBuildingAtHoveredCellPosition() == null;
+					isEmptyTerrainClickPending = false;
+					didEmptyTerrainClickDrag = false;
+					emptyTerrainSelectionAtPress = null;
+
+					if (shouldDeselect && selectedBuildingComponent != null)
+					{
+						UnHighlightSelectedBuilding(selectedBuildingComponent);
+						selectedBuildingComponent = null;
+						EmitSignal(SignalName.NoMoreRobotSelected);
+						GetViewport().SetInputAsHandled();
+					}
+					return;
+				}
+
 				if (evt.IsActionPressed(ACTION_RIGHT_CLICK))
 				{
 					if (selectedBuildingComponent != null)
@@ -192,40 +225,44 @@ public partial class BuildingManager : Node
 				}
 				if (evt.IsActionPressed(ACTION_LEFT_CLICK))
 				{
+					isEmptyTerrainClickPending = false;
+					didEmptyTerrainClickDrag = false;
+					emptyTerrainSelectionAtPress = null;
+					BuildingComponent clickedBuilding = SelectBuildingAtHoveredCellPosition();
+
 					if (selectedBuildingComponent == null)
 					{
-						selectedBuildingComponent = SelectBuildingAtHoveredCellPosition();
+						selectedBuildingComponent = clickedBuilding;
 						if (selectedBuildingComponent == null) return;
 						GameEvents.EmitRobotSelected(selectedBuildingComponent);
 						EmitSignal(SignalName.NewRobotSelected, selectedBuildingComponent);
 						HighlightSelectedBuilding(selectedBuildingComponent);
 						GetViewport().SetInputAsHandled();
 					}
-					else if (SelectBuildingAtHoveredCellPosition() == selectedBuildingComponent) //Clicked on the same robot
+					else if (clickedBuilding == selectedBuildingComponent) //Clicked on the same robot
 					{
 						GetViewport().SetInputAsHandled();
 						return;
 					}
 					else if (selectedBuildingComponent != null //Switch to another robot
-							&& SelectBuildingAtHoveredCellPosition() != selectedBuildingComponent
-							&& SelectBuildingAtHoveredCellPosition() != null
+							&& clickedBuilding != selectedBuildingComponent
+							&& clickedBuilding != null
 							&& !selectedBuildingComponent.IsDestroying)
 					{
 						UnHighlightSelectedBuilding(selectedBuildingComponent);
 						selectedBuildingComponent = null;
 						EmitSignal(SignalName.NoMoreRobotSelected);
-						selectedBuildingComponent = SelectBuildingAtHoveredCellPosition();
+						selectedBuildingComponent = clickedBuilding;
 						EmitSignal(SignalName.NewRobotSelected, selectedBuildingComponent);
 						GameEvents.EmitRobotSelected(selectedBuildingComponent);
 						HighlightSelectedBuilding(selectedBuildingComponent);
 						GetViewport().SetInputAsHandled();
 					}
-					else if (SelectBuildingAtHoveredCellPosition() == null) //Clicked on empty space
+					else if (clickedBuilding == null) //Defer deselection until an empty-terrain click is released.
 					{
-						UnHighlightSelectedBuilding(selectedBuildingComponent);
-						selectedBuildingComponent = null;
-						EmitSignal(SignalName.NoMoreRobotSelected);
-						GetViewport().SetInputAsHandled();
+						isEmptyTerrainClickPending = true;
+						emptyTerrainPressPosition = ((InputEventMouseButton)evt).Position;
+						emptyTerrainSelectionAtPress = selectedBuildingComponent;
 					}
 				}
 				if (evt.IsActionPressed(MOVE_UP))
@@ -535,6 +572,25 @@ public partial class BuildingManager : Node
 
 	public override void _Process(double delta)
 	{
+		if (isEmptyTerrainClickPending)
+		{
+			if (Input.IsMouseButtonPressed(MouseButton.Left))
+			{
+				if (GetViewport().GetMousePosition().DistanceTo(emptyTerrainPressPosition) >
+					EMPTY_TERRAIN_DRAG_THRESHOLD)
+				{
+					didEmptyTerrainClickDrag = true;
+				}
+			}
+			else
+			{
+				// A UI control can consume the release after a world drag.
+				isEmptyTerrainClickPending = false;
+				didEmptyTerrainClickDrag = false;
+				emptyTerrainSelectionAtPress = null;
+			}
+		}
+
 		using (Telemetry.Scope("BuildingManager._Process"))
 		{
 		clockTickTimer += delta;
@@ -680,6 +736,20 @@ public partial class BuildingManager : Node
 	{
 		startingMaterialCount = count;
 		EmitSignal(SignalName.AvailableMaterialCountChanged, AvailableMaterialCount);
+	}
+
+	public void SetRoverCanGetStuck(bool canGetStuck)
+	{
+		roverCanGetStuck = canGetStuck;
+	}
+
+	private bool CanRoverGetStuck(BuildingComponent robot)
+	{
+		return roverCanGetStuck &&
+			robot?.BuildingResource != null &&
+			!robot.BuildingResource.IsAerial &&
+			robot.BuildingResource.DisplayName == "Rover" &&
+			robot.BuildingResource.StuckChancePerMove > 0f;
 	}
 
 	public void DropResourcesAtBase(List<string> resourceList)
@@ -1444,7 +1514,7 @@ public partial class BuildingManager : Node
 			return;
 		}
 
-		if (gridManager.IsTileMud(destinationPosition))
+		if (CanRoverGetStuck(robot) && gridManager.IsTileMud(destinationPosition))
 		{
 			//Higher chance to get stuck on mud
 			double mudChance = random.NextDouble();
@@ -1456,7 +1526,7 @@ public partial class BuildingManager : Node
 				robot.SetToStuck();
 			}
 		}
-		else
+		else if (CanRoverGetStuck(robot))
 		{
 			double chance = random.NextDouble();
 			if (chance <= robot.BuildingResource.StuckChancePerMove)
@@ -1537,7 +1607,7 @@ public partial class BuildingManager : Node
 
 			using (Telemetry.Scope("BuildingManager.MoveInDirectionAutomated.StuckCheck"))
 			{
-				if (gridManager.IsTileMud(destinationPosition))
+				if (CanRoverGetStuck(robot) && gridManager.IsTileMud(destinationPosition))
 				{
 					double mudChance = random.NextDouble();
 					if (mudChance <= robot.BuildingResource.StuckChancePerMove * 100)
@@ -1549,7 +1619,7 @@ public partial class BuildingManager : Node
 						return false;
 					}
 				}
-				else
+				else if (CanRoverGetStuck(robot))
 				{
 					double chance = random.NextDouble();
 					if (chance <= robot.BuildingResource.StuckChancePerMove)

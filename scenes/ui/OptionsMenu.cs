@@ -84,13 +84,24 @@ public partial class OptionsMenu : CanvasLayer
 		var GetBusVolumePercent = OptionsHelper.GetBusVolumePercent(busName);
 		GetBusVolumePercent = Mathf.Clamp(GetBusVolumePercent + change, 0, 1);
 		OptionsHelper.SetBusVolumePercent(busName, GetBusVolumePercent);
+		SaveCurrentOptions();
 		UpdateDisplay();
 	}
 
 	private void OnWindowButtonPressed()
 	{
 		OptionsHelper.ToggleWindowMode();
+		SaveCurrentOptions();
 		UpdateDisplay();
+	}
+
+	private static void SaveCurrentOptions()
+	{
+		SaveManager.SaveOptions(
+			OptionsHelper.GetBusVolumePercent(SFX_BUS_NAME),
+			OptionsHelper.GetBusVolumePercent(MUSIC_BUS_NAME),
+			OptionsHelper.GetBusVolumePercent(GEIGER_BUS_NAME),
+			OptionsHelper.IsFullScreen());
 	}
 
 	private void OnDoneButtonPressed()

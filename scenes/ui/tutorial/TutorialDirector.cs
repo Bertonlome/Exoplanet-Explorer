@@ -235,13 +235,12 @@ public partial class TutorialDirector : Node
 			$"Tutorial step '{currentStep.Id}' could not resolve target '{currentStep.TargetId}'. " +
 			"Using text-only fallback.");
 
-		bool targetPressNeedsEscape = currentStep.Completion.Kind == TutorialCompletionKind.TargetPressed;
 		overlay.ShowStep(
 			currentStep.Title,
 			$"{currentStep.Text}\n\nThe highlighted control is unavailable. Continue with the described action.",
 			null,
 			currentStep.Mode,
-			showContinue: targetPressNeedsEscape,
+			showContinue: true,
 			showQuitTutorial: currentStep.Skippable,
 			dimBackground: currentStep.DimBackground,
 			calloutPlacement: GetMissingTargetPlacement());
@@ -305,8 +304,7 @@ public partial class TutorialDirector : Node
 		{
 			return;
 		}
-		if (currentStep.Completion.Kind == TutorialCompletionKind.Continue ||
-			(targetFallbackActive && currentStep.Completion.Kind == TutorialCompletionKind.TargetPressed))
+		if (currentStep.Completion.Kind == TutorialCompletionKind.Continue || targetFallbackActive)
 		{
 			CompleteCurrentStep();
 		}

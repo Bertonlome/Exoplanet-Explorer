@@ -145,10 +145,9 @@ public partial class DiscoveredElementsManager : Node
 			tileToDiscoveredElements.Remove(tile);
 		}
 
-		// Ground-level elements must render below robots, while standing props such
-		// as trees must remain in the regular Y-sorted layer. Keeping separate roots
-		// lets mud and trunks use a lower canvas depth without pulling every
-		// discovered element behind the terrain/world layers.
+		// Ground-level elements share the terrain canvas depth so they remain visible,
+		// but stay in the earlier ground-prop branch so dynamically added robots draw
+		// above them. Standing props such as trees remain in the regular Y-sorted layer.
 		var elementNode2D = type == "mud" || type == "trunk"
 			? discoveredElements.GetNode<Node2D>("%GroundElementNode2D")
 			: discoveredElements.GetNode<Node2D>("%ElementNode2D");

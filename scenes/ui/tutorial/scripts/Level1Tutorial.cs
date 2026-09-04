@@ -30,7 +30,9 @@ public sealed class Level1Tutorial : TutorialScript
 	{
 		if (!IsRover(eventContext) || !eventContext.WorldPosition.HasValue) return false;
 		Vector2I relativePosition = eventContext.WorldPosition.Value - context.BasePosition;
-		return relativePosition.X > 4 && relativePosition.Y < -9;
+		bool reachedNorthEastIsland = relativePosition.X > 4 && relativePosition.Y < -9;
+		bool reachedNorthWestIsland = relativePosition.X < 0 && relativePosition.Y < 0;
+		return reachedNorthEastIsland || reachedNorthWestIsland;
 	}
 
 	private bool RoverIsNearMonolith(TutorialEventContext eventContext)

@@ -8,7 +8,7 @@ script = ExtResource("1_nwpe3")
 
 [node name="GroundElementNode2D" type="Node2D" parent="."]
 unique_name_in_owner = true
-z_index = -1
+z_index = 0
 z_as_relative = false
 
 [node name="ElementNode2D" type="Node2D" parent="."]

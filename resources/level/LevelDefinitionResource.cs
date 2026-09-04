@@ -16,4 +16,6 @@ public partial class LevelDefinitionResource : Resource
     public string LevelScenePath { get; private set; }
     [Export]
     public int LevelDuration { get; private set; } = 300; // 5 minutes in seconds
+    [Export]
+    public bool RoverCanGetStuck { get; private set; } = false;
 }

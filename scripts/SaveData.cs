@@ -6,6 +6,7 @@ public class SaveData
 {
     public Dictionary<string, LevelCompletionData> LevelCompletionStatus { get; private set; } = new();
     public HashSet<string> TutorialStartedLevelIds { get; private set; } = new();
+    public OptionsData Options { get; private set; } = new();
 
     public void SavelevelCompletion(string id, bool completed, int timeCompletedInSeconds, int mineralsAnalyzed)
     {
@@ -38,5 +39,14 @@ public class SaveData
     {
         LevelCompletionStatus ??= new Dictionary<string, LevelCompletionData>();
         TutorialStartedLevelIds ??= new HashSet<string>();
+        Options ??= new OptionsData();
     }
+}
+
+public class OptionsData
+{
+    public float SfxVolumePercent { get; set; } = 1f;
+    public float MusicVolumePercent { get; set; } = 1f;
+    public float GeigerVolumePercent { get; set; } = 0.313f;
+    public bool IsFullscreen { get; set; }
 }

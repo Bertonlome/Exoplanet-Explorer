@@ -150,7 +150,7 @@ public sealed class Level3Tutorial : TutorialScript
 		tutorial.Step("level3.communication")
 			.When(TutorialEvent.RobotOutOfAntennaCoverage)
 			.Say("COMMUNICATION COVERAGE",
-				"Robots can only receive commands inside communication coverage. Place antennas to extend the base network; nearby robots can also form a chain that carries coverage farther into the canyon.")
+				"Robots can only receive commands inside communication coverage. Place antennas to extend the base network; nearby robots can also form a chain that carries coverage farther.")
 			.PointTo(TutorialTargetIds.PlaceAntennaButton)
 			.GuideAction().UndimBackground()
 			.Until(TutorialEvent.AntennaPlaced);

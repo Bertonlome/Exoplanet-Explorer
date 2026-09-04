@@ -43,6 +43,7 @@ public partial class TutorialOverlay : CanvasLayer
 	private Button continueButton;
 	private Button closeWindowButton;
 	private Button quitTutorialButton;
+	private Cursor tutorialCursor;
 
 	private Rect2? requestedFocusRect;
 	private TutorialCalloutPlacement requestedCalloutPlacement;
@@ -67,6 +68,7 @@ public partial class TutorialOverlay : CanvasLayer
 		continueButton = GetNode<Button>("%ContinueButton");
 		closeWindowButton = GetNode<Button>("%CloseWindowButton");
 		quitTutorialButton = GetNode<Button>("%QuitTutorialButton");
+		tutorialCursor = GetNodeOrNull<Cursor>("/root/Cursor");
 
 		AudioHelpers.RegisterButtons(new Button[] {
 			continueButton,
@@ -82,6 +84,7 @@ public partial class TutorialOverlay : CanvasLayer
 
 	public override void _ExitTree()
 	{
+		tutorialCursor?.SetPopupCursorOverride(false);
 		if (continueButton != null)
 		{
 			continueButton.Pressed -= OnContinuePressed;
@@ -140,6 +143,7 @@ public partial class TutorialOverlay : CanvasLayer
 		SetBlockersVisible(dimBackground);
 		overlayRoot.Visible = true;
 		stepVisible = true;
+		tutorialCursor?.SetPopupCursorOverride(true);
 		pulseTime = 0d;
 		RefreshLayout();
 		Callable.From(RefreshLayout).CallDeferred();
@@ -169,6 +173,7 @@ public partial class TutorialOverlay : CanvasLayer
 		{
 			overlayRoot.Visible = false;
 		}
+		tutorialCursor?.SetPopupCursorOverride(false);
 	}
 
 	public void RefreshLayout()

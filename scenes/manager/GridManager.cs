@@ -186,12 +186,44 @@ public partial class GridManager : Node
 	}
 
 	/// <summary>
-	/// Returns terrain data used by ground movement, ignoring a tree tile that is
-	/// drawn over the actual terrain. This is especially important on elevated
-	/// terrain: some levels keep their TreeLayer outside the ElevationLayer, so
-	/// using the tree layer for elevation checks incorrectly makes the tile look
-	/// like base terrain. Harvested trees remain present in the TileMap and are
-	/// represented visually as trunks, so the raw is_wood flag is used here.
+	/// Finds the exact TileMapLayer that owns a resource at this position. Resource
+	/// layers may exist both below BaseTerrainTileMapLayer and inside one or more
+	/// ElevationLayers, so the generic first-cell lookup cannot be used here.
+	/// </summary>
+	private TileMapLayer GetResourceLayer(Vector2I tilePosition, string resourceDataName)
+	{
+		foreach (var layer in allTilemapLayers)
+		{
+			var customData = layer.GetCellTileData(tilePosition);
+			if (customData == null || (bool)customData.GetCustomData(IS_IGNORED))
+			{
+				continue;
+			}
+
+			if (!(bool)customData.GetCustomData(resourceDataName))
+			{
+				continue;
+			}
+
+			// A harvested tree remains present in its TileMapLayer as a trunk, but it
+			// is no longer an available wood resource or an obstacle for a drone.
+			if (resourceDataName == IS_WOOD && collectedResourceTiles.Contains(tilePosition))
+			{
+				continue;
+			}
+
+			return layer;
+		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// Returns terrain data used by ground movement, ignoring resource and visual
+	/// overlays drawn over the actual terrain. Cliff shadows can extend onto a
+	/// lower surface, so their parent ElevationLayer must not define that tile's
+	/// elevation. Harvested trees remain in the TileMap as trunks, which is why
+	/// the raw is_wood flag is used rather than the runtime collection state.
 	/// </summary>
 	private (TileMapLayer, bool) GetGroundTerrainCustomData(Vector2I tilePosition, string dataName)
 	{
@@ -203,7 +235,9 @@ public partial class GridManager : Node
 				continue;
 			}
 
-			if ((bool)customData.GetCustomData(IS_WOOD))
+			if (IsVisualOnlyLayer(layer) ||
+				(bool)customData.GetCustomData(IS_WOOD) ||
+				(bool)customData.GetCustomData(IS_MINERAL))
 			{
 				continue;
 			}
@@ -212,6 +246,13 @@ public partial class GridManager : Node
 		}
 
 		return (null, false);
+	}
+
+	private static bool IsVisualOnlyLayer(TileMapLayer layer)
+	{
+		string layerName = layer.Name.ToString();
+		return layerName is "ShadowLayer" or "SecondaryShadowLayer" or
+			"FoamTileMapLayer" or "CloudLayer";
 	}
 
 	public (ElevationLayer elevationLayer, bool isElevated) GetElevationLayerForTile(Vector2I tilePosition)
@@ -288,7 +329,11 @@ public partial class GridManager : Node
 		{
 			var customData = layer.GetCellTileData(tilePosition);
 			if (customData == null || (bool)customData.GetCustomData(IS_IGNORED)) continue;
-			return (string)customData.GetCustomData("landscape_type");
+			var landscapeType = (string)customData.GetCustomData("landscape_type");
+			if (!string.IsNullOrEmpty(landscapeType))
+			{
+				return landscapeType;
+			}
 		}
 		return null;
 	}
@@ -400,8 +445,7 @@ public partial class GridManager : Node
 					return false;
 				}
 
-				(_, bool isWood) = GetTileCustomData(tilePosition, IS_WOOD);
-				return !isWood;
+				return GetResourceLayer(tilePosition, IS_WOOD) == null;
 			});
 		}
 
@@ -970,7 +1014,8 @@ public partial class GridManager : Node
 		// Only collect new resource tiles if robot has capacity
 		foreach (var tile in resourceTiles)
 		{
-			if (!collectedResourceTiles.Contains(tile) &&
+			if (IsResourceOnSameElevation(buildingComponent, tile, IS_WOOD) &&
+				!collectedResourceTiles.Contains(tile) &&
 				buildingComponent.resourceCollected.Count < buildingComponent.BuildingResource.ResourceCapacity)
 			{
 				collectedResourceTiles.Add(tile);
@@ -993,7 +1038,8 @@ public partial class GridManager : Node
 		// Only collect new mineral tiles if robot has capacity
 		foreach (var (tile, mineralType) in mineralTilesWithType)
 		{
-			if (!collectedMineralTiles.Contains(tile) &&
+			if (IsResourceOnSameElevation(buildingComponent, tile, IS_MINERAL) &&
+				!collectedMineralTiles.Contains(tile) &&
 				buildingComponent.resourceCollected.Count < buildingComponent.BuildingResource.ResourceCapacity)
 			{
 				collectedMineralTiles.Add(tile);
@@ -1007,6 +1053,30 @@ public partial class GridManager : Node
 		{
 			EmitSignal(SignalName.GridStateUpdated);
 		}
+	}
+
+	private bool IsResourceOnSameElevation(
+		BuildingComponent buildingComponent,
+		Vector2I resourceTile,
+		string resourceDataName)
+	{
+		// Aerial units currently have no collection radius, but keep their existing behavior if
+		// a future unit gains one. Ground collectors must share the exact terrain elevation node.
+		if (buildingComponent.BuildingResource.IsAerial)
+		{
+			return true;
+		}
+
+		var (roverElevation, _) =
+			GetElevationLayerForTile(buildingComponent.GetGridCellPosition());
+		var resourceLayer = GetResourceLayer(resourceTile, resourceDataName);
+		if (resourceLayer == null)
+		{
+			return false;
+		}
+
+		tileMapLayerToElevationLayer.TryGetValue(resourceLayer, out var resourceElevation);
+		return roverElevation == resourceElevation;
 	}
 
 	private void UpdateRechargeBattery(BuildingComponent buildingComponent)
@@ -1295,8 +1365,7 @@ public partial class GridManager : Node
 	{
 		return GetTilesInRadiusFiltered(tileArea, radius, (tilePosition) =>
 		{
-			var isWood = GetTileCustomData(tilePosition, IS_WOOD).Item2;
-			return isWood;
+			return GetResourceLayer(tilePosition, IS_WOOD) != null;
 		});
 	}
 
@@ -1304,8 +1373,7 @@ public partial class GridManager : Node
 	{
 		return GetTilesInRadiusFiltered(tileArea, radius, (tilePosition) =>
 		{
-			var isMineral = GetTileCustomData(tilePosition, IS_MINERAL).Item2;
-			return isMineral;
+			return GetResourceLayer(tilePosition, IS_MINERAL) != null;
 		});
 	}
 
@@ -1314,12 +1382,19 @@ public partial class GridManager : Node
 		var result = new List<(Vector2I, string)>();
 		var tiles = GetTilesInRadiusFiltered(tileArea, radius, (tilePosition) =>
 		{
-			return GetTileCustomData(tilePosition, IS_MINERAL).Item2;
+			return GetResourceLayer(tilePosition, IS_MINERAL) != null;
 		});
 
 		foreach (var tile in tiles)
 		{
-			var mineralTypeString = GetTileDiscoveredElements(tile);
+			var mineralLayer = GetResourceLayer(tile, IS_MINERAL);
+			var mineralData = mineralLayer?.GetCellTileData(tile);
+			if (mineralData == null)
+			{
+				continue;
+			}
+
+			var mineralTypeString = (string)mineralData.GetCustomData("landscape_type");
 			result.Add((tile, mineralTypeString));
 		}
 		return result;

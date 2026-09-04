@@ -1,6 +1,7 @@
 using System;
 using Game;
 using Game.Resources.Level;
+using Game.Autoload;
 using Godot;
 using Newtonsoft.Json;
 
@@ -68,6 +69,20 @@ public partial class SaveManager : Node
 		WriteSaveData();
 	}
 
+	public static void SaveOptions(
+		float sfxVolumePercent,
+		float musicVolumePercent,
+		float geigerVolumePercent,
+		bool isFullscreen)
+	{
+		saveData.EnsureDefaults();
+		saveData.Options.SfxVolumePercent = Mathf.Clamp(sfxVolumePercent, 0f, 1f);
+		saveData.Options.MusicVolumePercent = Mathf.Clamp(musicVolumePercent, 0f, 1f);
+		saveData.Options.GeigerVolumePercent = Mathf.Clamp(geigerVolumePercent, 0f, 1f);
+		saveData.Options.IsFullscreen = isFullscreen;
+		WriteSaveData();
+	}
+
 	private static void WriteSaveData()
 	{
 		var dataString = JsonConvert.SerializeObject(saveData);
@@ -80,6 +95,8 @@ public partial class SaveManager : Node
 	{
 		if(!FileAccess.FileExists(SAVE_FILE_PATH))
 		{
+			saveData.EnsureDefaults();
+			ApplySavedOptions();
 			return;
 		}
 
@@ -93,6 +110,18 @@ public partial class SaveManager : Node
 		catch(Exception _)
 		{
 			GD.PushWarning("Save JSON file was corrupted");
+			saveData = new SaveData();
 		}
+		ApplySavedOptions();
+	}
+
+	private static void ApplySavedOptions()
+	{
+		saveData.EnsureDefaults();
+		OptionsData options = saveData.Options;
+		OptionsHelper.SetBusVolumePercent("SFX", options.SfxVolumePercent);
+		OptionsHelper.SetBusVolumePercent("Music", options.MusicVolumePercent);
+		OptionsHelper.SetBusVolumePercent("Geiger", options.GeigerVolumePercent);
+		OptionsHelper.SetFullScreen(options.IsFullscreen);
 	}
 }

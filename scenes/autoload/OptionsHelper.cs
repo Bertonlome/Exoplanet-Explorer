@@ -19,14 +19,14 @@ public partial class OptionsHelper : Node
 
 	public static void ToggleWindowMode()
 	{
-		if (IsFullScreen())
-		{
-			DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
-		}
-		else
-		{
-			DisplayServer.WindowSetMode(DisplayServer.WindowMode.ExclusiveFullscreen);
-		}
+		SetFullScreen(!IsFullScreen());
+	}
+
+	public static void SetFullScreen(bool fullscreen)
+	{
+		DisplayServer.WindowSetMode(fullscreen
+			? DisplayServer.WindowMode.ExclusiveFullscreen
+			: DisplayServer.WindowMode.Windowed);
 	}
 
 	public static bool IsFullScreen()

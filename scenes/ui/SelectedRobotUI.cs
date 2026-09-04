@@ -368,6 +368,8 @@ public partial class SelectedRobotUI : CanvasLayer
 			trackRobotButton.Text = "Track Robot";
 		}
 		explorModeOptionsButton.ItemSelected += OnOptionsButtonItemSelected;
+		explorModeOptionsButton.GetPopup().AboutToPopup += OnExplorationModePopupOpened;
+		explorModeOptionsButton.GetPopup().PopupHide += OnExplorationModePopupClosed;
 		startExplorButton.Pressed += OnStartExplorButtonSelected;
 		customPathButton.Pressed += OnCustomPathButtonPressed;
 
@@ -913,6 +915,12 @@ public partial class SelectedRobotUI : CanvasLayer
 		{
 			explorModeOptionsButton.ItemSelected -= OnOptionsButtonItemSelected;
 		}
+		if (IsInstanceValid(explorModeOptionsButton))
+		{
+			PopupMenu explorationPopup = explorModeOptionsButton.GetPopup();
+			explorationPopup.AboutToPopup -= OnExplorationModePopupOpened;
+			explorationPopup.PopupHide -= OnExplorationModePopupClosed;
+		}
 		if (startExplorButton.IsConnected("pressed", Callable.From(OnStartExplorButtonSelected)))
 		{
 			startExplorButton.Pressed -= OnStartExplorButtonSelected;
@@ -971,7 +979,23 @@ public partial class SelectedRobotUI : CanvasLayer
 
 	public override void _ExitTree()
 	{
+		SetExplorationPopupCursorOverride(false);
 		DisconnectSignals();
+	}
+
+	private void OnExplorationModePopupOpened()
+	{
+		SetExplorationPopupCursorOverride(true);
+	}
+
+	private void OnExplorationModePopupClosed()
+	{
+		SetExplorationPopupCursorOverride(false);
+	}
+
+	private void SetExplorationPopupCursorOverride(bool enabled)
+	{
+		GetNodeOrNull<Cursor>("/root/Cursor")?.SetPopupCursorOverride(enabled);
 	}
 
 	private void OnAnalyseSampleButtonPressed()

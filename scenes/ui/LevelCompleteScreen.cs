@@ -84,6 +84,7 @@ public partial class LevelCompleteScreen : CanvasLayer
 
 		pendingNextLevelIndex = nextLevelIndex;
 		CreateTutorialChoiceDialog(nextLevelIndex);
+		SetPopupCursorOverride(true);
 		tutorialChoiceDialog.PopupCentered();
 	}
 
@@ -116,6 +117,7 @@ public partial class LevelCompleteScreen : CanvasLayer
 	private void OnContinueTutorialConfirmed()
 	{
 		int nextLevelIndex = ConsumePendingNextLevelIndex();
+		SetPopupCursorOverride(false);
 		if (nextLevelIndex < 0) return;
 		LevelDefinitionResource[] levels = LevelManager.GetLevelDefinitions();
 		StartTutorial(nextLevelIndex, levels[nextLevelIndex].Id);
@@ -125,6 +127,7 @@ public partial class LevelCompleteScreen : CanvasLayer
 	{
 		int nextLevelIndex = ConsumePendingNextLevelIndex();
 		tutorialChoiceDialog.Hide();
+		SetPopupCursorOverride(false);
 		if (nextLevelIndex >= 0)
 		{
 			LevelManager.ChangeToLevel(nextLevelIndex, tutorialMode: false);
@@ -134,6 +137,7 @@ public partial class LevelCompleteScreen : CanvasLayer
 	private void OnTutorialChoiceCanceled()
 	{
 		pendingNextLevelIndex = -1;
+		SetPopupCursorOverride(false);
 	}
 
 	private static void StartTutorial(int levelIndex, string levelId)
@@ -148,6 +152,17 @@ public partial class LevelCompleteScreen : CanvasLayer
 		pendingNextLevelIndex = -1;
 		return nextLevelIndex;
 	}
+
+	private void SetPopupCursorOverride(bool enabled)
+	{
+		GetNodeOrNull<Cursor>("/root/Cursor")?.SetPopupCursorOverride(enabled);
+	}
+
+	public override void _ExitTree()
+	{
+		SetPopupCursorOverride(false);
+	}
+
 	public void SetTimeElapsed(int seconds)
 	{
 		timeElapsed = seconds;
